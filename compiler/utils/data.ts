@@ -2,12 +2,19 @@ export enum TokenType {
     Identifier,
     Number,
     String,
-    Keyword
+    Keyword,
+    Comment
 }
 export enum TokenParam{
     Number,String,Identifier
 }
 export type token={type:TokenType,value:string,line:string}
+export type pre_token=[boolean,string,TokenType]
+export type cst_data=token|cst_data[]
+export type ast_data={
+    type:string,
+    children:(ast_data|string)[]
+}
 export let radix_map={
     'x':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],
     'X':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],
@@ -16,8 +23,8 @@ export let radix_map={
     'o':['0','1','2','3','4','5','6','7'],
     'O':['0','1','2','3','4','5','6','7']
 }
-export let identifier_start_white_list=['_','$','a','b','c','d','e','f','g','h','i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y','Z']
-export let identifier_continue_white_list=['_','$','a','b','c','d','e','f','g','h','i','j','k','l','m','n','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9']
+export let identifier_start_white_list=['_','$','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+export let identifier_continue_white_list=['_','$','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9']
 export let string_start_end=['"','\'','`']
 export let number_radix=['x','X','b','B','o','O']
 export let keywords=[
