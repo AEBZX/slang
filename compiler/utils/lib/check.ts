@@ -27,6 +27,7 @@ export class CheckVisitor{
     }
     visitor(ast:ast_data){
         let v=(ast:ast_data,scope:Scope)=>{
+            if(!this.visit.has(ast.type))return ast
             ast=this.visit.get(ast.type)(ast,scope)
             for(let j=0;j<ast.children.length;j++){
                 if(typeof ast.children[j]!='string')

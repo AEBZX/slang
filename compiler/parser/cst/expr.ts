@@ -8,13 +8,13 @@ const Literal=$.o(
 )
 const Identifier=$.s(TokenType.Identifier)
 const Primary=$.o(
-    Identifier,Literal,$.s('(',$.ref(()=>Expr()),')'),$.w('[',$.ref(()=>Expr()),$.s(','),']'),
-    $.w('{',$.s(Identifier,':',$.ref(()=>Expr())),$.s(','),'}'),
+    Identifier,Literal,$.s('(',$.ref(()=>Expr),')'),$.w('[',$.ref(()=>Expr),$.s(','),']'),
+    $.w('{',$.s(Identifier,':',$.ref(()=>Expr)),$.s(','),'}'),
     $.s($.w('(',$.s(Identifier,':',Type),',',')'),'=>',$.ref(()=>Command))
 )
 const Postfix=$.s(
     Primary,
-    $.l($.o($.s('[',$.ref(()=>Expr()),']'),$.w('(',$.ref(()=>Expr()),$.s(','),')'),$.s('.',TokenType.Identifier),'++','--'))
+    $.l($.o($.s('[',$.ref(()=>Expr),']'),$.w('(',$.ref(()=>Expr),$.s(','),')'),$.s('.',TokenType.Identifier),'++','--'))
 )
 const Prefix=$.s(
     $.l($.o('~','!','-','&','*','++','--','new')),Postfix
@@ -61,7 +61,5 @@ const LogicalOr=$.s(
 )
 const Binary=LogicalOr
 const Ternary=$.s(Binary,'?',Binary,':',Binary)
-function Expr(){
-    return $.o(Ternary,Binary)
-}
-export default Expr()
+const Expr=$.o(Ternary,Binary)
+export default Expr

@@ -6,6 +6,7 @@ export class DesugarVisitor{
     }
     visitor(ast:ast_data){
         let v=(ast:ast_data)=>{
+            if(!this.visit.has(ast.type))return ast
             ast=this.visit.get(ast.type)(ast)
             for(let j=0;j<ast.children.length;j++){
                 if(typeof ast.children[j]!='string')

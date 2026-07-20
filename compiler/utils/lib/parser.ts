@@ -526,6 +526,23 @@ export class ASTRule_While extends ASTRule{
         }
     }
 }
+export class ASTRule_Ref extends ASTRule{
+    constructor(public getter:()=>ASTRule){
+        super(null,'')
+    }
+    match():boolean{
+        let rule=this.getter()
+        rule.stream=this.stream
+        this._idx=this.stream.index
+        return rule.match()
+    }
+    generate():ast_data|token{
+        let rule=this.getter()
+        rule.stream=this.stream
+        this.stream.index=this._idx
+        return rule.generate()
+    }
+}
 export class ASTVisitor{
     data:Map<string,ast_visitor>
     constructor(public ast:ast_data) {
@@ -536,6 +553,7 @@ export class ASTVisitor{
     }
     visit(){
         let v=(a:ast_data)=>{
+            if(!this.data.has(a.type))return a
             a=this.data.get(a.type)(a)
             for(let i=0;i<a.children.length;i++)
                 if(typeof a.children[i]!='string')
@@ -557,12 +575,14 @@ export default {
     },
     ast:{
         s: (name:string,...data:(TokenType|string|ASTRule)[])=>new ASTRule_Seg(null,name,...data),
-        o: (name:string,...data:(TokenType|string|ASTRule)[])=>new ASTRule_Or(null,name,...data),
+        o: (...data:(TokenType|string|ASTRule)[])=>new ASTRule_Or(null,null,...data),
         c: (name:string,...data:(TokenType|string|ASTRule)[])=>new ASTRule_Choose(null,name,...data),
         l: (name:string,...data:(TokenType|string|ASTRule)[])=>new ASTRule_Loop(null,name,...data),
         w: (name:string,start:(TokenType|string|ASTRule),body:(TokenType|string|ASTRule),
             split:(TokenType|string|ASTRule),end:(TokenType|string|ASTRule))=>
             new ASTRule_While(name,start,body,split,end),
+        ref: (getter:()=>ASTRule)=>new ASTRule_Ref(getter),
+        factory:(name:string,visitor:ast_visitor)=>{return {name,visitor}},
         visit:(ast:ast_data,visitors:{name:string,visitor:ast_visitor}[])=>{
             let v=new ASTVisitor(ast)
             for(let i of visitors)
