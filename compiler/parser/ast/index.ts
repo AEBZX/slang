@@ -7,5 +7,6 @@ const $=Parser.ast
 export default function (stream:ASTStream){
     let v=$.s('File',$.o(link,module_))
     v.stream=stream
+    v.match()
     return $.visit(v.generate(),[...CommandVisitor,...ExprVisitor,...IdentifierVisitor,...BlockVisitor])
 }

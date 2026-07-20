@@ -7,17 +7,17 @@ const Literal=$.o(
     TokenType.Number,TokenType.String,'true','false','null'
 )
 const Identifier=$.s(TokenType.Identifier)
-const Primary=$.o(
-    Identifier,Literal,$.s('(',$.ref(()=>Expr),')'),$.w('[',$.ref(()=>Expr),$.s(','),']'),
-    $.w('{',$.s(Identifier,':',$.ref(()=>Expr)),$.s(','),'}'),
+const _Primary=()=>$.o(
+    Identifier,Literal,$.s('(',$.ref(()=>_Expr()),')'),$.w('[',$.ref(()=>_Expr()),$.s(','),']'),
+    $.w('{',$.s(Identifier,':',$.ref(()=>_Expr())),$.s(','),'}'),
     $.s($.w('(',$.s(Identifier,':',Type),',',')'),'=>',$.ref(()=>Command))
 )
-const Postfix=$.s(
-    Primary,
-    $.l($.o($.s('[',$.ref(()=>Expr),']'),$.w('(',$.ref(()=>Expr),$.s(','),')'),$.s('.',TokenType.Identifier),'++','--'))
+const _Postfix=()=>$.s(
+    _Primary(),
+    $.l($.o($.s('[',$.ref(()=>_Expr()),']'),$.w('(',$.ref(()=>_Expr()),$.s(','),')'),$.s('.',TokenType.Identifier),'++','--'))
 )
 const Prefix=$.s(
-    $.l($.o('~','!','-','&','*','++','--','new')),Postfix
+    $.l($.o('~','!','-','&','*','++','--','new')),_Postfix()
 )
 const Multiplicative=$.s(
     Prefix,
@@ -61,5 +61,6 @@ const LogicalOr=$.s(
 )
 const Binary=LogicalOr
 const Ternary=$.s(Binary,'?',Binary,':',Binary)
-const Expr=$.o(Ternary,Binary)
+const _Expr=()=>$.o(Ternary,Binary)
+const Expr=_Expr()
 export default Expr

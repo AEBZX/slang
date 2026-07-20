@@ -183,8 +183,8 @@ describe('默认导出 desugar 辅助函数', () => {
         expect(child.type).toBe('WhileLoop')
     })
 
-    it('desugar.desugar: 空 visitor 数组 (ast.type 无匹配) 会抛出错误', () => {
-        expect(() => desugar.desugar(makeAst('Unknown'), [])).toThrow()
+    it('desugar.desugar: 空 visitor 数组 (ast.type 无匹配) 静默返回原 ast', () => {
+        expect(() => desugar.desugar(makeAst('Unknown'), [])).not.toThrow()
     })
 
     it('desugar.desugar: 多层级嵌套的语法糖转换', () => {

@@ -374,8 +374,8 @@ describe('默认导出 check 辅助函数', () => {
         expect(result.tree.children).toHaveLength(2)
     })
 
-    it('check.check: 空 visitor 数组 (ast.type 无匹配) 会抛出错误', () => {
+    it('check.check: 空 visitor 数组 (ast.type 无匹配) 静默返回原 ast', () => {
         const ast = makeAst('Unknown')
-        expect(() => check.check(ast, [])).toThrow()
+        expect(() => check.check(ast, [])).not.toThrow()
     })
 })

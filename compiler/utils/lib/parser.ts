@@ -334,9 +334,10 @@ function ast_match(stream:ASTStream,rule:TokenType|string|ASTRule){
 function ast_generate(stream:ASTStream,rule:TokenType|string|ASTRule){
     if(typeof rule=='string')
         return <token>stream.next()
-    else if(rule instanceof ASTRule)
+    else if(rule instanceof ASTRule){
+        rule.stream=stream
         return rule.generate()
-    else
+    }else
         return <token>stream.next()
 }
 export class ASTRule_Seg extends ASTRule{

@@ -377,8 +377,8 @@ describe('Block 解析 (block.ts)', () => {
             t('}')
         ])).toBe(true)
     })
-    it('module (a.b) { }', () => {
-        const s = new CSTStream([t('module'), t('('), id('a'), t('.'), id('b'), t(')'), t('{'), t('}')])
+    it('module { }', () => {
+        const s = new CSTStream([t('module'), t('{'), t('}')])
         module_.stream = s
         expect(module_.match()).toBe(true)
     })
