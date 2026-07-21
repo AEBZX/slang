@@ -236,20 +236,22 @@ export class CSTRule_While extends CSTRule{
 
 }
 export class CSTRule_Ref extends CSTRule{
+    _rule:CSTRule|null
     constructor(public getter:()=>CSTRule){
         super(null)
+        this._rule=null
     }
     match():boolean{
-        let rule=this.getter()
-        rule.stream=this.stream
+        this._rule=this.getter()
+        this._rule.stream=this.stream
         this._idx=this.stream.index
-        return rule.match()
+        return this._rule.match()
     }
     generate():cst_data{
-        let rule=this.getter()
-        rule.stream=this.stream
+        if(!this._rule)return []
+        this._rule.stream=this.stream
         this.stream.index=this._idx
-        return rule.generate()
+        return this._rule.generate()
     }
 }
 export class ASTStream{
@@ -528,20 +530,22 @@ export class ASTRule_While extends ASTRule{
     }
 }
 export class ASTRule_Ref extends ASTRule{
+    _rule:ASTRule|null
     constructor(public getter:()=>ASTRule){
         super(null,'')
+        this._rule=null
     }
     match():boolean{
-        let rule=this.getter()
-        rule.stream=this.stream
+        this._rule=this.getter()
+        this._rule.stream=this.stream
         this._idx=this.stream.index
-        return rule.match()
+        return this._rule.match()
     }
     generate():ast_data|token{
-        let rule=this.getter()
-        rule.stream=this.stream
+        if(!this._rule)return {type:'',line:[],comment:'',children:[]}
+        this._rule.stream=this.stream
         this.stream.index=this._idx
-        return rule.generate()
+        return this._rule.generate()
     }
 }
 export class ASTVisitor{

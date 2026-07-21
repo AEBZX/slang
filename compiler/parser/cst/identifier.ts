@@ -2,13 +2,15 @@ import {Parser, TokenType} from '../../utils'
 
 const $=Parser.cst
 const BasicType=$.o('number','string','boolean','void',$.s($.l(TokenType.Identifier,'.'),TokenType.Identifier))
-const Type=$.s(
+const _Type=()=>$.s(
         $.o(
-            $.s('(',$.ref(()=>Type),')'),
+            $.s('(',$.ref(_Type),')'),
             $.s(BasicType, $.l('[]')),
             $.s(BasicType, $.l('{}')),
-            $.s($.w('(', $.s(TokenType.Identifier,':',$.ref(()=>Type)), ',', ')'),'=>',$.ref(()=>Type)),
+            $.s($.w('(', $.s(TokenType.Identifier,':',$.ref(_Type)), ',', ')'),'=>',$.ref(_Type)),
             BasicType
         ),$.l('*')
     )
+const Type=_Type()
+export {_Type}
 export default Type

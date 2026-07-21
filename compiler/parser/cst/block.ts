@@ -1,11 +1,12 @@
-import Expr from './expr'
+import Expr,{_Expr} from './expr'
 import Type from './identifier'
 import Command from './command'
+import {_commands} from './command'
 import {Parser, TokenType} from '../../utils'
 const $=Parser.cst
 const modifier=$.l($.o('public','private','async','sync','static','unstatic'))
 export const link=$.s('link',$.w('(',TokenType.Identifier,'.',')'),'as',TokenType.Identifier)
-const function_=$.s('function',$.w('(',$.s(TokenType.Identifier,':',Type),',',')'),':',Type,Command)
+const function_=$.s('function',$.w('(',$.s(TokenType.Identifier,':',Type),',',')'),':',Type,$.ref(()=>_commands()))
 const var_=$.s('var',Type,$.c('=',Expr),';')
 const class_=$.s('class',$.c('of',$.s($.l(TokenType.Identifier,'.'),TokenType.Identifier)),'{',$.ref(()=>_blocks()),'}')
 const interface_=$.s('interface',$.c('implements',$.s($.l(TokenType.Identifier,'.'),TokenType.Identifier)),
@@ -16,4 +17,5 @@ const _blocks=()=>$.l($.o(
         $.s(modifier,TokenType.Identifier, $.o(function_, var_, class_, interface_, enum_))
     ))
 const blocks=_blocks()
+export {_blocks}
 export default blocks

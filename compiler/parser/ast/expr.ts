@@ -49,6 +49,33 @@ const LogicalOr=$.s('LogicalOr',LogicalAnd,$.l('Op',
 const Binary=LogicalOr
 const Ternary=$.s('Ternary',Binary,'?',$.ref(()=>Ternary),':',$.ref(()=>Ternary))
 const Expr=$.o(Ternary,Binary)
+const _Expr=()=>{
+    const fp=$.o(NumberLiteral,StringLiteral,BooleanLiteral,NullLiteral,Identifier,
+        $.s('ThesesPrimary','(',$.ref(_Expr),')'),
+        $.w('ArrayLiteral','[',$.ref(_Expr),',',']'),
+        $.w('MapLiteral','{',$.s('MapKeyData',Identifier,':',$.ref(_Expr)),',','}'),
+        $.s('LambdaLiteral',$.w('LambdaParam','(',$.s('Param',Identifier,':',Type),',',')'),'=>',$.ref(()=>Command))
+    )
+    const fpost=$.s('Postfix',fp,$.l('FixOfPost',$.o('++','--',
+        $.s('MemberPostFix','.',TokenType.Identifier),
+        $.w('CallPostfix','(',$.ref(_Expr),',',')'),
+        $.s('ComputedPostfix','[',$.ref(_Expr),']'))))
+    const fpre=$.s('Prefix',$.l('FixOfPre',$.o('~','!','-','&','*','++','--','new')),fpost)
+    const fmul=$.s('Multiplicative',fpre,$.l('Op',$.o('*','/','%'),fpre))
+    const fadd=$.s('Additive',fmul,$.l('Op',$.o('+','-'),fmul))
+    const fshift=$.s('Shift',fadd,$.l('Op',$.o('<<','>>'),fadd))
+    const frel=$.s('Relational',fshift,$.l('Op',$.o('<','<=','>','>='),fshift))
+    const feq=$.s('Equality',frel,$.l('Op',$.o('==','!='),frel))
+    const fband=$.s('BitwiseAnd',feq,$.l('Op','&',feq))
+    const fbxor=$.s('BitwiseXor',fband,$.l('Op','^',fband))
+    const fbor=$.s('BitwiseOr',fbxor,$.l('Op','|',fbxor))
+    const fland=$.s('LogicalAnd',fbor,$.l('Op','&&',fbor))
+    const flor=$.s('LogicalOr',fland,$.l('Op','||',fland))
+    const fbin=flor
+    const ftern=$.s('Ternary',fbin,'?',$.ref(_Expr),':',$.ref(_Expr))
+    return $.o(ftern,fbin)
+}
+export {_Expr}
 export default Expr
 const ThesesPrimaryVisitor=(ast:ast_data)=>{
     ast.children=ast.children.filter(i=>typeof i!='string')

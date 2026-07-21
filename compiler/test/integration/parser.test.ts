@@ -1155,10 +1155,11 @@ describe('ASTVisitor 在 CST→AST pipeline 中', () => {
             type: 'Expr',
             line: ['line_x', 'line_+', 'line_y'],
             children: [
-                { type: 'Id', line: ['line_x'], children: ['x'] },
+                { type: 'Id', line: ['line_x'], children: ['x'],comment:'' },
                 '+',
-                { type: 'Id', line: ['line_y'], children: ['y'] }
-            ]
+                { type: 'Id', line: ['line_y'], children: ['y'],comment:'' }
+            ],
+            comment:''
         }
 
         // 验证结构
@@ -1186,8 +1187,9 @@ describe('ASTVisitor 在 CST→AST pipeline 中', () => {
             type: 'A', line: [],
             children: [{
                 type: 'B', line: [],
-                children: [{ type: 'C', line: [], children: [] }]
-            }]
+                children: [{ type: 'C', line: [], children: [],comment:'' }],comment:''
+            }],
+            comment:''
         }
         const trace: string[] = []
         const result = parser.ast.visit(ast, [

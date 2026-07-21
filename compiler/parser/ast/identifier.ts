@@ -77,12 +77,12 @@ const TypeVisitor=(ast:ast_data)=>{
     }
 }
 export const IdentifierVisitor=[
-    $.factory('MemberTypeVisitor',MemberTypeVisitor),
-    $.factory('ThesesTypeVisitor',ThesesTypeVisitor),
-    $.factory('ArrayTypeVisitor',ArrayTypeVisitor),
-    $.factory('MapTypeVisitor',MapTypeVisitor),
-    $.factory('LambdaParamTypeVisitor',LambdaParamTypeVisitor),
-    $.factory('LambdaParamsTypeVisitor',LambdaParamsTypeVisitor),
-    $.factory('LambdaTypeVisitor',LambdaTypeVisitor),
-    $.factory('TypeVisitor',TypeVisitor)
+    $.factory('MemberType',MemberTypeVisitor),
+    $.factory('ThesesType',ThesesTypeVisitor),
+    $.factory('ArrayType',ArrayTypeVisitor),
+    $.factory('MapType',MapTypeVisitor),
+    $.factory('LambdaParamType',LambdaParamTypeVisitor),
+    $.factory('LambdaParamsType',LambdaParamsTypeVisitor),
+    $.factory('LambdaType',LambdaTypeVisitor),
+    $.factory('Type',TypeVisitor)
 ]
