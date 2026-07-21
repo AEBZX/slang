@@ -1,174 +1,149 @@
-import {ast_data, ast_visitor, Parser, TokenType} from '../../utils'
-import Type from '../ast/identifier'
-import Command from '../ast/command'
+import {Parser, ast_data, TokenType} from '../../utils'
 const $=Parser.ast
-const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
-const StringLiteral=$.s('StringLiteral',TokenType.String)
-const BooleanLiteral=$.s('BooleanLiteral',$.o('true','false'))
-const NullLiteral=$.s('NullLiteral','null')
-const Identifier=$.s('Identifier',TokenType.Identifier)
-const Primary=$.o(
-    NumberLiteral,
-    StringLiteral,
-    BooleanLiteral,
-    NullLiteral,
-    Identifier,
-    $.s('ThesesPrimary','(',$.ref(()=>Expr),')'),
-    $.w('ArrayLiteral','[',$.ref(()=>Expr),',',']'),
-    $.w('MapLiteral','{',$.s('MapKeyData',Identifier,':',$.ref(()=>Expr)),',','}'),
-    $.s('LambdaLiteral',$.w('LambdaParam','(',$.s('Param',Identifier,':',Type),',',')'),'=>',$.ref(()=>Command))
-)
-const Postfix=$.s('Postfix',Primary,$.l('FixOfPost',$.o(
-    '++','--',$.s('MemberPostFix','.',TokenType.Identifier),
-    $.w('CallPostfix','(',$.ref(()=>Expr),',',')'),
-    $.s('ComputedPostfix','[',$.ref(()=>Expr),']')
-)))
-const Prefix=$.s('Prefix',$.l('FixOfPre',
-        $.o('~','!','-','&','*','++','--','new')),
-    Postfix)
-const Multiplicative=$.s('Multiplicative',Prefix,$.l('Op',
-    $.o('*','/','%'),Prefix))
-const Additive=$.s('Additive',Multiplicative,$.l('Op',
-    $.o('+','-'),Multiplicative))
-const Shift=$.s('Shift',Additive,$.l('Op',
-    $.o('<<','>>'),Additive))
-const Relational=$.s('Relational',Shift,$.l('Op',
-    $.o('<','<=','>','>='),Shift))
-const Equality=$.s('Equality',Relational,$.l('Op',
-    $.o('==','!='),Relational))
-const BitwiseAnd=$.s('BitwiseAnd',Equality,$.l('Op',
-    '&',Equality))
-const BitwiseXor=$.s('BitwiseXor',BitwiseAnd,$.l('Op',
-    '^',BitwiseAnd))
-const BitwiseOr=$.s('BitwiseOr',BitwiseXor,$.l('Op',
-    '|',BitwiseXor))
-const LogicalAnd=$.s('LogicalAnd',BitwiseOr,$.l('Op',
-    '&&',BitwiseOr))
-const LogicalOr=$.s('LogicalOr',LogicalAnd,$.l('Op',
-    '||',LogicalAnd))
-const Binary=LogicalOr
-const Ternary=$.s('Ternary',Binary,'?',$.ref(()=>Ternary),':',$.ref(()=>Ternary))
-const Expr=$.o(Ternary,Binary)
-const _Expr=()=>{
-    const fp=$.o(NumberLiteral,StringLiteral,BooleanLiteral,NullLiteral,Identifier,
-        $.s('ThesesPrimary','(',$.ref(_Expr),')'),
-        $.w('ArrayLiteral','[',$.ref(_Expr),',',']'),
-        $.w('MapLiteral','{',$.s('MapKeyData',Identifier,':',$.ref(_Expr)),',','}'),
-        $.s('LambdaLiteral',$.w('LambdaParam','(',$.s('Param',Identifier,':',Type),',',')'),'=>',$.ref(()=>Command))
-    )
-    const fpost=$.s('Postfix',fp,$.l('FixOfPost',$.o('++','--',
-        $.s('MemberPostFix','.',TokenType.Identifier),
-        $.w('CallPostfix','(',$.ref(_Expr),',',')'),
-        $.s('ComputedPostfix','[',$.ref(_Expr),']'))))
-    const fpre=$.s('Prefix',$.l('FixOfPre',$.o('~','!','-','&','*','++','--','new')),fpost)
-    const fmul=$.s('Multiplicative',fpre,$.l('Op',$.o('*','/','%'),fpre))
-    const fadd=$.s('Additive',fmul,$.l('Op',$.o('+','-'),fmul))
-    const fshift=$.s('Shift',fadd,$.l('Op',$.o('<<','>>'),fadd))
-    const frel=$.s('Relational',fshift,$.l('Op',$.o('<','<=','>','>='),fshift))
-    const feq=$.s('Equality',frel,$.l('Op',$.o('==','!='),frel))
-    const fband=$.s('BitwiseAnd',feq,$.l('Op','&',feq))
-    const fbxor=$.s('BitwiseXor',fband,$.l('Op','^',fband))
-    const fbor=$.s('BitwiseOr',fbxor,$.l('Op','|',fbxor))
-    const fland=$.s('LogicalAnd',fbor,$.l('Op','&&',fbor))
-    const flor=$.s('LogicalOr',fland,$.l('Op','||',fland))
-    const fbin=flor
-    const ftern=$.s('Ternary',fbin,'?',$.ref(_Expr),':',$.ref(_Expr))
-    return $.o(ftern,fbin)
+function Literal(){
+    return $.ref(()=>$.o(
+        $.s('NumberLiteral',TokenType.Number),
+        $.s('StringLiteral',TokenType.String),
+        $.s('BooleanLiteral',$.o('true','false')),
+        $.s('NullLiteral','null')
+    ))
 }
-export {_Expr}
-export default Expr
-const ThesesPrimaryVisitor=(ast:ast_data)=>{
-    ast.children=ast.children.filter(i=>typeof i!='string')
-    return ast
+function Primary(){
+    return $.ref(()=>$.o(
+        $.s('ThesesExpr','(',Expr(),')'),
+        $.w('ArrayExpr','[',Expr(),',',']'),
+        $.w('MapExpr','{',$.s('MapKey',TokenType.Identifier,'=',$.ref(()=>Expr())),',','}'),
+        $.s('IdentifierExpr',TokenType.Identifier),
+        Literal()
+    ))
 }
-const ArrayLiteralVisitor=ThesesPrimaryVisitor
-const MapLiteralVisitor=ArrayLiteralVisitor
-const MapKeyDataVisitor=(ast:ast_data)=>{
-    ast.children=ast.children.filter(i=>i!=':')
-    return ast
+function Postfix(){
+    return $.ref(()=>$.s(
+        'PostfixExpr',
+        Primary(),
+        $.l('PostfixData',$.o(
+            $.s('IncrementPostfix','++'),
+            $.s('DecrementPostfix','--'),
+            $.s('ComputedPostfix','[',Expr(),']'),
+            $.w('CallPostfix','(',Expr(),',',')'),
+            $.s('MemberPostfix','.',TokenType.Identifier)
+        ))
+    ))
 }
-const LambdaLiteralVisitor=(ast:ast_data)=>{
-    ast.children=ast.children.filter(i=>i!='=>')
-    return ast
+function Prefix(){
+    return $.ref(()=>$.s(
+        'PrefixExpr',
+        $.l('PrefixData',$.o(
+            $.s('IncrementPrefix','++'),
+            $.s('DecrementPrefix','--'),
+            $.s('NegatePrefix','-'),
+            $.s('NotPrefix','!'),
+            $.s('BitwiseNotPrefix','~'),
+            $.s('NewPrefix','new')
+        )),
+        Postfix()
+    ))
 }
-const LambdaParamVisitor=MapLiteralVisitor
-const ParamVisitor=MapKeyDataVisitor
-const PostfixVisitor=(ast:ast_data)=>{
-    let ls=(<ast_data>ast.children[1]).children
-    for(let i=0;i<ls.length;i++){
-        if(typeof ls[i]=='string')
-            ls[i]={
-                type:ls[i]=='++'?'IncrementPostfix':'DecrementPostfix',
-                line:[],
-                comment:'',
-                children:[]
-            }
-    }
+function Multiplicative(){
+    return $.ref(()=>$.s(
+        'MultiplicativeExpr',
+        Prefix(),
+        $.l('Oper',$.s('BinaryData',$.o('*','/','%'),Prefix()))
+    ))
+}
+function Additive(){
+    return $.ref(()=>$.s(
+        'AdditiveExpr',
+        Multiplicative(),
+        $.l('Oper',$.s('BinaryData',$.o('+','-'),Multiplicative()))
+    ))
+}
+function Shift(){
+    return $.ref(()=>$.s(
+        'ShiftExpr',
+        Additive(),
+        $.l('Oper',$.s('BinaryData',$.o('<<','>>'),Additive()))
+    ))
+}
+function Relational(){
+    return $.ref(()=>$.s(
+        'RelationalExpr',
+        Shift(),
+        $.l('Oper',$.s('BinaryData',$.o('<=','>=','<','>'),Shift()))
+    ))
+}
+function Equality(){
+    return $.ref(()=>$.s(
+        'EqualityExpr',
+        Relational(),
+        $.l('Oper',$.s('BinaryData',$.o('==','!='),Relational()))
+    ))
+}
+function BitwiseAnd(){
+    return $.ref(()=>$.s(
+        'BitwiseAndExpr',
+        Equality(),
+        $.l('Oper',$.s('BinaryData','&',Equality()))
+    ))
+}
+function BitwiseXor(){
+    return $.ref(()=>$.s(
+        'BitwiseXorExpr',
+        BitwiseAnd(),
+        $.l('Oper',$.s('BinaryData','^',BitwiseAnd()))
+    ))
+}
+function BitwiseOr(){
+    return $.ref(()=>$.s(
+        'BitwiseOrExpr',
+        BitwiseXor(),
+        $.l('Oper',$.s('BinaryData','|',BitwiseXor()))
+    ))
+}
+function LogicalAnd(){
+    return $.ref(()=>$.s(
+        'LogicalAndExpr',
+        BitwiseOr(),
+        $.l('Oper',$.s('BinaryData','&&',BitwiseOr()))
+    ))
+}
+function LogicalOr(){
+    return $.ref(()=>$.s(
+        'LogicalOrExpr',
+        LogicalAnd(),
+        $.l('Oper',$.s('BinaryData','||',LogicalAnd()))
+    ))
+}
+function Binary(){
+    return LogicalOr()
+}
+function Ternary(){
+    return $.ref(()=>$.s(
+        'TernaryExpr',
+        Binary(),
+        '?',
+        Expr(),
+        ':',
+        Expr()
+    ))
+}
+function Expr(){
+    return $.ref(()=>$.o(Binary(),Ternary()))
+}
+const ThesesExpr=(ast:ast_data)=>ast.children[1]
+const ArrayExpr=(ast:ast_data)=>{
+    ast.children.pop()
     ast.children.shift()
-    ast.children.push(...ls)
     return ast
 }
-const MemberPostfixVisitor=(ast:ast_data)=>{
-    ast.children=ast.children.filter(i=>i!='.')
+const MapExpr=ArrayExpr
+const MapKey=(ast:ast_data)=>{
+    ast.children=[ast.children[0],ast.children[1]]
     return ast
 }
-const CallPostfixVisitor=ThesesPrimaryVisitor
-const ComputedPostfixVisitor=CallPostfixVisitor
-const FixOfPreVisitor=(ast:ast_data)=>{
-    let g=(type:string)=> {
-        return {
-            type,
-            comment:'',
-            line:[],
-            children:[]
-        }
-    }
-    for(let i of ast.children){
-        if(i=='!')return g('NotPrefix')
-        if(i=='-')return g('NegPrefix')
-        if(i=='~')return g('ContraryPrefix')
-        if(i=='&')return g('AddressPrefix')
-        if(i=='*')return g('DereferencePrefix')
-        if(i=='++')return g('IncrementPrefix')
-        if(i=='--')return g('DecrementPrefix')
-        if(i=='new')return g('NewPrefix')
-    }
+const ComputedPostfix=(ast:ast_data)=>{
+    ast.children=[ast.children[1]]
+    return ast
 }
-const PrefixVisitor=(ast:ast_data)=>{
-    let ls=ast.children[0] as ast_data
-    let array=ls.children
-    return {
-        type:ast.type,
-        line:ls.line,
-        comment:ls.comment,
-        children:[ast.children[1],...array]
-    }
-}
-const BinaryVisitor=ThesesPrimaryVisitor
-const TernaryVisitor=BinaryVisitor
-export const ExprVisitor=[
-    $.factory('ThesesPrimary',ThesesPrimaryVisitor),
-    $.factory('ArrayLiteral',ArrayLiteralVisitor),
-    $.factory('MapLiteral',MapLiteralVisitor),
-    $.factory('MapKeyData',MapKeyDataVisitor),
-    $.factory('LambdaLiteral',LambdaLiteralVisitor),
-    $.factory('LambdaParam',LambdaParamVisitor),
-    $.factory('Param',ParamVisitor),
-    $.factory('Postfix',PostfixVisitor),
-    $.factory('MemberPostfix',MemberPostfixVisitor),
-    $.factory('CallPostfix',CallPostfixVisitor),
-    $.factory('ComputedPostfix',ComputedPostfixVisitor),
-    $.factory('FixOfPre',FixOfPreVisitor),
-    $.factory('Prefix',PrefixVisitor),
-    $.factory('Multiplicative',BinaryVisitor),
-    $.factory('Additive',BinaryVisitor),
-    $.factory('Shift',BinaryVisitor),
-    $.factory('Relational',BinaryVisitor),
-    $.factory('Equality',BinaryVisitor),
-    $.factory('BitwiseAnd',BinaryVisitor),
-    $.factory('BitwiseXor',BinaryVisitor),
-    $.factory('BitwiseOr',BinaryVisitor),
-    $.factory('LogicalAnd',BinaryVisitor),
-    $.factory('LogicalOr',BinaryVisitor),
-    $.factory('Ternary',TernaryVisitor)
-]
+const CallPostfix=ArrayExpr
+const MemberPostfix=(ast:ast_data)=>ComputedPostfix

@@ -76,7 +76,7 @@ export let string_start_end=['"','\'','`']
 export let number_radix=['x','X','b','B','o','O']
 export let keywords=[
     //修饰符
-    'public','private','async','sync','static','unstatic',
+    'public','private','async','sync','static','unstatic','=>',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
     '+','-','*','/','%','<<','>>','&&','||','&','|','^','==','!=','>=','<=','>','<','!','=',

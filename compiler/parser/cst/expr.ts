@@ -1,47 +1,117 @@
 import {Parser, TokenType} from '../../utils'
-import Type,{_Type} from './identifier'
+import Type from './identifier'
 import Command from './command'
+import command from "./command";
 const $=Parser.cst
-
-const Literal=$.o(
-    TokenType.Number,TokenType.String,'true','false','null'
-)
-const Identifier=$.s(TokenType.Identifier)
-const UnaryOps=$.o('~','!','-','&','*','++','--','new')
-const PostfixOps=$.o($.s('.',TokenType.Identifier),'++','--')
-const MulOps=$.o('*','/','%')
-const AddOps=$.o('+','-')
-const ShiftOps=$.o('<<','>>')
-const RelOps=$.o('<','<=','>','>=')
-
-const _Expr=()=>{
-    const fp=$.o(
-        Identifier,Literal,
-        $.s('(',$.ref(_Expr),')'),
-        $.w('[',$.ref(_Expr),$.s(','),']'),
-        $.w('{',$.s(Identifier,':',$.ref(_Expr)),$.s(','),'}'),
-        $.s($.w('(',$.s(TokenType.Identifier,':',$.ref(_Type)),',',')'),'=>',$.ref(()=>Command))
-    )
-    const fpost=$.s(fp,$.l($.o(
-        $.s('[',$.ref(_Expr),']'),
-        $.w('(',$.ref(_Expr),$.s(','),')'),
-        PostfixOps
-    )))
-    const fpre=$.s($.l(UnaryOps),fpost)
-    const fmul=$.s(fpre,$.l(MulOps,fpre))
-    const fadd=$.s(fmul,$.l(AddOps,fmul))
-    const fshift=$.s(fadd,$.l(ShiftOps,fadd))
-    const frel=$.s(fshift,$.l(RelOps,fshift))
-    const feq=$.s(frel,$.l($.o('==','!='),frel))
-    const fband=$.s(feq,$.l('&',feq))
-    const fbxor=$.s(fband,$.l('^',fband))
-    const fbor=$.s(fbxor,$.l('|',fbxor))
-    const fland=$.s(fbor,$.l('&&',fbor))
-    const flor=$.s(fland,$.l('||',fland))
-    const fbin=flor
-    const ftern=$.s(fbin,'?',fbin,':',fbin)
-    return $.o(ftern,fbin)
+function Literal(){
+    return $.ref(()=>$.o(
+        TokenType.Number,
+        TokenType.String,
+        'true','false','null'
+    ))
 }
-const Expr=_Expr()
-export {_Expr}
-export default Expr
+function Primary(){
+    return $.ref(()=>$.o(
+        $.s('(',Expr(),')'),
+        $.w('[',Expr(),',',']'),
+        $.w('{',$.s(TokenType.Identifier,'=',$.ref(()=>Expr())),',','}'),
+        $.s($.w('(',$.s(TokenType.Identifier,':',Type()),',',')'),':',Type(),'=>',command()),
+        Literal(),
+        TokenType.Identifier
+    ))
+}
+function Postfix(){
+    return $.ref(()=>$.s(
+        Primary(),
+        $.l($.o(
+            '++','--',
+            $.s('[',Expr(),']'),
+            $.w('(',Expr(),',',')'),
+            $.s('.',TokenType.Identifier)
+        ))
+    ))
+}
+function Prefix(){
+    return $.ref(()=>$.s(
+        $.l($.o('++','--','-','!','~','new')),
+        Postfix()
+    ))
+}
+function Multiplicative(){
+    return $.ref(()=>$.s(
+        Prefix(),
+        $.l($.s($.o('*','/','%'),Prefix()))
+    ))
+}
+function Additive(){
+    return $.ref(()=>$.s(
+        Multiplicative(),
+        $.l($.s($.o('+','-'),Multiplicative()))
+    ))
+}
+function Shift(){
+    return $.ref(()=>$.s(
+        Additive(),
+        $.l($.s($.o('<<','>>'),Additive()))
+    ))
+}
+function Relational(){
+    return $.ref(()=>$.s(
+        Shift(),
+        $.l($.s($.o('<=','>=','<','>'),Shift()))
+    ))
+}
+function Equality(){
+    return $.ref(()=>$.s(
+        Relational(),
+        $.l($.s($.o('==','!='),Relational()))
+    ))
+}
+function BitwiseAnd(){
+    return $.ref(()=>$.s(
+        Equality(),
+        $.l($.s('&',Equality()))
+    ))
+}
+function BitwiseXor(){
+    return $.ref(()=>$.s(
+        BitwiseAnd(),
+        $.l($.s('^',BitwiseAnd()))
+    ))
+}
+function BitwiseOr(){
+    return $.ref(()=>$.s(
+        BitwiseXor(),
+        $.l($.s('|',BitwiseXor()))
+    ))
+}
+function LogicalAnd(){
+    return $.ref(()=>$.s(
+        BitwiseOr(),
+        $.l($.s('&&',BitwiseOr()))
+    ))
+}
+function LogicalOr(){
+    return $.ref(()=>$.s(
+        LogicalAnd(),
+        $.l($.s('||',LogicalAnd()))
+    ))
+}
+function Binary(){
+    return LogicalOr()
+}
+function Ternary(){
+    return $.ref(()=>$.s(
+        Binary(),
+        '?',
+        Expr(),
+        ':',
+        Expr()
+    ))
+}
+export default function Expr(){
+    return $.ref(()=>$.o(
+        Binary(),
+        Ternary()
+    ))
+}

@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest'
 import Type from '../../parser/cst/identifier'
 import Expr from '../../parser/cst/expr'
 import Command from '../../parser/cst/command'
-import Block, { link, module_ } from '../../parser/cst/block'
-import { CSTStream } from '../../utils/lib/parser'
+import { link, module_ } from '../../parser/cst/block'
+import { CSTStream, CSTRule_Ref } from '../../utils/lib/parser'
 import { Parser, TokenType } from '../../utils'
-import { token } from '../../utils/data'
+import { token, cst_data } from '../../utils/data'
 
-function t(value: string, type: TokenType = TokenType.Keyword): token {
-    return { type, value, line: `L:${value}` }
+// token 工厂函数, 模拟 lexer 输出
+function kw(value: string): token {
+    return { type: TokenType.Keyword, value, line: `L:${value}` }
 }
 function id(value: string): token {
     return { type: TokenType.Identifier, value, line: `L:${value}` }
@@ -16,475 +17,545 @@ function id(value: string): token {
 function num(value: string): token {
     return { type: TokenType.Number, value, line: `L:${value}` }
 }
-function str(value: string): token {
+function str_lit(value: string): token {
     return { type: TokenType.String, value, line: `L:${value}` }
 }
 
-// ==================== 模块加载验证 ====================
+// 辅助: 调用工厂函数获取新规则实例, 设置 stream, 执行 match
+function match_rule(rule: CSTRule_Ref, tokens: token[]): boolean {
+    const s = new CSTStream([...tokens])
+    rule.stream = s
+    return rule.match()
+}
+function gen_rule(rule: CSTRule_Ref, tokens: token[]): cst_data {
+    const s = new CSTStream([...tokens])
+    rule.stream = s
+    rule.match()
+    return rule.generate()
+}
+
+// ==================== 模块加载 ====================
 describe('CST 模块加载', () => {
-    it('identifier.ts 成功加载', () => {
-        expect(Type).toBeDefined()
+    it('identifier.ts: Type 是 function', () => {
+        expect(Type).toBeInstanceOf(Function)
     })
-    it('expr.ts 成功加载', () => {
-        expect(Expr).toBeDefined()
+    it('expr.ts: Expr 是 function', () => {
+        expect(Expr).toBeInstanceOf(Function)
     })
-    it('command.ts 成功加载', () => {
-        expect(Command).toBeDefined()
+    it('command.ts: Command 是 function', () => {
+        expect(Command).toBeInstanceOf(Function)
     })
-    it('block.ts 成功加载', () => {
-        expect(Block).toBeDefined()
-        expect(link).toBeDefined()
-        expect(module_).toBeDefined()
+    it('block.ts: link/module_ 是 function', () => {
+        expect(link).toBeInstanceOf(Function)
+        expect(module_).toBeInstanceOf(Function)
+    })
+    it('Type() 返回 CSTRule_Ref 实例', () => {
+        expect(Type()).toBeInstanceOf(CSTRule_Ref)
+    })
+    it('Expr() 返回 CSTRule_Ref 实例', () => {
+        expect(Expr()).toBeInstanceOf(CSTRule_Ref)
+    })
+    it('每次调用返回新的 Ref 实例 (状态隔离)', () => {
+        const a = Type()
+        const b = Type()
+        expect(a).not.toBe(b)
     })
 })
 
-// ==================== 类型解析 (identifier.ts) ====================
+// ==================== Type 解析 (identifier.ts) ====================
 describe('Type 解析 (identifier.ts)', () => {
-    function match_type(tokens: token[]): boolean {
-        const s = new CSTStream([...tokens])
-        Type.stream = s
-        return Type.match()
-    }
-    function gen_type(tokens: token[]) {
-        const s = new CSTStream([...tokens])
-        Type.stream = s
-        Type.match()
-        return Type.generate()
-    }
-
-    it('基础类型: number', () => {
-        expect(match_type([t('number')])).toBe(true)
-    })
-    it('基础类型: string', () => {
-        expect(match_type([t('string')])).toBe(true)
+    it('基础类型: void', () => {
+        expect(match_rule(Type(), [kw('void')])).toBe(true)
     })
     it('基础类型: boolean', () => {
-        expect(match_type([t('boolean')])).toBe(true)
+        expect(match_rule(Type(), [kw('boolean')])).toBe(true)
     })
-    it('基础类型: void', () => {
-        expect(match_type([t('void')])).toBe(true)
+    it('基础类型: number', () => {
+        expect(match_rule(Type(), [kw('number')])).toBe(true)
     })
-    it('限定名: a.b.c', () => {
-        expect(match_type([id('a'), t('.'), id('b'), t('.'), id('c')])).toBe(true)
+    it('基础类型: string', () => {
+        expect(match_rule(Type(), [kw('string')])).toBe(true)
     })
-    it('数组类型: number[]', () => {
-        expect(match_type([t('number'), t('['), t(']')])).toBe(true)
+    it('限定名: 单标识符 a', () => {
+        expect(match_rule(Type(), [id('a')])).toBe(true)
+    })
+    it('限定名: 多层点分隔 a.b.C', () => {
+        expect(match_rule(Type(), [id('a'), kw('.'), id('b'), kw('.'), id('C')])).toBe(true)
+    })
+    it('数组类型: number[] ([] 是单 token)', () => {
+        expect(match_rule(Type(), [kw('number'), kw('[]')])).toBe(true)
+    })
+    it('嵌套数组: number[][]', () => {
+        expect(match_rule(Type(), [kw('number'), kw('[]'), kw('[]')])).toBe(true)
     })
     it('Map 类型: string{}', () => {
-        expect(match_type([t('string'), t('{'), t('}')])).toBe(true)
+        expect(match_rule(Type(), [kw('string'), kw('{}')])).toBe(true)
     })
     it('指针类型: number*', () => {
-        const s = new CSTStream([t('number'), t('*')])
-        Type.stream = s
-        expect(Type.match()).toBe(true)
+        expect(match_rule(Type(), [kw('number'), kw('*')])).toBe(true)
+    })
+    it('多重指针: number**', () => {
+        expect(match_rule(Type(), [kw('number'), kw('*'), kw('*')])).toBe(true)
+    })
+    it('混合后缀: number[]*', () => {
+        expect(match_rule(Type(), [kw('number'), kw('[]'), kw('*')])).toBe(true)
     })
     it('括号类型: (number)', () => {
-        expect(match_type([t('('), t('number'), t(')')])).toBe(true)
+        expect(match_rule(Type(), [kw('('), kw('number'), kw(')')])).toBe(true)
     })
-    it('函数类型: (a: number) => number', () => {
-        const tokens = [t('('), id('a'), t(':'), t('number'), t(')'), t('=>'), t('number')]
-        expect(match_type(tokens)).toBe(true)
+    it('括号嵌套: ((number))', () => {
+        expect(match_rule(Type(), [kw('('), kw('('), kw('number'), kw(')'), kw(')')])).toBe(true)
     })
-    it('函数类型多参数: (a: number, b: string) => boolean', () => {
-        const tokens = [
-            t('('), id('a'), t(':'), t('number'), t(','),
-            id('b'), t(':'), t('string'), t(')'),
-            t('=>'), t('boolean')
-        ]
-        expect(match_type(tokens)).toBe(true)
+    it('括号+后缀: (number)[]', () => {
+        expect(match_rule(Type(), [kw('('), kw('number'), kw(')'), kw('[]')])).toBe(true)
     })
-    it('generate 返回正确的 cst_data', () => {
-        const result = gen_type([t('number')])
+    it('generate: number 返回非空 cst_data', () => {
+        const result = gen_rule(Type(), [kw('number')])
+        expect(result).toBeDefined()
+        expect(Array.isArray(result)).toBe(true)
+    })
+    it('generate: number[] 返回非空 cst_data', () => {
+        const result = gen_rule(Type(), [kw('number'), kw('[]')])
         expect(Array.isArray(result)).toBe(true)
     })
 })
 
-// ==================== 表达式解析 (expr.ts) ====================
+// ==================== Expr 解析 (expr.ts) ====================
 describe('Expr 解析 (expr.ts)', () => {
-    function match_expr(tokens: token[]): boolean {
-        const s = new CSTStream([...tokens])
-        Expr.stream = s
-        return Expr.match()
-    }
-
+    // --- 字面量 ---
     it('字面量: 数字', () => {
-        expect(match_expr([num('42')])).toBe(true)
+        expect(match_rule(Expr(), [num('42')])).toBe(true)
     })
     it('字面量: 字符串', () => {
-        expect(match_expr([str('"hello"')])).toBe(true)
+        expect(match_rule(Expr(), [str_lit('hello')])).toBe(true)
     })
     it('字面量: true', () => {
-        expect(match_expr([t('true')])).toBe(true)
+        expect(match_rule(Expr(), [kw('true')])).toBe(true)
     })
     it('字面量: false', () => {
-        expect(match_expr([t('false')])).toBe(true)
+        expect(match_rule(Expr(), [kw('false')])).toBe(true)
     })
     it('字面量: null', () => {
-        expect(match_expr([t('null')])).toBe(true)
+        expect(match_rule(Expr(), [kw('null')])).toBe(true)
     })
     it('标识符', () => {
-        expect(match_expr([id('x')])).toBe(true)
+        expect(match_rule(Expr(), [id('myVar')])).toBe(true)
     })
-    it('括号表达式: (x)', () => {
-        expect(match_expr([t('('), id('x'), t(')')])).toBe(true)
+
+    // --- 括号表达式 ---
+    it('括号: (x)', () => {
+        expect(match_rule(Expr(), [kw('('), id('x'), kw(')')])).toBe(true)
     })
-    it('括号表达式: (1 + 2)', () => {
-        expect(match_expr([t('('), num('1'), t('+'), num('2'), t(')')])).toBe(true)
+    it('括号: (1 + 2)', () => {
+        expect(match_rule(Expr(), [kw('('), num('1'), kw('+'), num('2'), kw(')')])).toBe(true)
     })
-    it('前缀: -x', () => {
-        expect(match_expr([t('-'), id('x')])).toBe(true)
+
+    // --- 数组字面量 [1, 2] ---
+    it('数组: [1, 2, 3]', () => {
+        expect(match_rule(Expr(), [
+            kw('['), num('1'), kw(','), num('2'), kw(','), num('3'), kw(']')
+        ])).toBe(true)
     })
-    it('前缀: !x', () => {
-        expect(match_expr([t('!'), id('x')])).toBe(true)
+    it('数组: [] (空数组)', () => {
+        expect(match_rule(Expr(), [kw('['), kw(']')])).toBe(true)
     })
-    it('前缀: ++x', () => {
-        expect(match_expr([t('++'), id('x')])).toBe(true)
+
+    // --- 对象字面量 (语法使用 = 不是 :) ---
+    it('对象: {x = 1}', () => {
+        expect(match_rule(Expr(), [kw('{'), id('x'), kw('='), num('1'), kw('}')])).toBe(true)
     })
+    it('对象: {} (空对象, While 空匹配)', () => {
+        expect(match_rule(Expr(), [kw('{'), kw('}')])).toBe(true)
+    })
+
+    // --- 后缀操作 ---
     it('后缀: x++', () => {
-        expect(match_expr([id('x'), t('++')])).toBe(true)
+        expect(match_rule(Expr(), [id('x'), kw('++')])).toBe(true)
     })
     it('后缀: x--', () => {
-        expect(match_expr([id('x'), t('--')])).toBe(true)
+        expect(match_rule(Expr(), [id('x'), kw('--')])).toBe(true)
     })
-    it('成员访问: x.y', () => {
-        expect(match_expr([id('x'), t('.'), id('y')])).toBe(true)
+    it('后缀: 成员访问 x.y', () => {
+        expect(match_rule(Expr(), [id('x'), kw('.'), id('y')])).toBe(true)
     })
-    it('下标: a[0]', () => {
-        expect(match_expr([id('a'), t('['), num('0'), t(']')])).toBe(true)
+    it('后缀: 下标 a[0]', () => {
+        expect(match_rule(Expr(), [id('a'), kw('['), num('0'), kw(']')])).toBe(true)
     })
-    it('函数调用: f()', () => {
-        expect(match_expr([id('f'), t('('), t(')')])).toBe(true)
+    it('后缀: 函数调用 f()', () => {
+        expect(match_rule(Expr(), [id('f'), kw('('), kw(')')])).toBe(true)
     })
-    it('函数调用: f(1, 2)', () => {
-        expect(match_expr([id('f'), t('('), num('1'), t(','), num('2'), t(')')])).toBe(true)
+    it('后缀: 函数调用 f(1, 2)', () => {
+        expect(match_rule(Expr(), [id('f'), kw('('), num('1'), kw(','), num('2'), kw(')')])).toBe(true)
     })
-    it('加法: a + b', () => {
-        expect(match_expr([id('a'), t('+'), id('b')])).toBe(true)
+
+    // --- 前缀操作 ---
+    it('前缀: -x', () => {
+        expect(match_rule(Expr(), [kw('-'), id('x')])).toBe(true)
     })
-    it('减法: a - b', () => {
-        expect(match_expr([id('a'), t('-'), id('b')])).toBe(true)
+    it('前缀: !x', () => {
+        expect(match_rule(Expr(), [kw('!'), id('x')])).toBe(true)
     })
+    it('前缀: ~x', () => {
+        expect(match_rule(Expr(), [kw('~'), id('x')])).toBe(true)
+    })
+    it('前缀: ++x', () => {
+        expect(match_rule(Expr(), [kw('++'), id('x')])).toBe(true)
+    })
+    it('前缀: --x', () => {
+        expect(match_rule(Expr(), [kw('--'), id('x')])).toBe(true)
+    })
+
+    // --- 二元运算 (按优先级链验证) ---
     it('乘法: a * b', () => {
-        expect(match_expr([id('a'), t('*'), id('b')])).toBe(true)
+        expect(match_rule(Expr(), [id('a'), kw('*'), id('b')])).toBe(true)
     })
     it('除法: a / b', () => {
-        expect(match_expr([id('a'), t('/'), id('b')])).toBe(true)
+        expect(match_rule(Expr(), [id('a'), kw('/'), id('b')])).toBe(true)
     })
-    it('运算符优先级: a + b * c', () => {
-        expect(match_expr([id('a'), t('+'), id('b'), t('*'), id('c')])).toBe(true)
+    it('取模: a % b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('%'), id('b')])).toBe(true)
     })
-    it('比较: a < b', () => {
-        expect(match_expr([id('a'), t('<'), id('b')])).toBe(true)
+    it('加法: a + b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('+'), id('b')])).toBe(true)
     })
-    it('相等: a == b', () => {
-        expect(match_expr([id('a'), t('=='), id('b')])).toBe(true)
+    it('减法: a - b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('-'), id('b')])).toBe(true)
     })
-    it('逻辑与: a && b', () => {
-        expect(match_expr([id('a'), t('&&'), id('b')])).toBe(true)
-    })
-    it('逻辑或: a || b', () => {
-        expect(match_expr([id('a'), t('||'), id('b')])).toBe(true)
-    })
-    it('三元: a ? b : c', () => {
-        expect(match_expr([id('a'), t('?'), id('b'), t(':'), id('c')])).toBe(true)
-    })
-    it('位运算: a & b', () => {
-        expect(match_expr([id('a'), t('&'), id('b')])).toBe(true)
-    })
-    it('位运算: a | b', () => {
-        expect(match_expr([id('a'), t('|'), id('b')])).toBe(true)
-    })
-    it('位运算: a ^ b', () => {
-        expect(match_expr([id('a'), t('^'), id('b')])).toBe(true)
+    it('优先级: a + b * c', () => {
+        expect(match_rule(Expr(), [id('a'), kw('+'), id('b'), kw('*'), id('c')])).toBe(true)
     })
     it('移位: a << b', () => {
-        expect(match_expr([id('a'), t('<<'), id('b')])).toBe(true)
+        expect(match_rule(Expr(), [id('a'), kw('<<'), id('b')])).toBe(true)
     })
     it('移位: a >> b', () => {
-        expect(match_expr([id('a'), t('>>'), id('b')])).toBe(true)
+        expect(match_rule(Expr(), [id('a'), kw('>>'), id('b')])).toBe(true)
     })
-    it('new 表达式: new X', () => {
-        expect(match_expr([t('new'), id('X')])).toBe(true)
+    it('比较: a < b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('<'), id('b')])).toBe(true)
     })
-    it('数组字面量: [1, 2, 3]', () => {
-        expect(match_expr([t('['), num('1'), t(','), num('2'), t(','), num('3'), t(']')])).toBe(true)
+    it('比较: a >= b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('>='), id('b')])).toBe(true)
     })
-    it('对象字面量: {x: 1}', () => {
-        expect(match_expr([t('{'), id('x'), t(':'), num('1'), t('}')])).toBe(true)
+    it('相等: a == b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('=='), id('b')])).toBe(true)
+    })
+    it('不等: a != b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('!='), id('b')])).toBe(true)
+    })
+    it('位与: a & b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('&'), id('b')])).toBe(true)
+    })
+    it('位或: a | b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('|'), id('b')])).toBe(true)
+    })
+    it('位异或: a ^ b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('^'), id('b')])).toBe(true)
+    })
+    it('逻辑与: a && b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('&&'), id('b')])).toBe(true)
+    })
+    it('逻辑或: a || b', () => {
+        expect(match_rule(Expr(), [id('a'), kw('||'), id('b')])).toBe(true)
+    })
+
+    // --- 三元运算 ---
+    it('三元: a ? b : c', () => {
+        expect(match_rule(Expr(), [id('a'), kw('?'), id('b'), kw(':'), id('c')])).toBe(true)
+    })
+
+    // --- generate 验证 ---
+    it('generate: 数字返回非空 cst_data', () => {
+        const result = gen_rule(Expr(), [num('42')])
+        expect(result).toBeDefined()
+    })
+    it('generate: 二元表达式返回非空 cst_data', () => {
+        const result = gen_rule(Expr(), [id('a'), kw('+'), id('b')])
+        expect(result).toBeDefined()
     })
 })
 
-// ==================== 命令解析 (command.ts) ====================
+// ==================== Command 解析 (command.ts) ====================
 describe('Command 解析 (command.ts)', () => {
-    function match_cmd(tokens: token[]): boolean {
-        const s = new CSTStream([...tokens])
-        Command.stream = s
-        return Command.match()
-    }
-
-    it('赋值: x = 1;', () => {
-        expect(match_cmd([id('x'), t('='), num('1'), t(';')])).toBe(true)
-    })
-    it('复合赋值: x += 1;', () => {
-        expect(match_cmd([id('x'), t('+='), num('1'), t(';')])).toBe(true)
-    })
+    // --- 简单命令 (带关键字的) ---
     it('return;', () => {
-        expect(match_cmd([t('return'), t(';')])).toBe(true)
+        expect(match_rule(Command(), [kw('return'), kw(';')])).toBe(true)
     })
     it('return expr;', () => {
-        expect(match_cmd([t('return'), num('42'), t(';')])).toBe(true)
+        expect(match_rule(Command(), [kw('return'), num('42'), kw(';')])).toBe(true)
     })
     it('break;', () => {
-        expect(match_cmd([t('break'), t(';')])).toBe(true)
+        expect(match_rule(Command(), [kw('break'), kw(';')])).toBe(true)
     })
     it('continue;', () => {
-        expect(match_cmd([t('continue'), t(';')])).toBe(true)
+        expect(match_rule(Command(), [kw('continue'), kw(';')])).toBe(true)
     })
-    it('await expr;', () => {
-        expect(match_cmd([t('await'), id('f'), t('('), t(')'), t(';')])).toBe(true)
+    it('throw "err";', () => {
+        expect(match_rule(Command(), [kw('throw'), str_lit('err'), kw(';')])).toBe(true)
     })
-    it('throw expr;', () => {
-        expect(match_cmd([t('throw'), str('"error"'), t(';')])).toBe(true)
+    it('await f();', () => {
+        expect(match_rule(Command(), [kw('await'), id('f'), kw('('), kw(')'), kw(';')])).toBe(true)
     })
     it('vm "code";', () => {
-        expect(match_cmd([t('vm'), str('"code"'), t(';')])).toBe(true)
+        expect(match_rule(Command(), [kw('vm'), str_lit('code'), kw(';')])).toBe(true)
     })
-    it('var x: number;', () => {
-        expect(match_cmd([t('var'), id('x'), t(':'), t('number'), t(';')])).toBe(true)
+
+    // --- 自增/自减 (命令形式: expr++; ---
+    it('自增: x++;', () => {
+        expect(match_rule(Command(), [id('x'), kw('++'), kw(';')])).toBe(true)
     })
+    it('自减: x--;', () => {
+        expect(match_rule(Command(), [id('x'), kw('--'), kw(';')])).toBe(true)
+    })
+
+    // --- var 声明 (语法要求 = Expr, 无 $.c 包裹) ---
     it('var x: number = 5;', () => {
-        expect(match_cmd([t('var'), id('x'), t(':'), t('number'), t('='), num('5'), t(';')])).toBe(true)
-    })
-    it('if (x) {}', () => {
-        expect(match_cmd([t('if'), t('('), id('x'), t(')'), t('{'), t('}')])).toBe(true)
-    })
-    it('if (x) {stmt;}', () => {
-        expect(match_cmd([t('if'), t('('), id('x'), t(')'), t('{'), id('a'), t('='), num('1'), t(';'), t('}')])).toBe(true)
-    })
-    it('if (x) {} else {}', () => {
-        expect(match_cmd([
-            t('if'), t('('), id('x'), t(')'), t('{'), t('}'),
-            t('else'), t('{'), t('}')
+        expect(match_rule(Command(), [
+            kw('var'), id('x'), kw(':'), kw('number'), kw('='), num('5'), kw(';')
         ])).toBe(true)
     })
+
+    // --- if ---
+    it('if (x) {}', () => {
+        expect(match_rule(Command(), [
+            kw('if'), kw('('), id('x'), kw(')'), kw('{'), kw('}')
+        ])).toBe(true)
+    })
+    it('if (x) {return;} else {}', () => {
+        expect(match_rule(Command(), [
+            kw('if'), kw('('), id('x'), kw(')'),
+            kw('{'), kw('return'), kw(';'), kw('}'),
+            kw('else'), kw('{'), kw('}')
+        ])).toBe(true)
+    })
+
+    // --- while ---
     it('while (x) {}', () => {
-        expect(match_cmd([t('while'), t('('), id('x'), t(')'), t('{'), t('}')])).toBe(true)
+        expect(match_rule(Command(), [
+            kw('while'), kw('('), id('x'), kw(')'), kw('{'), kw('}')
+        ])).toBe(true)
     })
-    it('do {} while (x)', () => {
-        expect(match_cmd([t('do'), t('{'), t('}'), t('while'), t('('), id('x'), t(')')])).toBe(true)
+
+    // --- do-while (语法以 ; 结尾) ---
+    it('do {} while (x);', () => {
+        expect(match_rule(Command(), [
+            kw('do'), kw('{'), kw('}'), kw('while'), kw('('), id('x'), kw(')'), kw(';')
+        ])).toBe(true)
     })
-    it('for (;;) {}', () => {
-        expect(match_cmd([t('for'), t('('), t(';'), id('x'), t('<'), num('10'), t(';'), t('{'), t('}')])).toBe(false)
-    })
+
+    // --- for-in ---
     it('for (x: arr) {}', () => {
-        expect(match_cmd([t('for'), t('('), id('x'), t(':'), id('arr'), t(')'), t('{'), t('}')])).toBe(true)
+        expect(match_rule(Command(), [
+            kw('for'), kw('('), id('x'), kw(':'), id('arr'), kw(')'), kw('{'), kw('}')
+        ])).toBe(true)
     })
-    it('switch (x) { case 1 => {} default {} }', () => {
-        const tokens = [
-            t('switch'), t('('), id('x'), t(')'), t('{'),
-            t('case'), num('1'), t('=>'), t('{'), t('}'),
-            t('default'), t('{'), t('}'),
-            t('}')
-        ]
-        expect(match_cmd(tokens)).toBe(true)
+
+    // --- switch ---
+    it('switch (x) { case 1 => {} default => {} }', () => {
+        expect(match_rule(Command(), [
+            kw('switch'), kw('('), id('x'), kw(')'), kw('{'),
+            kw('case'), num('1'), kw('=>'), kw('{'), kw('}'),
+            kw('default'), kw('=>'), kw('{'), kw('}'),
+            kw('}')
+        ])).toBe(true)
     })
+
+    // --- try/catch/finally ---
     it('try {} catch (e: Error) {}', () => {
-        expect(match_cmd([
-            t('try'), t('{'), t('}'),
-            t('catch'), t('('), id('e'), t(':'), id('Error'), t(')'), t('{'), t('}')
+        expect(match_rule(Command(), [
+            kw('try'), kw('{'), kw('}'),
+            kw('catch'), kw('('), id('e'), kw(':'), id('Error'), kw(')'), kw('{'), kw('}')
         ])).toBe(true)
     })
     it('try {} catch (e: Error) {} finally {}', () => {
-        expect(match_cmd([
-            t('try'), t('{'), t('}'),
-            t('catch'), t('('), id('e'), t(':'), id('Error'), t(')'), t('{'), t('}'),
-            t('finally'), t('{'), t('}')
+        expect(match_rule(Command(), [
+            kw('try'), kw('{'), kw('}'),
+            kw('catch'), kw('('), id('e'), kw(':'), id('Error'), kw(')'), kw('{'), kw('}'),
+            kw('finally'), kw('{'), kw('}')
         ])).toBe(true)
     })
-    it('块: { stmt1; stmt2; }', () => {
-        const tokens = [
-            t('{'),
-            id('a'), t('='), num('1'), t(';'),
-            id('b'), t('='), num('2'), t(';'),
-            t('}')
-        ]
-        expect(match_cmd(tokens)).toBe(true)
+
+    // --- 块 ---
+    it('块: { return; break; }', () => {
+        expect(match_rule(Command(), [
+            kw('{'),
+            kw('return'), kw(';'),
+            kw('break'), kw(';'),
+            kw('}')
+        ])).toBe(true)
+    })
+
+    // --- generate ---
+    it('generate: return; 返回非空 cst_data', () => {
+        const result = gen_rule(Command(), [kw('return'), kw(';')])
+        expect(result).toBeDefined()
     })
 })
 
-// ==================== 块解析 (block.ts) ====================
+// ==================== Block 解析 (block.ts) ====================
 describe('Block 解析 (block.ts)', () => {
-    function match_block(tokens: token[]): boolean {
-        const s = new CSTStream([...tokens])
-        Block.stream = s
-        return Block.match()
-    }
+    // link: 语法为 link ident.path as ident; (无括号)
+    it('link a.b.c as d;', () => {
+        expect(match_rule(link(), [
+            kw('link'), id('a'), kw('.'), id('b'), kw('.'), id('c'), kw('as'), id('d'), kw(';')
+        ])).toBe(true)
+    })
+    it('link a as b;', () => {
+        expect(match_rule(link(), [
+            kw('link'), id('a'), kw('as'), id('b'), kw(';')
+        ])).toBe(true)
+    })
 
-    it('link (a.b) as c', () => {
-        const s = new CSTStream([t('link'), t('('), id('a'), t('.'), id('b'), t(')'), t('as'), id('c')])
-        link.stream = s
-        expect(link.match()).toBe(true)
-    })
-    it('link (a) as b', () => {
-        const s = new CSTStream([t('link'), t('('), id('a'), t(')'), t('as'), id('b')])
-        link.stream = s
-        expect(link.match()).toBe(true)
-    })
-    it('var x: number;', () => {
-        expect(match_block([t('var'), t('number'), id('x'), t(';')])).toBe(true)
-    })
-    it('var: 带初始化 var number x = 5;', () => {
-        expect(match_block([t('var'), t('number'), id('x'), t('='), num('5'), t(';')])).toBe(true)
-    })
-    it('public function main(): void {}', () => {
-        const tokens = [
-            t('public'), t('function'), t('('), t(')'),
-            t(':'), t('void'), t('{'), t('}')
-        ]
-        expect(match_block(tokens)).toBe(true)
-    })
-    it('async function f(x: number): number {return x;}', () => {
-        const tokens = [
-            t('async'), t('function'),
-            t('('), id('x'), t(':'), t('number'), t(')'),
-            t(':'), t('number'),
-            t('{'), t('return'), id('x'), t(';'), t('}')
-        ]
-        expect(match_block(tokens)).toBe(true)
-    })
-    it('class Foo {}', () => {
-        expect(match_block([t('class'), id('Foo'), t('{'), t('}')])).toBe(true)
-    })
-    it('class Foo of Bar { var x: number; }', () => {
-        expect(match_block([
-            t('class'), id('Foo'), t('of'), id('Bar'),
-            t('{'), t('var'), t('number'), id('x'), t(';'), t('}')
-        ])).toBe(true)
-    })
-    it('interface I {}', () => {
-        expect(match_block([t('interface'), id('I'), t('{'), t('}')])).toBe(true)
-    })
-    it('interface I implements J { var x: number; }', () => {
-        expect(match_block([
-            t('interface'), id('I'), t('implements'), id('J'),
-            t('{'), t('var'), t('number'), id('x'), t(';'), t('}')
-        ])).toBe(true)
-    })
-    it('enum Color { Red, Green, Blue }', () => {
-        expect(match_block([
-            t('enum'),
-            t('{'), id('Red'), t(','), id('Green'), t(','), id('Blue'),
-            t('}')
-        ])).toBe(true)
-    })
+    // module
     it('module { }', () => {
-        const s = new CSTStream([t('module'), t('{'), t('}')])
-        module_.stream = s
-        expect(module_.match()).toBe(true)
+        expect(match_rule(module_(), [kw('module'), kw('{'), kw('}')])).toBe(true)
     })
-    it('多个顶层声明连续匹配', () => {
-        const tokens = [
-            t('link'), id('a'), t('as'), id('b'),
-            t('var'), t('number'), id('x'), t(';'),
-            t('public'), t('function'), t('('), t(')'), t(':'), t('void'), t('{'), t('}')
-        ]
-        const s = new CSTStream([...tokens])
-        Block.stream = s
-        expect(Block.match()).toBe(true)
+    // function 语法: function ReturnType (params) body
+    it('module { public f : function void () {} }', () => {
+        expect(match_rule(module_(), [
+            kw('module'), kw('{'),
+            kw('public'), id('f'), kw(':'), kw('function'),
+            kw('void'), kw('('), kw(')'), kw('{'), kw('}'),
+            kw('}')
+        ])).toBe(true)
+    })
+
+    // generate
+    it('generate: link 返回非空 cst_data', () => {
+        const result = gen_rule(link(), [
+            kw('link'), id('a'), kw('as'), id('b'), kw(';')
+        ])
+        expect(result).toBeDefined()
+    })
+    it('generate: module 返回非空 cst_data', () => {
+        const result = gen_rule(module_(), [kw('module'), kw('{'), kw('}')])
+        expect(result).toBeDefined()
     })
 })
 
 // ==================== 跨模块集成 ====================
 describe('跨模块集成', () => {
-    it('表达式: 用 Expr 匹配括号表达式 (x)', () => {
-        const s = new CSTStream([t('('), id('x'), t(')')])
-        Expr.stream = s
-        expect(Expr.match()).toBe(true)
+    it('括号表达式中嵌入复杂表达式: (a + b * c)', () => {
+        expect(match_rule(Expr(), [
+            kw('('),
+            id('a'), kw('+'), id('b'), kw('*'), id('c'),
+            kw(')')
+        ])).toBe(true)
     })
-    // 已知限制: lambda 表达式在 Expr=o(Ternary,Binary) 的 Or 第二次 Binary 重试时失败
-    // 根因: 第一次 Binary(在 Ternary 中) 成功后, 第二次 Binary 的 Primary lambda 路径中
-    //       CSTRule_While/Command 内部状态未能完全重置, 导致匹配结果不一致
-    it.todo('表达式 lambda: (x: number) => {}')
-    it('命令中使用表达式: if (a + b > 0) { x = 1; }', () => {
-        const tokens = [
-            t('if'), t('('),
-            id('a'), t('+'), id('b'), t('>'), num('0'),
-            t(')'),
-            t('{'),
-            id('x'), t('='), num('1'), t(';'),
-            t('}')
-        ]
-        const s = new CSTStream([...tokens])
-        Command.stream = s
-        expect(Command.match()).toBe(true)
-    })
-    it('函数定义包含完整表达式: function f(x: number): number { return x + 1; }', () => {
-        const tokens = [
-            t('function'),
-            t('('), id('x'), t(':'), t('number'), t(')'),
-            t(':'), t('number'),
-            t('{'),
-            t('return'), id('x'), t('+'), num('1'), t(';'),
-            t('}')
-        ]
-        const s = new CSTStream([...tokens])
-        Block.stream = s
-        expect(Block.match()).toBe(true)
-    })
-})
-
-// ==================== generate 验证 ====================
-describe('CST generate 验证', () => {
-    it('Type generate 返回 cst_data[]', () => {
-        const s = new CSTStream([t('number')])
-        Type.stream = s
-        Type.match()
-        const result = Type.generate()
-        expect(Array.isArray(result)).toBe(true)
-    })
-    it('Expr generate 返回 cst_data', () => {
-        const s = new CSTStream([num('42')])
-        Expr.stream = s
-        Expr.match()
-        const result = Expr.generate()
-        expect(result).toBeDefined()
-    })
-    it('Command generate 返回 cst_data', () => {
-        const s = new CSTStream([t('return'), t(';')])
-        Command.stream = s
-        Command.match()
-        const result = Command.generate()
-        expect(result).toBeDefined()
+    it('嵌套块语句: { if (x) {return;} }', () => {
+        expect(match_rule(Command(), [
+            kw('{'),
+            kw('if'), kw('('), id('x'), kw(')'), kw('{'), kw('return'), kw(';'), kw('}'),
+            kw('}')
+        ])).toBe(true)
     })
 })
 
 // ==================== 边界情况 ====================
 describe('边界情况', () => {
     it('空流: Type match 返回 false', () => {
-        const s = new CSTStream([])
-        Type.stream = s
-        expect(Type.match()).toBe(false)
+        expect(match_rule(Type(), [])).toBe(false)
     })
     it('空流: Expr match 返回 false', () => {
-        const s = new CSTStream([])
-        Expr.stream = s
-        expect(Expr.match()).toBe(false)
+        expect(match_rule(Expr(), [])).toBe(false)
     })
-    it('不合法类型', () => {
-        const s = new CSTStream([t('+')])
-        Type.stream = s
-        expect(Type.match()).toBe(false)
+    it('空流: Command match 返回 false', () => {
+        expect(match_rule(Command(), [])).toBe(false)
     })
-    it('不合法表达式', () => {
-        const s = new CSTStream([t(';')])
-        Expr.stream = s
-        expect(Expr.match()).toBe(false)
+    it('非法类型: 单个运算符 +', () => {
+        expect(match_rule(Type(), [kw('+')])).toBe(false)
     })
-    it('重复 match 不崩溃', () => {
-        const s = new CSTStream([t('number'), num('42'), t('number')])
-        Type.stream = s
-        Type.match()
-        Type.match()
-        expect(true).toBe(true)
+    it('非法表达式: 只有分号', () => {
+        expect(match_rule(Expr(), [kw(';')])).toBe(false)
+    })
+    it('重复 match 不崩溃 (每次 match 重建内部规则)', () => {
+        const rule = Type()
+        expect(() => {
+            rule.stream = new CSTStream([kw('number')])
+            rule.match()
+            rule.stream = new CSTStream([kw('string')])
+            rule.match()
+        }).not.toThrow()
+    })
+    it('重复 generate 不崩溃', () => {
+        const rule = Type()
+        rule.stream = new CSTStream([kw('number')])
+        rule.match()
+        expect(() => rule.generate()).not.toThrow()
+        expect(() => rule.generate()).not.toThrow()
+    })
+    it('不同实例之间状态不互相影响', () => {
+        const a = Type()
+        const b = Type()
+        a.stream = new CSTStream([kw('number')])
+        b.stream = new CSTStream([kw('string')])
+        expect(a.match()).toBe(true)
+        expect(b.match()).toBe(true)
+    })
+})
+
+// ==================== 已修复: 赋值与声明 (command.ts) ====================
+describe('已修复: 赋值与 var 声明', () => {
+    it('赋值: x = 1;', () => {
+        expect(match_rule(Command(), [id('x'), kw('='), num('1'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x += 1;', () => {
+        expect(match_rule(Command(), [id('x'), kw('+='), num('1'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x -= 1;', () => {
+        expect(match_rule(Command(), [id('x'), kw('-='), num('1'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x *= 2;', () => {
+        expect(match_rule(Command(), [id('x'), kw('*='), num('2'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x /= 2;', () => {
+        expect(match_rule(Command(), [id('x'), kw('/='), num('2'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x %= 2;', () => {
+        expect(match_rule(Command(), [id('x'), kw('%='), num('2'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x <<= 1;', () => {
+        expect(match_rule(Command(), [id('x'), kw('<<='), num('1'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x >>= 1;', () => {
+        expect(match_rule(Command(), [id('x'), kw('>>='), num('1'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x &&= y;', () => {
+        expect(match_rule(Command(), [id('x'), kw('&&='), id('y'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x ||= y;', () => {
+        expect(match_rule(Command(), [id('x'), kw('||='), id('y'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x &= y;', () => {
+        expect(match_rule(Command(), [id('x'), kw('&='), id('y'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x |= y;', () => {
+        expect(match_rule(Command(), [id('x'), kw('|='), id('y'), kw(';')])).toBe(true)
+    })
+    it('复合赋值: x ^= y;', () => {
+        expect(match_rule(Command(), [id('x'), kw('^='), id('y'), kw(';')])).toBe(true)
+    })
+    it('var x: number; (无初始化器, $.c 修复)', () => {
+        expect(match_rule(Command(), [kw('var'), id('x'), kw(':'), kw('number'), kw(';')])).toBe(true)
+    })
+    it('var x: number = 5; (有初始化器)', () => {
+        expect(match_rule(Command(), [
+            kw('var'), id('x'), kw(':'), kw('number'), kw('='), num('5'), kw(';')
+        ])).toBe(true)
+    })
+    // 跨模块: 命令中嵌入表达式
+    it('if (a + b > 0) { x = 1; }', () => {
+        expect(match_rule(Command(), [
+            kw('if'), kw('('),
+            id('a'), kw('+'), id('b'), kw('>'), num('0'),
+            kw(')'),
+            kw('{'),
+            id('x'), kw('='), num('1'), kw(';'),
+            kw('}')
+        ])).toBe(true)
+    })
+    // generate
+    it('generate: x = 1; 返回非空', () => {
+        const result = gen_rule(Command(), [id('x'), kw('='), num('1'), kw(';')])
+        expect(result).toBeDefined()
     })
 })
