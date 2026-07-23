@@ -3,7 +3,6 @@ const $=Parser.cst
 import Type from './identifier'
 import Command from './command'
 import Expr from './expr'
-import command from "./command";
 export function link(){
     return $.ref(()=>$.s(
         $.s('link',TokenType.Identifier,$.l('.',TokenType.Identifier),'as',TokenType.Identifier),';'))
@@ -15,7 +14,7 @@ function modifier(){
 }
 function function_(){
     return $.ref(()=>$.s(
-        'function',Type(),$.w('(',$.s(TokenType.Identifier,':',Type()),',',')'),command()))
+        'function',Type(),$.w('(',$.s(TokenType.Identifier,':',Type()),',',')'),Command()))
 }
 function enum_(){
     return $.ref(()=>$.s('enum',$.w('{',TokenType.Identifier,',','}')))
@@ -25,6 +24,9 @@ function interface_(){
         'of',
         TokenType.Identifier,$.l('.',TokenType.Identifier)
     ),block()))
+}
+function variable(){
+    return $.ref(()=>$.s('var',Type(),$.c('=',Expr())))
 }
 function class_(){
     return $.ref(()=>$.s('class',$.c(
@@ -37,6 +39,6 @@ export function module_(){
 }
 function block(){
     return $.ref(()=>$.s('{',$.l($.s(
-        modifier(),TokenType.Identifier,':',$.o(function_())
+        modifier(),TokenType.Identifier,':',$.o(function_(),variable(),interface_(),enum_(),class_(),module_())
     )),'}'))
 }

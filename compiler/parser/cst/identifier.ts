@@ -6,9 +6,7 @@ function BasicType(){
     ))
 }
 export default function Type(){
-    return $.ref(()=>$.o(
-        $.s(
+    return $.ref(()=> $.s(
             $.o($.s('(',Type(),')'),BasicType(),$.s($.w('(',$.s(TokenType.Identifier,':',Type()),',',')'),'=>',Type())),
-            $.l($.o('[]','{}','*'))),
-    ))
+            $.l($.o('[]','{}','*'))))
 }

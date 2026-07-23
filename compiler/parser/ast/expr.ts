@@ -1,4 +1,5 @@
-import {Parser, ast_data, TokenType} from '../../utils'
+import {ast_data, Parser, TokenType} from '../../utils'
+
 const $=Parser.ast
 function Literal(){
     return $.ref(()=>$.o(
@@ -53,63 +54,63 @@ function Multiplicative(){
 }
 function Additive(){
     return $.ref(()=>$.s(
-        'AdditiveExpr',
+        'OperExpr',
         Multiplicative(),
         $.l('Oper',$.s('BinaryData',$.o('+','-'),Multiplicative()))
     ))
 }
 function Shift(){
     return $.ref(()=>$.s(
-        'ShiftExpr',
+        'OperExpr',
         Additive(),
         $.l('Oper',$.s('BinaryData',$.o('<<','>>'),Additive()))
     ))
 }
 function Relational(){
     return $.ref(()=>$.s(
-        'RelationalExpr',
+        'OperExpr',
         Shift(),
         $.l('Oper',$.s('BinaryData',$.o('<=','>=','<','>'),Shift()))
     ))
 }
 function Equality(){
     return $.ref(()=>$.s(
-        'EqualityExpr',
+        'OperExpr',
         Relational(),
         $.l('Oper',$.s('BinaryData',$.o('==','!='),Relational()))
     ))
 }
 function BitwiseAnd(){
     return $.ref(()=>$.s(
-        'BitwiseAndExpr',
+        'OperExpr',
         Equality(),
         $.l('Oper',$.s('BinaryData','&',Equality()))
     ))
 }
 function BitwiseXor(){
     return $.ref(()=>$.s(
-        'BitwiseXorExpr',
+        'OperExpr',
         BitwiseAnd(),
         $.l('Oper',$.s('BinaryData','^',BitwiseAnd()))
     ))
 }
 function BitwiseOr(){
     return $.ref(()=>$.s(
-        'BitwiseOrExpr',
+        'OperExpr',
         BitwiseXor(),
         $.l('Oper',$.s('BinaryData','|',BitwiseXor()))
     ))
 }
 function LogicalAnd(){
     return $.ref(()=>$.s(
-        'LogicalAndExpr',
+        'OperExpr',
         BitwiseOr(),
         $.l('Oper',$.s('BinaryData','&&',BitwiseOr()))
     ))
 }
 function LogicalOr(){
     return $.ref(()=>$.s(
-        'LogicalOrExpr',
+        'OperExpr',
         LogicalAnd(),
         $.l('Oper',$.s('BinaryData','||',LogicalAnd()))
     ))
@@ -127,10 +128,10 @@ function Ternary(){
         Expr()
     ))
 }
-function Expr(){
+export default function Expr(){
     return $.ref(()=>$.o(Binary(),Ternary()))
 }
-const ThesesExpr=(ast:ast_data)=>ast.children[1]
+const ThesesExpr=(ast:ast_data)=>ast.children[1] as ast_data
 const ArrayExpr=(ast:ast_data)=>{
     ast.children.pop()
     ast.children.shift()
@@ -146,4 +147,37 @@ const ComputedPostfix=(ast:ast_data)=>{
     return ast
 }
 const CallPostfix=ArrayExpr
-const MemberPostfix=(ast:ast_data)=>ComputedPostfix
+const MemberPostfix=ComputedPostfix
+const PrefixExpr=(ast:ast_data)=>{
+    let data=ast.children[1]
+    ast.children=[data, ...(ast.children[0] as ast_data).children]
+    return ast
+}
+const Oper=(ast:ast_data)=>{
+    let child=[]
+    for(let i of ast.children)
+        child.push(...(i as ast_data).children)
+    ast.children=child
+    return ast
+}
+const OperExpr=(ast:ast_data)=>{
+    ast.children=[ast.children[0],...(ast.children[1] as ast_data).children]
+    return ast
+}
+const TernaryExpr=(ast:ast_data)=>{
+    ast.children=ast.children.filter(i=>typeof i!='string')
+    return ast
+}
+export const ExprVisitors=[
+    $.factory('ThesesExpr',ThesesExpr),
+    $.factory('ArrayExpr',ArrayExpr),
+    $.factory('MapExpr',MapExpr),
+    $.factory('MapKey',MapKey),
+    $.factory('ComputedPostfix',ComputedPostfix),
+    $.factory('CallPostfix',CallPostfix),
+    $.factory('MemberPostfix',MemberPostfix),
+    $.factory('PrefixExpr',PrefixExpr),
+    $.factory('Oper',Oper),
+    $.factory('OperExpr',OperExpr),
+    $.factory('TernaryExpr',TernaryExpr),
+]
