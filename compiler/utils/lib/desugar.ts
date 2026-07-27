@@ -1,28 +1,32 @@
 import {ast_data} from '../data'
+import {AstNode} from './ast-node'
+
+export type desugar_visitor=(node:AstNode)=>AstNode
+
 export class DesugarVisitor{
-    visit:Map<string,(data:ast_data)=>ast_data>
+    visit:Map<string,desugar_visitor>
     constructor(){
         this.visit=new Map()
     }
     visitor(ast:ast_data){
-        let v=(ast:ast_data)=>{
-            if(!this.visit.has(ast.type))return ast
-            ast=this.visit.get(ast.type)(ast)
-            for(let j=0;j<ast.children.length;j++){
-                if(typeof ast.children[j]!='string')
-                    ast.children[j]=v(ast.children[j] as ast_data)
+        let v=(node:AstNode):AstNode=>{
+            for(let j=0;j<node.children.length;j++){
+                if(typeof node.children[j]!=='string')
+                    node.children[j]=v(node.children[j] as AstNode)
             }
-            return ast
+            if(!this.visit.has(node.type))return node
+            return this.visit.get(node.type)(node)
         }
-        return v(ast)
+        return v(new AstNode(ast)).to_data()
     }
-    register(name:string,visitor:(data:ast_data)=>ast_data){
-        this.visit.set(name, visitor)
+    register(name:string,visitor:desugar_visitor){
+        this.visit.set(name,visitor)
     }
 }
+
 export default {
-    visitor:(name:string,visitor:(data:ast_data)=>ast_data)=>{return {name,visitor}},
-    desugar:(tree:ast_data,visit:{name:string,visitor:(data:ast_data)=>ast_data}[])=>{
+    visitor:(name:string,visitor:desugar_visitor)=>{return {name,visitor}},
+    desugar:(tree:ast_data,visit:{name:string,visitor:desugar_visitor}[])=>{
         let v=new DesugarVisitor()
         for(let i of visit)
             v.register(i.name,i.visitor)

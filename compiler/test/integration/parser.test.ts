@@ -202,9 +202,10 @@ describe('CST_Choose → AST_Choose 联动', () => {
         const astRule = new ASTRule_Choose(astStream, 'Mod', TokenType.Keyword)
         expect(astRule.match()).toBe(true)
         expect(astRule.has).toBe(true)
-        const astOut = astRule.generate() as token
+        const astOut = astRule.generate() as ast_data
 
-        expect(astOut.value).toBe('static')
+        expect(astOut.type).toBe('Mod')
+        expect(astOut.children[0]).toBe('static')
     })
 
     it('has=false: CST Choose 不匹配 → 输出 [] → AST Choose 产生空 ast_data', () => {

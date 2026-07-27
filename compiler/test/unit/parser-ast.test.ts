@@ -185,12 +185,14 @@ describe('ASTRule_Choose', () => {
         expect(rule.has).toBe(false)
     })
 
-    it('has=true 时 generate 返回匹配的 token', () => {
+    it('has=true 时 generate 返回 ast_data (Choose 现在继承 Seg)', () => {
         const stream = makeASTStream([t('hello', TokenType.Identifier)])
         const rule = new ASTRule_Choose(stream, 'test', TokenType.Identifier)
         rule.match()
-        const result = rule.generate() as token
-        expect(result.value).toBe('hello')
+        const result = rule.generate() as ast_data
+        expect(result.type).toBe('test')
+        expect(result.children).toHaveLength(1)
+        expect(result.children[0]).toBe('hello')
     })
 
     it('has=false 时 generate 返回 {type, children:[], line:[]}', () => {

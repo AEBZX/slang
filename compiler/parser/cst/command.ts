@@ -15,9 +15,9 @@ function basic_command(){
         $.s('return',$.c(Expr())),
         'break','continue',
         $.s('throw',Expr()),
+        $.s(Expr(),$.o('++','--')),
         $.s($.c('await'),Expr()),
         $.s('var',TokenType.Identifier,':',Type(),$.c('=',Expr())),
-        $.s(Expr(),$.o('++','--')),
         $.s('vm',TokenType.String),
     ),';'))
 }

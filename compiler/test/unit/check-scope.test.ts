@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { Scope, CheckVisitor, default as check } from '../../utils/lib/check'
 import { ast_data } from '../../utils/data'
+import { AstNode } from '../../utils/lib/ast-node'
+
+function makeAst(type: string, children: (ast_data | string)[] = []): ast_data {
+    return { type, line: [], comment: '', children }
+}
 
 // ==================== Scope 初始化 ====================
 describe('Scope 初始化', () => {
@@ -41,7 +46,7 @@ describe('Scope enter/leave', () => {
     it('enter 传递 global 到子 Scope', () => {
         const root = new Scope(null, null)
         const child = root.enter()
-        expect(child.global).toBeNull()  // root.global 是 null, 所以子 scope 也 null
+        expect(child.global).toBeNull()
     })
 
     it('leave 返回 parent', () => {
@@ -101,7 +106,6 @@ describe('Scope thr 错误报告', () => {
         const global = new Scope(null, null)
         const child = new Scope(global, global)
         child.thr('子 Scope 的错误')
-        // 错误被传递到 global
         expect(child.error).toEqual([])
         expect(global.error).toEqual(['子 Scope 的错误'])
     })
@@ -120,12 +124,9 @@ describe('Scope thr 错误报告', () => {
     })
 
     it('enter 创建的子 Scope (global=null): thr 存入自己的 error', () => {
-        // enter() 传 this.global, 根 Scope 的 global 是 null
-        // 所以 enter 产生的子 Scope 的 global 也是 null
         const root = new Scope(null, null)
         const child = root.enter()
         child.thr('子 Scope 错误')
-        // global 为 null, 所以存到自己的 error
         expect(child.error).toEqual(['子 Scope 错误'])
         expect(root.error).toEqual([])
     })
@@ -144,12 +145,9 @@ describe('Scope thr 错误报告', () => {
     })
 
     it('手动设置 global 后 enter: 子 Scope global 正确传递', () => {
-        // 通过 enter() 创建的子 scope 继承 this.global
-        // 如果手动设置 root.global = root, 则所有 enter 产生的 scope 都能传递错误
         const global = new Scope(null, null)
         const child = new Scope(global, global)
         const grandchild = child.enter()
-        // enter() 传 this.global → 即 global
         expect(grandchild.global).toBe(global)
 
         grandchild.thr('孙 Scope 错误')
@@ -161,38 +159,34 @@ describe('Scope thr 错误报告', () => {
 
 // ==================== Scope.data 数据存储 ====================
 describe('Scope.data 数据存储', () => {
-    function makeAst(type: string): ast_data {
-        return { type, line: [], comment: '', children: [] }
-    }
-
-    it('set 和 get: 存储并读取 ast_data', () => {
+    it('set 和 get: 存储并读取 AstNode', () => {
         const s = new Scope(null, null)
-        const ast = makeAst('var')
-        s.data.set('x', ast)
-        expect(s.data.get('x')).toBe(ast)
+        const node = new AstNode(makeAst('var'))
+        s.data.set('x', node)
+        expect(s.data.get('x')).toBe(node)
         expect(s.data.get('x').type).toBe('var')
     })
 
     it('has: 检查 key 是否存在', () => {
         const s = new Scope(null, null)
         expect(s.data.has('x')).toBe(false)
-        s.data.set('x', makeAst('var'))
+        s.data.set('x', new AstNode(makeAst('var')))
         expect(s.data.has('x')).toBe(true)
     })
 
-    it('delete: 删除存储的 ast_data', () => {
+    it('delete: 删除存储的 AstNode', () => {
         const s = new Scope(null, null)
-        s.data.set('x', makeAst('var'))
+        s.data.set('x', new AstNode(makeAst('var')))
         expect(s.data.has('x')).toBe(true)
         s.data.delete('x')
         expect(s.data.has('x')).toBe(false)
     })
 
-    it('存储多个不同 key 的 ast_data', () => {
+    it('存储多个不同 key 的 AstNode', () => {
         const s = new Scope(null, null)
-        s.data.set('a', makeAst('var'))
-        s.data.set('b', makeAst('func'))
-        s.data.set('c', makeAst('class'))
+        s.data.set('a', new AstNode(makeAst('var')))
+        s.data.set('b', new AstNode(makeAst('func')))
+        s.data.set('c', new AstNode(makeAst('class')))
         expect(s.data.size).toBe(3)
         expect(s.data.get('a').type).toBe('var')
         expect(s.data.get('b').type).toBe('func')
@@ -201,8 +195,8 @@ describe('Scope.data 数据存储', () => {
 
     it('同名 key 覆盖旧值', () => {
         const s = new Scope(null, null)
-        const old = makeAst('old')
-        const newAst = makeAst('new')
+        const old = new AstNode(makeAst('old'))
+        const newAst = new AstNode(makeAst('new'))
         s.data.set('x', old)
         s.data.set('x', newAst)
         expect(s.data.size).toBe(1)
@@ -213,10 +207,6 @@ describe('Scope.data 数据存储', () => {
 
 // ==================== CheckVisitor 类 ====================
 describe('CheckVisitor 类', () => {
-    function makeAst(type: string, children: (ast_data | string)[] = []): ast_data {
-        return { type, line: [], comment: '', children }
-    }
-
     it('初始化: scope 创建, visit 为空 Map', () => {
         const v = new CheckVisitor()
         expect(v.scope).toBeInstanceOf(Scope)
@@ -224,7 +214,7 @@ describe('CheckVisitor 类', () => {
         expect(v.visit.size).toBe(0)
     })
 
-    it('初始化: scope 的 global 非 null (创建了新的全局 Scope)', () => {
+    it('初始化: scope 的 global 非 null', () => {
         const v = new CheckVisitor()
         expect(v.scope.global).not.toBeNull()
         expect(v.scope.global).toBeInstanceOf(Scope)
@@ -232,7 +222,7 @@ describe('CheckVisitor 类', () => {
 
     it('register: 注册 visitor 函数', () => {
         const v = new CheckVisitor()
-        const fn = (data: ast_data, scope: Scope) => data
+        const fn = (node: AstNode, scope: Scope) => node
         v.register('Test', fn)
         expect(v.visit.has('Test')).toBe(true)
         expect(v.visit.get('Test')).toBe(fn)
@@ -240,21 +230,21 @@ describe('CheckVisitor 类', () => {
 
     it('visitor: 调用已注册的 visitor, 返回 {tree, error}', () => {
         const v = new CheckVisitor()
-        v.register('Number', (data, scope) => data)
+        v.register('Number', (node, scope) => node)
         const ast = makeAst('Number', ['42'])
         const result = v.visitor(ast)
 
         expect(result).toHaveProperty('tree')
         expect(result).toHaveProperty('error')
-        expect(result.tree).toBe(ast)
+        expect(result.tree.type).toBe('Number')
         expect(result.error).toEqual([])
     })
 
-    it('visitor: 嵌套 ast 递归调用 visitor', () => {
+    it('visitor: 嵌套 ast 递归调用 visitor (自底向上)', () => {
         const v = new CheckVisitor()
         const visited: string[] = []
-        v.register('Block', (data, scope) => { visited.push('Block'); return data })
-        v.register('Stmt', (data, scope) => { visited.push('Stmt'); return data })
+        v.register('Block', (node, scope) => { visited.push('Block'); return node })
+        v.register('Stmt', (node, scope) => { visited.push('Stmt'); return node })
 
         const ast: ast_data = makeAst('Block', [
             makeAst('Stmt', ['x']),
@@ -262,12 +252,12 @@ describe('CheckVisitor 类', () => {
         ])
         v.visitor(ast)
 
-        expect(visited).toEqual(['Block', 'Stmt', 'Stmt'])
+        expect(visited).toEqual(['Stmt', 'Stmt', 'Block'])
     })
 
     it('visitor: visitor 函数可修改 ast', () => {
         const v = new CheckVisitor()
-        v.register('Var', (data, scope) => ({ ...data, type: 'Checked' }))
+        v.register('Var', (node, scope) => new AstNode({ ...node.to_data(), type: 'Checked' }))
 
         const result = v.visitor(makeAst('Var', ['x']))
         expect(result.tree.type).toBe('Checked')
@@ -275,25 +265,19 @@ describe('CheckVisitor 类', () => {
 
     it('visitor: visitor 函数可使用 scope 进行错误报告', () => {
         const v = new CheckVisitor()
-        v.register('ErrorType', (data, scope) => {
+        v.register('ErrorType', (node, scope) => {
             scope.thr('变量未定义')
-            return data
+            return node
         })
 
         const result = v.visitor(makeAst('ErrorType'))
-        // error 从 scope.global 传递到 scope, 但 visitor 返回 this.scope.error
-        // scope 的 global 非 null, thr 调用传递到 global
-        // visitor() 返回 this.scope.error, 而 this.scope 的 global 非 null
-        // thr 把错误推到 global.error, 但返回的是 this.scope.error
-        // 所以 error 可能为空!
-        // 这是当前实现的行为:
-        expect(result.error).toEqual([])  // scope.error 为空, 错误在 scope.global.error 中
+        expect(result.error).toEqual([])
         expect(v.scope.global.error).toEqual(['变量未定义'])
     })
 
     it('visitor: 无叶子节点的 ast (children 全为字符串)', () => {
         const v = new CheckVisitor()
-        v.register('Token', (data, scope) => data)
+        v.register('Token', (node, scope) => node)
         const result = v.visitor(makeAst('Token', ['a', 'b', 'c']))
 
         expect(result.tree.type).toBe('Token')
@@ -302,8 +286,8 @@ describe('CheckVisitor 类', () => {
 
     it('register: 覆盖已注册的 visitor', () => {
         const v = new CheckVisitor()
-        const oldFn = (data: ast_data, scope: Scope) => data
-        const newFn = (data: ast_data, scope: Scope) => ({ ...data, type: 'new' })
+        const oldFn = (node: AstNode, scope: Scope) => node
+        const newFn = (node: AstNode, scope: Scope) => new AstNode({ ...node.to_data(), type: 'new' })
 
         v.register('X', oldFn)
         v.register('X', newFn)
@@ -314,12 +298,8 @@ describe('CheckVisitor 类', () => {
 
 // ==================== 默认导出 check 辅助函数 ====================
 describe('默认导出 check 辅助函数', () => {
-    function makeAst(type: string, children: (ast_data | string)[] = []): ast_data {
-        return { type, line: [], comment: '', children }
-    }
-
     it('check.visitor: 返回 {name, visitor}', () => {
-        const fn = (data: ast_data, scope: Scope) => data
+        const fn = (node: AstNode, scope: Scope) => node
         const result = check.visitor('Test', fn)
         expect(result).toEqual({ name: 'Test', visitor: fn })
     })
@@ -329,11 +309,11 @@ describe('默认导出 check 辅助函数', () => {
             makeAst('Var', ['x'])
         ])
         const result = check.check(ast, [
-            check.visitor('Program', (data, scope) => data),
-            check.visitor('Var', (data, scope) => {
+            check.visitor('Program', (node, scope) => node),
+            check.visitor('Var', (node, scope) => {
                 scope.enter()
                 scope.leave()
-                return data
+                return node
             })
         ])
 
@@ -345,20 +325,16 @@ describe('默认导出 check 辅助函数', () => {
     it('check.check: 捕获类型错误', () => {
         const ast = makeAst('Duplicate', ['x'])
         const result = check.check(ast, [
-            check.visitor('Duplicate', (data, scope) => {
+            check.visitor('Duplicate', (node, scope) => {
                 scope.thr('重复定义变量 x')
-                return data
+                return node
             })
         ])
 
-        // scope 结构: CheckVisitor 创建 scope(global=新Scope)
-        // thr → 传递给 global Scope
-        // visitor() 返回 scope.error, 而非 scope.global.error
-        // 所以 scope.error 可能为空
         expect(result.tree.type).toBe('Duplicate')
     })
 
-    it('check.check: 嵌套 ast 递归检查', () => {
+    it('check.check: 嵌套 ast 递归检查 (自底向上)', () => {
         const checked: string[] = []
         const ast = makeAst('Root', [
             makeAst('Child', ['a']),
@@ -366,11 +342,11 @@ describe('默认导出 check 辅助函数', () => {
         ])
 
         const result = check.check(ast, [
-            check.visitor('Root', (data, scope) => { checked.push('Root'); return data }),
-            check.visitor('Child', (data, scope) => { checked.push(`Child:${data.children[0]}`); return data })
+            check.visitor('Root', (node, scope) => { checked.push('Root'); return node }),
+            check.visitor('Child', (node, scope) => { checked.push(`Child:${node.str(0)}`); return node })
         ])
 
-        expect(checked).toEqual(['Root', 'Child:a', 'Child:b'])
+        expect(checked).toEqual(['Child:a', 'Child:b', 'Root'])
         expect(result.tree.children).toHaveLength(2)
     })
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DesugarVisitor, default as desugar } from '../../utils/lib/desugar'
 import { ast_data } from '../../utils/data'
+import { AstNode } from '../../utils/lib/ast-node'
 
 function makeAst(type: string, children: (ast_data | string)[] = []): ast_data {
     return { type, line: [], comment: '', children }
@@ -16,7 +17,7 @@ describe('DesugarVisitor 类', () => {
 
     it('register: 注册 visitor 函数', () => {
         const v = new DesugarVisitor()
-        const fn = (data: ast_data) => data
+        const fn = (node: AstNode) => node
         v.register('Test', fn)
         expect(v.visit.has('Test')).toBe(true)
         expect(v.visit.get('Test')).toBe(fn)
@@ -24,8 +25,8 @@ describe('DesugarVisitor 类', () => {
 
     it('register: 注册多个 visitor', () => {
         const v = new DesugarVisitor()
-        const f1 = (data: ast_data) => data
-        const f2 = (data: ast_data) => data
+        const f1 = (node: AstNode) => node
+        const f2 = (node: AstNode) => node
         v.register('A', f1)
         v.register('B', f2)
         expect(v.visit.size).toBe(2)
@@ -33,50 +34,48 @@ describe('DesugarVisitor 类', () => {
 
     it('register: 覆盖已注册的 visitor', () => {
         const v = new DesugarVisitor()
-        const oldFn = (data: ast_data) => data
-        const newFn = (data: ast_data) => ({ ...data, type: 'new' })
+        const oldFn = (node: AstNode) => node
+        const newFn = (node: AstNode) => new AstNode({ ...node.to_data(), type: 'new' })
         v.register('X', oldFn)
         v.register('X', newFn)
         expect(v.visit.size).toBe(1)
         expect(v.visit.get('X')).toBe(newFn)
     })
 
-    it('visitor: 调用已注册的 visitor 并返回 ast', () => {
+    it('visitor: 调用已注册的 visitor 并返回 ast_data', () => {
         const v = new DesugarVisitor()
-        v.register('Number', (data) => data)
+        v.register('Number', (node) => node)
         const ast = makeAst('Number', ['42'])
         const result = v.visitor(ast)
-        expect(result).toBe(ast)
+        expect(result).toBeInstanceOf(Object)
+        expect(result.type).toBe('Number')
     })
 
     it('visitor: visitor 函数可变换 ast', () => {
         const v = new DesugarVisitor()
-        v.register('Old', (data) => ({ ...data, type: 'New' }))
+        v.register('Old', (node) => new AstNode({ ...node.to_data(), type: 'New' }))
         const result = v.visitor(makeAst('Old'))
         expect(result.type).toBe('New')
     })
 
-    it('visitor: 嵌套 ast 递归调用 visitor', () => {
+    it('visitor: 嵌套 ast 递归调用 visitor (自底向上)', () => {
         const v = new DesugarVisitor()
         const visited: string[] = []
-        v.register('Block', (data) => { visited.push('Block'); return data })
-        v.register('Stmt', (data) => { visited.push('Stmt'); return data })
+        v.register('Block', (node) => { visited.push('Block'); return node })
+        v.register('Stmt', (node) => { visited.push('Stmt'); return node })
 
         const ast: ast_data = makeAst('Block', [
             makeAst('Stmt', ['a']),
             makeAst('Stmt', ['b'])
         ])
         v.visitor(ast)
-        expect(visited).toEqual(['Block', 'Stmt', 'Stmt'])
+        expect(visited).toEqual(['Stmt', 'Stmt', 'Block'])
     })
 
     it('visitor: 嵌套变换, 子节点的变换结果反映到父节点', () => {
         const v = new DesugarVisitor()
-        v.register('Program', (data) => data)  // 不修改
-        v.register('For', (data) => {
-            // 语法糖: for → while
-            return { ...data, type: 'While' }
-        })
+        v.register('Program', (node) => node)
+        v.register('For', (node) => new AstNode({ ...node.to_data(), type: 'While' }))
 
         const ast = makeAst('Program', [
             makeAst('For', ['i', '0', '10'])
@@ -85,15 +84,15 @@ describe('DesugarVisitor 类', () => {
 
         expect(result.type).toBe('Program')
         const child = result.children[0] as ast_data
-        expect(child.type).toBe('While')  // 子节点被变换
+        expect(child.type).toBe('While')
     })
 
-    it('visitor: 深层嵌套全部递归', () => {
+    it('visitor: 深层嵌套全部递归 (自底向上)', () => {
         const v = new DesugarVisitor()
         const visited: string[] = []
-        v.register('A', (data) => { visited.push('A'); return data })
-        v.register('B', (data) => { visited.push('B'); return data })
-        v.register('C', (data) => { visited.push('C'); return data })
+        v.register('A', (node) => { visited.push('A'); return node })
+        v.register('B', (node) => { visited.push('B'); return node })
+        v.register('C', (node) => { visited.push('C'); return node })
 
         const ast = makeAst('A', [
             makeAst('B', [
@@ -101,28 +100,27 @@ describe('DesugarVisitor 类', () => {
             ])
         ])
         v.visitor(ast)
-        expect(visited).toEqual(['A', 'B', 'C'])
+        expect(visited).toEqual(['C', 'B', 'A'])
     })
 
     it('visitor: children 中的字符串不进入递归', () => {
         const v = new DesugarVisitor()
         let callCount = 0
-        v.register('Expr', (data) => {
+        v.register('Expr', (node) => {
             callCount++
-            return data
+            return node
         })
 
-        // children 全是字符串, 没有 ast_data 子节点
         const ast = makeAst('Expr', ['a', '+', 'b'])
         v.visitor(ast)
         expect(callCount).toBe(1)
     })
 
-    it('visitor: 混合 children (ast_data + string)', () => {
+    it('visitor: 混合 children (ast_data + string) (自底向上)', () => {
         const v = new DesugarVisitor()
         const visited: string[] = []
-        v.register('Root', (data) => { visited.push('Root'); return data })
-        v.register('Id', (data) => { visited.push('Id'); return data })
+        v.register('Root', (node) => { visited.push('Root'); return node })
+        v.register('Id', (node) => { visited.push('Id'); return node })
 
         const ast = makeAst('Root', [
             makeAst('Id', ['x']),
@@ -130,31 +128,26 @@ describe('DesugarVisitor 类', () => {
             makeAst('Id', ['y'])
         ])
         v.visitor(ast)
-        expect(visited).toEqual(['Root', 'Id', 'Id'])
+        expect(visited).toEqual(['Id', 'Id', 'Root'])
     })
 
-    it('visitor: visitor 变换后子节点继续递归 (当前节点只访问一次)', () => {
+    it('visitor: visitor 变换后新子节点不自动递归 (底向上, 新子树由 visitor 负责)', () => {
         const v = new DesugarVisitor()
-        v.register('Old', (data) => {
-            // 变换为新的 ast, 包含新的子节点
-            return makeAst('New', [
+        v.register('Old', (node) => {
+            return new AstNode(makeAst('New', [
                 makeAst('Inner', ['replaced'])
-            ])
+            ]))
         })
-        // 'New' 不会被调用, 因为当前节点只访问一次
-        // 但 'Inner' 子节点会被递归访问
-        v.register('Inner', (data) => ({ ...data, type: 'InnerProcessed' }))
 
         const result = v.visitor(makeAst('Old', ['original']))
-        // Old → New (当前节点已访问, 不再重新访问 New 类型)
         expect(result.type).toBe('New')
         const child = result.children[0] as ast_data
-        expect(child.type).toBe('InnerProcessed')  // 子节点被递归
+        expect(child.type).toBe('Inner')
     })
 
     it('visitor: 空的 children 安全处理', () => {
         const v = new DesugarVisitor()
-        v.register('Empty', (data) => ({ ...data, type: 'Done' }))
+        v.register('Empty', (node) => new AstNode({ ...node.to_data(), type: 'Done' }))
         const result = v.visitor(makeAst('Empty'))
         expect(result.type).toBe('Done')
         expect(result.children).toEqual([])
@@ -164,7 +157,7 @@ describe('DesugarVisitor 类', () => {
 // ==================== 默认导出 desugar 辅助函数 ====================
 describe('默认导出 desugar 辅助函数', () => {
     it('desugar.visitor: 返回 {name, visitor}', () => {
-        const fn = (data: ast_data) => data
+        const fn = (node: AstNode) => node
         const result = desugar.visitor('Test', fn)
         expect(result).toEqual({ name: 'Test', visitor: fn })
     })
@@ -174,8 +167,8 @@ describe('默认导出 desugar 辅助函数', () => {
             makeAst('ForLoop', ['i'])
         ])
         const result = desugar.desugar(ast, [
-            desugar.visitor('Program', (data) => data),
-            desugar.visitor('ForLoop', (data) => ({ ...data, type: 'WhileLoop' }))
+            desugar.visitor('Program', (node) => node),
+            desugar.visitor('ForLoop', (node) => new AstNode({ ...node.to_data(), type: 'WhileLoop' }))
         ])
 
         expect(result.type).toBe('Program')
@@ -195,9 +188,9 @@ describe('默认导出 desugar 辅助函数', () => {
         ])
 
         const result = desugar.desugar(ast, [
-            desugar.visitor('Module', (data) => data),
-            desugar.visitor('ForEach', (data) => ({ ...data, type: 'For' })),
-            desugar.visitor('Body', (data) => data)
+            desugar.visitor('Module', (node) => node),
+            desugar.visitor('ForEach', (node) => new AstNode({ ...node.to_data(), type: 'For' })),
+            desugar.visitor('Body', (node) => node)
         ])
 
         expect(result.type).toBe('Module')
@@ -207,16 +200,17 @@ describe('默认导出 desugar 辅助函数', () => {
 
     it('desugar.desugar: visitor 可添加新的 children', () => {
         const v = desugar.desugar(makeAst('PlusEq', ['x', '10']), [
-            desugar.visitor('PlusEq', (data) => ({
-                ...data,
+            desugar.visitor('PlusEq', (node) => new AstNode({
                 type: 'Assign',
+                line: node.line,
+                comment: '',
                 children: [
-                    data.children[0],  // 'x'
-                    makeAst('BinaryOp', ['x', '+', '10'])  // 展开语法糖
+                    node.children[0],
+                    makeAst('BinaryOp', ['x', '+', '10'])
                 ]
             })),
-            desugar.visitor('Assign', (data) => data),
-            desugar.visitor('BinaryOp', (data) => data)
+            desugar.visitor('Assign', (node) => node),
+            desugar.visitor('BinaryOp', (node) => node)
         ])
 
         expect(v.type).toBe('Assign')
@@ -226,4 +220,3 @@ describe('默认导出 desugar 辅助函数', () => {
         expect(rhs.children).toEqual(['x', '+', '10'])
     })
 })
-

@@ -314,6 +314,8 @@ function children(data: (token | ast_data)[]){
     return ret
 }
 function ast_match(stream:ASTStream,rule:TokenType|string|ASTRule){
+    if(rule instanceof ASTRule)
+        return rule.match()
     let now=stream.now()
     if(now==undefined)
         return false
@@ -321,9 +323,6 @@ function ast_match(stream:ASTStream,rule:TokenType|string|ASTRule){
         if(Array.isArray(now))
             return false
         if((<token>now).value!=rule)
-            return false
-    }else if(rule instanceof ASTRule) {
-        if (!rule.match())
             return false
     }else{
         if(Array.isArray(now))
@@ -377,6 +376,7 @@ export class ASTRule_Or extends ASTRule{
             if(i instanceof ASTRule)i.stream=this.stream
         this._idx=this.stream.index
         for(let i of this.data){
+            this.stream.index=this._idx
             if(ast_match(this.stream,i)) {
                 this.m=i
                 if(!(i instanceof ASTRule))
@@ -391,27 +391,17 @@ export class ASTRule_Or extends ASTRule{
         return ast_generate(this.stream, this.m)
     }
 }
-export class ASTRule_Choose extends ASTRule{
-    m:TokenType|string|ASTRule
+export class ASTRule_Choose extends ASTRule_Seg{
     has:boolean
     match():boolean{
         for(let i of this.data)
             if(i instanceof ASTRule)i.stream=this.stream
-        this.has=false
-        this._idx=this.stream.index
-        for(let i of this.data)
-            if(ast_match(this.stream,i)) {
-                this.m = i
-                this.has=true
-                if(!(i instanceof ASTRule))
-                    this.stream.next()
-                break
-            }
+        this.has=super.match()
         return true
     }
-    generate():ast_data|token{
+    generate():ast_data{
         this.stream.index=this._idx
-        if(this.has)return ast_generate(this.stream, this.m)
+        if(this.has)return super.generate()
         return {
             type:this.name,
             comment:'',
