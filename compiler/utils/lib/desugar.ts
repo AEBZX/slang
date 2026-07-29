@@ -11,7 +11,7 @@ export class DesugarVisitor{
         let v=(node:ast_data):ast_data=>{
             for(let [k,_v] of node.children)
                 if(typeof _v=='object')
-                    v(_v)
+                    node.children.set(k,v(_v))
             if(!this.visit.has(node.type))return node
             return this.visit.get(node.type)(node)
         }

@@ -17,7 +17,7 @@ export class ASMFactory{
 export class BinFactory{
     block:(name:string,code:asm_command[],visit:(asm:asm_command)=>bin_command)=>bin_command[]
     command:Map<asm_type,(asm:asm_command)=>bin_command>
-    constructor(block:(name:string,code:asm_command[])=>bin_command[]){
+    constructor(block:(name:string,code:asm_command[],visit:(asm:asm_command)=>bin_command)=>bin_command[]){
         this.block=block
         this.command=new Map()
     }
@@ -53,7 +53,7 @@ export default {
         factory:(name:asm_type,visitor:(asm:asm_command)=>bin_command)=>{
             return {name,visitor}
         },
-        generate:(asm:asm,block:(name:string,code:asm_command[])=>bin_command[],factory:{name:asm_type,visitor:(asm:asm_command)=>bin_command}[])=>{
+        generate:(asm:asm,block:(name:string,code:asm_command[],visit:(asm:asm_command)=>bin_command)=>bin_command[],factory:{name:asm_type,visitor:(asm:asm_command)=>bin_command}[])=>{
             let v=new BinFactory(block)
             for(let i of factory)
                 v.register(i.name,i.visitor)

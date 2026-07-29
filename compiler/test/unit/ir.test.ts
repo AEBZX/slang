@@ -3,8 +3,8 @@ import { ASMFactory, BinFactory, default as ir } from '../../utils/lib/ir'
 import { asm, asm_command, asm_args, asm_type, ast_data, bin } from '../../utils/data'
 
 // ==================== 辅助函数 ====================
-function makeAst(type: string, children: (ast_data | string)[] = []): ast_data {
-    return { type, line: [], comment: '', children }
+function makeAst(type: string, children: Map<string, ast_data|string> = new Map()): ast_data {
+    return { type, line: [], comment: undefined, children }
 }
 
 function makeAsmCommand(name: asm_type, args: asm_args[] = []): asm_command {
@@ -33,7 +33,7 @@ describe('ASMFactory', () => {
 
     it('visitor: 调用已注册的 visitor 函数, 传入 ast/factory/asm', () => {
         const factory = new ASMFactory()
-        const ast = makeAst('NumberLiteral', ['42'])
+        const ast = makeAst('NumberLiteral', new Map([['0', '42']]))
         let capturedAst: ast_data | undefined
         let capturedFactory: ASMFactory | undefined
         let capturedAsm: asm | undefined
@@ -119,20 +119,24 @@ describe('ASMFactory', () => {
         expect(calls).toEqual(['A', 'B', 'C', 'A'])
     })
 
-    it('visitor: 使用 ast.children 中的数据生成 asm 指令', () => {
+    it('visitor: 使用 ast.children Map 中的数据生成 asm 指令', () => {
         const factory = new ASMFactory()
         factory.visit.set('BinaryExpr', (data, factory, asm) => {
-            expect(data.children).toHaveLength(3)
-            expect(data.children[0]).toBe('x')
-            expect(data.children[1]).toBe('+')
-            expect(data.children[2]).toBe('10')
+            expect(data.children.size).toBe(3)
+            expect(data.children.get('child_0')).toBe('x')
+            expect(data.children.get('child_1')).toBe('+')
+            expect(data.children.get('child_2')).toBe('10')
 
             asm.code.set('expr', [
                 makeAsmCommand(asm_type.add, [makeAsmArgs(10)])
             ])
         })
 
-        const ast = makeAst('BinaryExpr', ['x', '+', '10'])
+        const child = new Map<string, ast_data|string>()
+        child.set('child_0', 'x')
+        child.set('child_1', '+')
+        child.set('child_2', '10')
+        const ast = makeAst('BinaryExpr', child)
         const result = factory.visitor(ast)
         expect(result.code.get('expr')[0].name).toBe(asm_type.add)
     })
@@ -397,7 +401,7 @@ describe('ASM → Bin 集成流程 (完整 pipeline)', () => {
         })
 
         // 2. AST → ASM
-        const ast = makeAst('AddExpr', ['10', '+', '20'])
+        const ast = makeAst('AddExpr', new Map([['0','10'],['1','+'],['2','20']]))
         const asmResult = asmFactory.visitor(ast)
 
         expect(asmResult.code.get('calc')).toHaveLength(1)
@@ -428,7 +432,7 @@ describe('ASM → Bin 集成流程 (完整 pipeline)', () => {
             })
         ])
 
-        const asm = factory.visitor(makeAst('Move', ['x', '=', '100']))
+        const asm = factory.visitor(makeAst('Move', new Map([['0','x'],['1','='],['2','100']])))
         expect(asm.code.has('entry')).toBe(true)
 
         // 2. Bin generate
