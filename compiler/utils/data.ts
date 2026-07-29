@@ -10,14 +10,18 @@ export enum TokenParam{
 }
 export type token={type:TokenType,value:string,line:string}
 export type pre_token=[boolean,string,TokenType]
-export type cst_data=token|cst_data[]
 export type ast_data={
     type:string,
     line:string[],
-    comment:string,
-    children:(ast_data|string)[]
+    comment?:any,
+    children:Map<string,ast_data|string>
 }
-export type ast_visitor=(ast:ast_data)=>ast_data
+export type ast_rule={
+    type:string,
+    name:string,
+    data:ast_rule_param[]
+}
+export type ast_rule_param=ast_rule|string|TokenType
 export type asm_command={
     name:asm_type,
     args:asm_args[]
@@ -76,7 +80,9 @@ export let string_start_end=['"','\'','`']
 export let number_radix=['x','X','b','B','o','O']
 export let keywords=[
     //修饰符
-    'public','private','async','sync','static','unstatic','=>',
+    'public','private','async','sync','static','unstatic',
+    //特殊关键字
+    '=>',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
     '+','-','*','/','%','<<','>>','&&','||','&','|','^','==','!=','>=','<=','>','<','!','=',

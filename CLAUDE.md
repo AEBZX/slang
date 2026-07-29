@@ -50,19 +50,11 @@ slang->
                  block.ts:块字节码生成
                  identifier.ts:标识字节码生成
                  index.ts:入口
-             parser->解析器
-                   cst->将代码解析为CST
-                        command.ts:命令cst解析
-                        expr.ts:表达式cst解析
-                        block.ts:块cst解析
-                        identifier.ts:标识cst解析
-                        index.ts:入口
-                   ast->将CST解析为AST
-                        command.ts:命令ast解析
-                        expr.ts:表达式ast解析
-                        block.ts:块ast解析
-                        identifier.ts:标识ast解析
-                        index.ts:入口
+             parser->解析器:tokens[]->ast
+                   command.ts:命令解析
+                   expr.ts:表达式解析
+                   block.ts:块解析
+                   identifier.ts:标识解析
                    index.ts:入口
              test->测试
                  unit:单元测试,文件命名要求:功能所属功能集-功能.test.ts,如desugar-command.test.ts
@@ -91,6 +83,5 @@ slang->
 - 函数命名约定:函数采用下划线命名法,如get_identifier_type
 - 类命名约定:类采用首字母大写命名法,如IdentifierTypeParser
 - 库引用规范:对于默认导出,import $ from 'xxx'
-- 导出规范:所有函数默认导出
 - import统一使用单引号
 - 不要写分号

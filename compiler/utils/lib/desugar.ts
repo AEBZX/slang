@@ -1,7 +1,6 @@
 import {ast_data} from '../data'
-import {AstNode} from './ast-node'
 
-export type desugar_visitor=(node:AstNode)=>AstNode
+export type desugar_visitor=(node:ast_data)=>ast_data
 
 export class DesugarVisitor{
     visit:Map<string,desugar_visitor>
@@ -9,15 +8,14 @@ export class DesugarVisitor{
         this.visit=new Map()
     }
     visitor(ast:ast_data){
-        let v=(node:AstNode):AstNode=>{
-            for(let j=0;j<node.children.length;j++){
-                if(typeof node.children[j]!=='string')
-                    node.children[j]=v(node.children[j] as AstNode)
-            }
+        let v=(node:ast_data):ast_data=>{
+            for(let [k,_v] of node.children)
+                if(typeof _v=='object')
+                    v(_v)
             if(!this.visit.has(node.type))return node
             return this.visit.get(node.type)(node)
         }
-        return v(new AstNode(ast)).to_data()
+        return v(ast)
     }
     register(name:string,visitor:desugar_visitor){
         this.visit.set(name,visitor)

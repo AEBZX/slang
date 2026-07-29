@@ -1,12 +1,16 @@
 import {ast_data} from '../data'
-import {AstNode} from './ast-node'
-
+type ast_visitor=(ast:ast_data,scope:Scope)=>ast_data
 export class Scope{
-    data:Map<string,AstNode>
+    parent:Scope
+    global:Scope
+    chain:Map<string,string>
+    data:Map<string,ast_data>
     error:string[]
-    constructor(public parent:Scope,public global:Scope){
-        this.data = new Map()
-        this.error = []
+    constructor(parent:Scope,global:Scope){
+        this.parent=parent
+        this.global=global
+        this.data=new Map()
+        this.chain=new Map()
     }
     enter(){
         return new Scope(this,this.global)
@@ -14,45 +18,54 @@ export class Scope{
     leave(){
         return this.parent
     }
-    thr(message:string){
-        if(this.global!=null){
-            this.global.thr(message)
-        }else this.error.push(message)
+    get(name:string){
+        return this.data.get(name)
     }
-}
-
-export type check_visitor=(node:AstNode,scope:Scope)=>AstNode
-
-export class CheckVisitor{
-    scope:Scope
-    visit:Map<string,check_visitor>
-    constructor(){
-        this.scope = new Scope(null,new Scope(null,null))
-        this.visit = new Map()
+    set(name:string,data:ast_data){
+        this.data.set(name,data)
     }
-    visitor(ast:ast_data){
-        let v=(node:AstNode,scope:Scope):AstNode=>{
-            for(let j=0;j<node.children.length;j++){
-                if(typeof node.children[j]!=='string')
-                    node.children[j]=v(node.children[j] as AstNode,scope)
+    is(chain1:string,chain2:string){
+        let chain=[]
+        let v=(s:string)=>{
+            if(this.chain.has(s)){
+                chain.push(this.chain.get(s))
+                v(this.chain.get(s))
             }
-            if(!this.visit.has(node.type))return node
-            return this.visit.get(node.type)(node,scope)
         }
-        let root=new AstNode(ast)
-        return {tree:v(root,this.scope).to_data(),error:this.scope.error}
+        v(chain1)
+        if(chain.includes(chain2))return true
+        chain=[]
+        v(chain2)
+        return chain.includes(chain1)
     }
-    register(name:string,visitor:check_visitor){
-        this.visit.set(name,visitor)
+    impl(c:string,i:string){
+        this.chain.set(c,i)
+    }
+    thr(msg:string){
+        this.error.push(msg)
     }
 }
-
-export default {
-    visitor:(name:string,visitor:check_visitor)=>{return {name,visitor}},
-    check:(tree:ast_data,visit:{name:string,visitor:check_visitor}[])=>{
-        let v=new CheckVisitor()
-        for(let i of visit)
-            v.register(i.name,i.visitor)
-        return v.visitor(tree)
+export class Checker{
+    scope:Scope
+    visitor:Map<string,ast_visitor>
+    constructor(){
+        this.scope=new Scope(null,new Scope(null,null))
+        this.visitor=new Map()
     }
+    register(name:string,visitor:ast_visitor){
+        this.visitor.set(name, visitor)
+    }
+    check(ast:ast_data){
+        for(let [name,data] of ast.children){
+            if(typeof data=='object')
+                this.check(data)
+        }
+        ast=this.visitor.get(ast.type)(ast,this.scope)
+    }
+}
+export default function (ast:ast_data,...data:{name:string,ast:ast_visitor}[]){
+    let checker=new Checker()
+    for(let i of data)
+        checker.register(i.name,i.ast)
+    return checker.check(ast)
 }
