@@ -20,7 +20,7 @@ export class Scope{
         return this.parent
     }
     get(name:string){
-        return this.data.get(name)
+        return this.data.get(name)||this.parent.get(name)||this.global.get(name)
     }
     set(name:string,data:ast_data){
         this.data.set(name,data)
@@ -44,6 +44,12 @@ export class Scope{
     }
     thr(msg:string){
         this.error.push(msg)
+    }
+    type(a:any,b:any){
+        if(a==b)return true
+        if(a=='any'||b=='any'||a==null||b==null)return true
+        if(a['type']==b['type'])return this.type(a['children'],b['children'])
+        return false
     }
 }
 export class Checker{

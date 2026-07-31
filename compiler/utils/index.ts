@@ -11,5 +11,5 @@ export default {
 }
 export {
     tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,
-    Checker,Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser
+    Checker,Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,Check
 }

@@ -85,11 +85,12 @@ export let keywords=[
     '=>',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
-    '+','-','*','/','%','<<','>>','&&','||','&','|','^','==','!=','>=','<=','>','<','!','=',
+    '++','--','===','!==','+=','-=','*=','/=','%=','<<=','>>=','&&=','||=','&=','|=','^=',
+    '<<','>>','&&','||','==','!=','>=','<=','+','-','*','/','%','&','|','^','>','<','!','=',
     //外层关键字
     'link','module','class','enum','interface','of','implements','function','var','as',
     //类型关键字
-    'void','boolean','number','string','{}','[]','[',']',
+    'void','boolean','number','string','[',']','{','}',
     //命令关键字
     'vm','break','continue','return','throw','await',
     //选择块关键字
@@ -97,4 +98,4 @@ export let keywords=[
     //其他
     'null','true','false','(',')','{','}',',','.',':',';','?','~'
 ]
-export let tokens=[TokenParam.Identifier,TokenParam.Number,TokenParam.String,...keywords]
+export let tokens=[TokenParam.Number,TokenParam.String,...keywords,TokenParam.Identifier]

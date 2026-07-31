@@ -74,8 +74,9 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
     switch (typeof data){
         case 'string':{
             if(stream.now().value==data){
+                let ret=stream.now().value
                 stream.next()
-                return stream.now().value
+                return ret
             }
             throw new Error(`无法找到${data}在${stream.now().line}`)
         }
@@ -108,14 +109,18 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     break
                 }
                 case 'delete':{
+                    let saved_type=data.type
                     data.type='seg'
                     parse(stream,data,ref)
+                    data.type=saved_type
                     ret=null
                     break
                 }
                 case 'child':{
+                    let saved_type=data.type
                     data.type='seg'
                     ls=parse(stream,data,ref)
+                    data.type=saved_type
                     for(let [name,i] of (ls as ast_data).children){
                         if(i!=null&&typeof i=='object')
                             ret=i
@@ -125,6 +130,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                 case 'or':{
                     let ok=false
                     for(let i of data.data){
+                        let saved=stream.pos
                         try{
                             ls=parse(stream,i,ref)
                             if(ls!=null){
@@ -133,6 +139,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                                 break
                             }
                         }catch (e) {
+                            stream.pos=saved
                         }
                     }
                     let a=[]
@@ -151,7 +158,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     return null
                 }
                 case 'call':{
-                    ls=parse(stream,ref.get(data.name),ref)
+                    ret=parse(stream,ref.get(data.name),ref)
                     break
                 }
                 case 'while':{
@@ -188,8 +195,9 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
         }
         default:{
             if(stream.now().type==data){
+                let ret=stream.now().value
                 stream.next()
-                return stream.now().value
+                return ret
             }
             throw new Error(`无法找到${TokenType[data as TokenType]}在${stream.now().line}`)
         }

@@ -54,7 +54,7 @@ const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
     $.d(')'),$.r('Commands'))
 const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('{'),
     $.l('CaseList',$.s('Case',
-        $.d('case'),$.r(' Expression'),$.d('=>'),$.r('Commands')
+        $.d('case'),$.r('Expression'),$.d('=>'),$.r('Commands')
     )),
     $.c($.d('default'),$.d('=>'),$.r('Commands')),
     $.d('}')
@@ -69,10 +69,9 @@ const BlockCommand=$.o('BlockCommand',
     $.r('ForStatement'),
     $.r('SwitchStatement'),
     $.r('TryStatement'),
-    $.r('BlockCommand')
+    $.t('{',$.l('Commands',$.r('Commands')),'}')
 )
-const Commands=$.o('Commands',$.r('BasicCommand'),$.r('BlockCommand)'),
-    $.t('{',$.l('Commands',$.r('Command')),'}'))
+const Commands=$.o('Commands',$.r('BasicCommand'),$.r('BlockCommand'))
 export default [
     AAssign,
     AddAssign,

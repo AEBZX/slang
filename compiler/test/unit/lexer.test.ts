@@ -119,10 +119,13 @@ describe('lexer - 标识符解析', () => {
     })
 
     it('应该正确解析包含数字的标识符', () => {
+        // 注: var123 现在被拆为 Keyword('var') + Number('123'), 因 var 是关键字
         const result = lexer('var123')
-        const tokens = result.filter(t => t.type === TokenType.Identifier)
-        expect(tokens.length).toBe(1)
-        expect(tokens[0].value).toBe('var123')
+        expect(result.length).toBe(2)
+        expect(result[0].value).toBe('var')
+        expect(result[0].type).toBe(TokenType.Keyword)
+        expect(result[1].value).toBe('123')
+        expect(result[1].type).toBe(TokenType.Number)
     })
 
     it('应该正确解析包含下划线和数字的标识符', () => {

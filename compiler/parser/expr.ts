@@ -4,10 +4,10 @@ const StringLiteral=$.s('StringLiteral',TokenType.String)
 const BooleanLiteral=$.s('BooleanLiteral',$.o('true','false'))
 const NullLiteral=$.s('NullLiteral','null')
 const Identifier=$.s('Identifier',TokenType.Identifier)
-const ArrayExpression=$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']')
-const MapExpression=$.t('{',
+const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']'))
+const MapExpression=$.o('MapExpression',$.t('{',
     $.w('MapExpression',$.s('MapData',TokenType.Identifier,':',$.r('Expression')),',')
-    ,'}')
+    ,'}'))
 const LambdaExpression=$.s('LambdaExpression',
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'),$.r('Commands'))
@@ -18,6 +18,7 @@ const PrimaryExpression=$.o('PrimaryExpression',
     $.r('NullLiteral'),
     $.r('Identifier'),
     $.t('(',$.r('Expression'),')'),
+    //TIPS:可以通过.o包裹
     $.r('ArrayExpression'),
     $.r('MapExpression'),
     $.r('LambdaExpression')

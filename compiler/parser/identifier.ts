@@ -9,8 +9,8 @@ const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
     $.r('BooleanType'),$.r('StringType'),$.t('(',$.r('Type'),')'))
 const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
     $.o('TypePostfix',
-        $.s('MapPostfix','{}'),
-        $.s('ArrayPostfix','[]'),
+        $.s('MapPostfix','{','}'),
+        $.s('ArrayPostfix','[',']'),
         $.s('PointPostfix','*')
     )
 ))
