@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../utils'
+import {Parser as $, TokenType} from '../../utils/index'
 const ModuleName=$.w('ModuleName',TokenType.Identifier,'.')
 const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
 const Modifier=$.l('Modifiers',$.o('Modifier',
@@ -13,7 +13,6 @@ const _enum=$.s('Enum',$.d('enum'),$.d('{'),$.w('EnumList',TokenType.Identifier,
 const _function=$.s('Function',$.d('function'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     '=>',$.r('Type'),$.r('Commands'))
-//不要修改,block定义里有名字
 const _var=$.s('Variable',$.d('var'),':',$.r('Type'),$.c($.d('='),$.r('Expression')),';')
 const block=$.s('Block',$.r('Modifiers'),TokenType.Identifier,':',
     $.o('BlockData',$.r('Module'),$.r('Class'),$.r('Interface')

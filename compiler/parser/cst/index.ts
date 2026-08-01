@@ -2,7 +2,7 @@ import block from './block'
 import command from './command'
 import expr from './expr'
 import identifier from './identifier'
-import {Parser as $, token} from '../utils'
+import {Parser as $, token} from '../../utils/index'
 export default function(code:token[]){
     return $.run('File',[...block,...expr,...command,...identifier],code)
 }

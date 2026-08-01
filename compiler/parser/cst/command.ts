@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../utils'
+import {Parser as $, TokenType} from '../../utils/index'
 const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.d(';'))
 const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.d(';'))
 const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.d(';'))
@@ -50,7 +50,7 @@ const IfStatement=$.s('IfStatement',$.d('if'),$.r('Condition'),$.r('Commands'),
 const WhileStatement=$.s('WhileStatement',$.d('while'),$.r('Condition'),$.r('Commands'))
 const DoWhileStatement=$.s('DoWhileStatement',$.d('do'),$.r('Commands'),$.d('while'),$.r('Condition'),$.d(';'))
 const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
-    $.l('Init',$.r('VarDeclaration')),$.r('Expression'),$.d(';'),$.r('BasicCommand'),
+    $.l('Init',$.r('VarDeclaration')),$.r('Expression'),$.d(';'),$.l('Step',$.r('BasicCommand')),
     $.d(')'),$.r('Commands'))
 const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('{'),
     $.l('CaseList',$.s('Case',
@@ -60,7 +60,7 @@ const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('
     $.d('}')
 )
 const TryStatement=$.s('TryStatement',$.d('try'),$.r('Commands'),
-    $.d('catch'),$.d('('),TokenType.Identifier,')',$.r('Commands'),
+    $.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'),
     $.c($.d('finally'),$.r('Commands')))
 const BlockCommand=$.o('BlockCommand',
     $.r('IfStatement'),

@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lexer'
 import { ast_data, TokenType } from '../../utils/data'
 import $ from '../../utils'
-import ExprRules from '../../parser/expr'
-import IdentifierRules from '../../parser/identifier'
-import CommandRules from '../../parser/command'
-import BlockRules from '../../parser/block'
+import ExprRules from '../../parser/cst/expr.js'
+import IdentifierRules from '../../parser/cst/identifier.js'
+import CommandRules from '../../parser/cst/command.js'
+import BlockRules from '../../parser/cst/block.js'
 
 // 辅助: 深克隆规则数组 (避免 mutation 污染)
 function clone_rules(rules: any[]): any[] {

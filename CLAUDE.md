@@ -20,13 +20,26 @@ slang->
              utils->库
                  lexer.ts:分词器
                  data.ts:数据结构定义
+                 model.ts->ast节点定义
+                         command.ts:命令类节点
+                         expr.ts:表达式类节点
+                         block.ts:块类节点
+                         identifier.ts:标识符类节点
+                         index.ts:入口
                  lib->对于其他模块的库实现
                     check.ts
                     cli.ts
                     desugar.ts
                     ir.ts
                     parser.ts
+                    optimize.ts
                  index.ts:库入口
+             optimize->优化器
+                     command.ts:命令语法优化
+                     expr.ts:表达式语法优化
+                     block.ts:块语法优化
+                     identifier.ts:标识语法优化
+                     index.ts:入口
              check->语法检查
                   command.ts:命令语法检查
                   expr.ts:表达式语法检查
@@ -51,10 +64,18 @@ slang->
                  identifier.ts:标识字节码生成
                  index.ts:入口
              parser->解析器:tokens[]->ast
-                   command.ts:命令解析
-                   expr.ts:表达式解析
-                   block.ts:块解析
-                   identifier.ts:标识解析
+                   cst-> tokens[]->ast_data
+                      command.ts:命令解析
+                      expr.ts:表达式解析
+                      block.ts:块解析
+                      identifier.ts:标识解析
+                      index.ts:入口
+                   ast-> ast_data->ASTTree
+                      command.ts:命令解析
+                      expr.ts:表达式解析
+                      block.ts:块解析
+                      identifier.ts:标识解析
+                      index.ts:入口
                    index.ts:入口
              test->测试
                  unit:单元测试,文件命名要求:功能所属功能集-功能.test.ts,如desugar-command.test.ts

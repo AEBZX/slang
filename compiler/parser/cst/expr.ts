@@ -1,15 +1,15 @@
-import {Parser as $, TokenType} from '../utils'
+import {Parser as $, TokenType} from '../../utils/index'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
 const BooleanLiteral=$.s('BooleanLiteral',$.o('true','false'))
-const NullLiteral=$.s('NullLiteral','null')
+const NullLiteral=$.s('NullLiteral',$.d('null'))
 const Identifier=$.s('Identifier',TokenType.Identifier)
 const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']'))
 const MapExpression=$.o('MapExpression',$.t('{',
-    $.w('MapExpression',$.s('MapData',TokenType.Identifier,':',$.r('Expression')),',')
+    $.w('MapExpression',$.s('MapData',TokenType.Identifier,$.d(':'),$.r('Expression')),',')
     ,'}'))
 const LambdaExpression=$.s('LambdaExpression',
-    $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
+    $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'),$.r('Commands'))
 const PrimaryExpression=$.o('PrimaryExpression',
     $.r('NumberLiteral'),

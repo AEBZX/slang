@@ -13,8 +13,15 @@ export type pre_token=[boolean,string,TokenType]
 export type ast_data={
     type:string,
     line:string[],
-    comment?:any,
     children:Map<string,ast_data|string>
+}
+export type ast_type={
+    type:string
+    data:string
+    child:ast_type[]
+}
+export class ASTTree{
+    type:ast_type
 }
 export type ast_rule={
     type:string,

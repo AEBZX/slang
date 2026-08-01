@@ -83,7 +83,6 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
         case 'object':{
             let ret:ast_data|string={
                 type:data.name,
-                comment:null,
                 children:new Map(),
                 line:[]
             }
@@ -216,6 +215,8 @@ class Parser{
     parse(name:string):ast_data|string{
         return parse(this.stream,this.parser_rule.get(name),this.parser_rule)
     }
+}
+function generate(){
 }
 export default {
     s:seg_rule,
