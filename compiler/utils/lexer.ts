@@ -141,6 +141,12 @@ function match(input:TokenParam|string):(stream:CharStream)=>pre_token{
                 }
                 stream.next()
             }
+            //词类关键字(以字母/下划线结尾)要求词边界,避免 'for' 吃掉 'foreach' 的前缀
+            let last=input[input.length-1]
+            if(/[a-zA-Z_]/.test(last)&&identifier_continue_white_list.includes(stream.now())){
+                stream.index=index
+                return [false, '',TokenType.Keyword]
+            }
             return [true,input,TokenType.Keyword]
         }
     }

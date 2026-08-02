@@ -23,6 +23,7 @@ export type ast_type={
 export class ASTTree{
     type:ast_type
 }
+export type ast_generate=(data:ast_data,tree:ast_generate)=>ASTTree
 export type ast_rule={
     type:string,
     name:string,
@@ -99,7 +100,7 @@ export let keywords=[
     //类型关键字
     'void','boolean','number','string','[',']','{','}',
     //命令关键字
-    'vm','break','continue','return','throw','await',
+    'vm','break','continue','return','throw','await','try','catch','finally','foreach',
     //选择块关键字
     'if','else','switch','case','default','for','while','do',
     //其他

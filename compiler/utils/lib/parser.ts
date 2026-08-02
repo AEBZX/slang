@@ -1,4 +1,4 @@
-import {ast_data, ast_rule, ast_rule_param, token, TokenType} from '../data'
+import {ast_data, ast_generate, ast_rule, ast_rule_param, ASTTree, token, TokenType} from '../data'
 
 class ParserStream{
     public pos:number
@@ -70,15 +70,20 @@ function loop_rule(name:string,data:ast_rule_param):ast_rule{
         data:[data]
     }
 }
+function now_line(stream:ParserStream):string{
+    let now=stream.now()
+    return now?now.line:'EOF'
+}
 function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>):ast_data|string{
     switch (typeof data){
         case 'string':{
-            if(stream.now().value==data){
-                let ret=stream.now().value
+            let now=stream.now()
+            if(now&&now.value==data){
+                let ret=now.value
                 stream.next()
                 return ret
             }
-            throw new Error(`无法找到${data}在${stream.now().line}`)
+            throw new Error(`无法找到${data}在${now_line(stream)}`)
         }
         case 'object':{
             let ret:ast_data|string={
@@ -108,18 +113,17 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     break
                 }
                 case 'delete':{
-                    let saved_type=data.type
-                    data.type='seg'
-                    parse(stream,data,ref)
-                    data.type=saved_type
-                    ret=null
+                    //不改写共享规则对象,传副本避免递归解析时的状态污染
+                    try{
+                        parse(stream,{...data,type:'seg'},ref)
+                    }finally{
+                        ret=null
+                    }
                     break
                 }
                 case 'child':{
-                    let saved_type=data.type
-                    data.type='seg'
-                    ls=parse(stream,data,ref)
-                    data.type=saved_type
+                    //同上,传副本
+                    ls=parse(stream,{...data,type:'seg'},ref)
                     for(let [name,i] of (ls as ast_data).children){
                         if(i!=null&&typeof i=='object')
                             ret=i
@@ -143,7 +147,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     }
                     let a=[]
                     for(let i of data.data)a.push(typeof i=='string'?i:typeof i=='object'?i.name:TokenType[i])
-                    if(!ok)throw new Error(`无法找到${a.join(' ')}中的任意一条规则在${stream.now().line}`)
+                    if(!ok)throw new Error(`无法找到${a.join(' ')}中的任意一条规则在${now_line(stream)}`)
                     break
                 }
                 case 'choose':{
@@ -162,16 +166,23 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                 }
                 case 'while':{
                     let param_num=0
+                    let saved=stream.pos
                     try{
                         ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
                         param_num++
-                    }catch (e) {}
+                    }catch (e) {
+                        stream.pos=saved
+                    }
+                    //0次匹配视为未命中,交由上层决定是否接受
+                    if(param_num==0)return null
                     while(true){
+                        saved=stream.pos
                         try{
                             ls=parse(stream,data.data[1],ref)
                             ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
                             param_num++
                         }catch (e) {
+                            stream.pos=saved
                             break
                         }
                     }
@@ -180,9 +191,11 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                 case 'loop':{
                     let param_num=0
                     while(true){
+                        let saved=stream.pos
                         try{
                             ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
                         }catch (e){
+                            stream.pos=saved
                             break
                         }
                         param_num++
@@ -193,12 +206,13 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
             return ret
         }
         default:{
-            if(stream.now().type==data){
-                let ret=stream.now().value
+            let now=stream.now()
+            if(now&&now.type==data){
+                let ret=now.value
                 stream.next()
                 return ret
             }
-            throw new Error(`无法找到${TokenType[data as TokenType]}在${stream.now().line}`)
+            throw new Error(`无法找到${TokenType[data as TokenType]}在${now_line(stream)}`)
         }
     }
 }
@@ -216,7 +230,12 @@ class Parser{
         return parse(this.stream,this.parser_rule.get(name),this.parser_rule)
     }
 }
-function generate(){
+function generate(entry:ast_data,reg:{[key:string]:ast_generate}){
+    let g:ast_generate=(data:ast_data,tree:ast_generate)=>{
+        if(data.type in reg)
+            return reg[data.type](data,tree)
+    }
+    return g(entry,g)
 }
 export default {
     s:seg_rule,
@@ -232,5 +251,6 @@ export default {
         for(let i of rule)
             data.register(i)
         return data.parse(entry)
-    }
+    },
+    generate
 }

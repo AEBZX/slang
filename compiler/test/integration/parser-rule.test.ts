@@ -70,6 +70,24 @@ describe('类型解析 (Type)', () => {
         expect((postfixList.children.get('param_1') as ast_data).type).toBe('ArrayPostfix')
         expect((postfixList.children.get('param_2') as ast_data).type).toBe('PointPostfix')
     })
+
+    it('void 作为返回类型', () => {
+        const result = parse_entry('Type', rules, 'void') as ast_data
+        const basic = result.children.get('child_0') as ast_data
+        expect(basic.type).toBe('VoidType')
+    })
+
+    it('lambda 类型: (x:number)=>number', () => {
+        const result = parse_entry('Type', rules, '(x:number)=>number') as ast_data
+        const basic = result.children.get('child_0') as ast_data
+        expect(basic.type).toBe('LambdaType')
+    })
+
+    it('lambda 类型空参数: ()=>number', () => {
+        const result = parse_entry('Type', rules, '()=>number') as ast_data
+        const basic = result.children.get('child_0') as ast_data
+        expect(basic.type).toBe('LambdaType')
+    })
 })
 
 // ==================== 表达式解析 (expr.ts) ====================
@@ -271,6 +289,16 @@ describe('命令解析 (Commands)', () => {
         expect(result.type).toBe('TryStatement')
     })
 
+    it('try-catch 带类型标注: try{return;}catch(e:number){return;}', () => {
+        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e:number){return;}') as ast_data
+        expect(result.type).toBe('TryStatement')
+    })
+
+    it('try-catch-finally 带类型标注', () => {
+        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e:string){return;}finally{break;}') as ast_data
+        expect(result.type).toBe('TryStatement')
+    })
+
     it('调用: foo( x );', () => {
         const result = parse_entry('Call', all_rules, 'foo( x );') as ast_data
         expect(result.type).toBe('Call')
@@ -279,6 +307,28 @@ describe('命令解析 (Commands)', () => {
     it('await 调用: await foo( x );', () => {
         const result = parse_entry('Call', all_rules, 'await foo( x );') as ast_data
         expect(result.type).toBe('Call')
+    })
+
+    it('for 循环: for(var i=0;i<10;i++){break;}', () => {
+        const result = parse_entry('ForStatement', all_rules, 'for(var i=0;i<10;i++){break;}') as ast_data
+        expect(result.type).toBe('ForStatement')
+    })
+
+    it('foreach 循环: foreach(i:item){break;}', () => {
+        const result = parse_entry('ForeachStatement', all_rules, 'foreach(i:item){break;}') as ast_data
+        expect(result.type).toBe('ForeachStatement')
+    })
+
+    it('switch: case + default', () => {
+        const result = parse_entry('SwitchStatement', all_rules,
+            'switch(x){case 1=>{break;}default=>{break;}}') as ast_data
+        expect(result.type).toBe('SwitchStatement')
+    })
+
+    it('switch: 仅 default', () => {
+        const result = parse_entry('SwitchStatement', all_rules,
+            'switch(x){default=>{break;}}') as ast_data
+        expect(result.type).toBe('SwitchStatement')
     })
 
     it('Commands: 单个命令', () => {
@@ -327,7 +377,7 @@ describe('顶层块解析 (File)', () => {
 
     it('blocks: 多行顶层定义', () => {
         const result = parse_entry('blocks', all_rules,
-            'public main:function():void{return;}'
+            'public main:void(){return;}'
         ) as ast_data
         expect(result.type).toBe('blocks')
     })
@@ -335,9 +385,59 @@ describe('顶层块解析 (File)', () => {
     it('File: 完整文件', () => {
         const result = parse_entry('File', all_rules,
             'link std.io.print as print;\n' +
-            'public main:function():void{return;}'
+            'public main:void(){return;}'
         ) as ast_data
         expect(result.type).toBe('File')
+    })
+
+    it('Enum: 空枚举 {}', () => {
+        const result = parse_entry('Enum', all_rules, 'enum{}') as ast_data
+        expect(result.type).toBe('Enum')
+    })
+
+    it('Enum: 带成员 a,b', () => {
+        const result = parse_entry('Enum', all_rules, 'enum{a,b}') as ast_data
+        expect(result.type).toBe('Enum')
+    })
+
+    it('Class: 可选 implements 子句命中', () => {
+        const result = parse_entry('Class', all_rules, 'class implements std.io {}') as ast_data
+        expect(result.type).toBe('Class')
+        // d('class') 不占 child → implements 子句是 child_0
+        const child = result.children.get('child_0') as ast_data
+        expect(child.type).toBe('ModuleName')
+    })
+
+    it('Class: 无 implements 子句', () => {
+        const result = parse_entry('Class', all_rules, 'class {}') as ast_data
+        expect(result.type).toBe('Class')
+    })
+
+    it('function: 空参数非空体', () => {
+        const result = parse_entry('Function', all_rules, 'void(){return;}') as ast_data
+        expect(result.type).toBe('Function')
+    })
+
+    it('function: 带参数', () => {
+        const result = parse_entry('Function', all_rules, 'void(a:number,b:string){return;}') as ast_data
+        expect(result.type).toBe('Function')
+    })
+
+    it('function: 空参数空体 (Type 不再直接接触 {} 后缀)', () => {
+        const result = parse_entry('Function', all_rules, 'void(){}') as ast_data
+        expect(result.type).toBe('Function')
+    })
+
+    it('blocks: 真实解析出 Function(而非空列表)', () => {
+        const result = parse_entry('blocks', all_rules,
+            'public main:void(){return;}'
+        ) as ast_data
+        expect(result.type).toBe('blocks')
+        const block = result.children.get('param_0') as ast_data
+        expect(block.type).toBe('Block')
+        // Block = seg(Modifiers, Identifier, ':', or(BlockData))
+        const fn = block.children.get('child_3') as ast_data
+        expect(fn.type).toBe('Function')
     })
 })
 
@@ -347,6 +447,14 @@ describe('边界和错误情况', () => {
 
     it('空 tokens 应该抛出', () => {
         expect(() => parse_entry('Type', [...IdentifierRules], '')).toThrow()
+    })
+
+    it('空输入 Commands 应该抛出', () => {
+        expect(() => parse_entry('Commands', all_rules, '')).toThrow()
+    })
+
+    it('空输入 IfStatement 应该抛出', () => {
+        expect(() => parse_entry('IfStatement', all_rules, '')).toThrow()
     })
 
     it('不匹配的关键字应该抛出', () => {

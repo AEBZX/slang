@@ -77,6 +77,11 @@ export class ForStatement extends BlockCommand{
         super()
     }
 }
+export class ForeachStatement extends BlockCommand{
+    constructor(public iden:string,public data:Expression,public commands:Command) {
+        super()
+    }
+}
 export class Case{
     constructor(public condition:Expression,public commands:Command) {
     }

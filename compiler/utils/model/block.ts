@@ -48,7 +48,7 @@ export class Variable extends Block{
     }
 }
 export class File extends ASTTree{
-    constructor(public links:Link[],public children:Block) {
+    constructor(public links:Link[],public children:Block[]) {
         super()
     }
 }

@@ -63,6 +63,7 @@ export class BitNotPrefix extends Prefix{}
 export class MinusPrefix extends Prefix{}
 export class ReferencePrefix extends Prefix{}
 export class AddressPrefix extends Prefix{}
+export class NewPrefix extends Prefix{}
 export class PrefixExpression extends Expression{
     constructor(public expr:PrimaryExpression,public prefix:Prefix[]) {
         super()
@@ -74,10 +75,18 @@ export class BinaryExpression extends Expression{
     }
 }
 export class AdditiveExpression extends BinaryExpression{}
+export class SubtractiveExpression extends BinaryExpression{}
 export class MultiplicativeExpression extends BinaryExpression{}
-export class ShiftExpression extends BinaryExpression{}
-export class RelationalExpression extends BinaryExpression{}
+export class ModExpression extends BinaryExpression{}
+export class DivisionExpression extends BinaryExpression{}
+export class ShiftLeftExpression extends BinaryExpression{}
+export class ShiftRightExpression extends BinaryExpression{}
+export class GreaterExpression extends BinaryExpression{}
+export class LessExpression extends BinaryExpression{}
+export class GreaterEqualExpression extends BinaryExpression{}
+export class LessEqualExpression extends BinaryExpression{}
 export class EqualityExpression extends BinaryExpression{}
+export class InequalityExpression extends BinaryExpression{}
 export class BitwiseAndExpression extends BinaryExpression{}
 export class BitwiseXorExpression extends BinaryExpression{}
 export class BitwiseOrExpression extends BinaryExpression{}

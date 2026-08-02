@@ -62,7 +62,14 @@ export class Checker{
         this.visitor.set(name, visitor)
     }
     check(ast:ast_data):ast_data{
-        let call=(ast:ast_data)=>{
+        let call=(ast:ast_data):ast_data=>{
+            //底向上:先递归处理子节点并写回结果
+            if(ast.children){
+                for(let [name,child] of ast.children){
+                    if(child!=null&&typeof child=='object')
+                        ast.children.set(name,call(child))
+                }
+            }
             if(!this.visitor.has(ast.type))return ast
             return this.visitor.get(ast.type)(ast,this.scope,call)
         }

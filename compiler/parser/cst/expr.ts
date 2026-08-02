@@ -41,7 +41,8 @@ const PrefixExpression=$.s('PrefixExpression',
         $.s('BitNotPrefix',$.d('~')),
         $.s('MinusPrefix',$.d('-')),
         $.s('ReferencePrefix',$.d('&')),
-        $.s('AddressPrefix',$.d('*'))
+        $.s('AddressPrefix',$.d('*')),
+        $.s('NewPrefix',$.d('new'))
     )),
     $.r('PostfixExpression')
 )
@@ -65,8 +66,8 @@ const AdditiveExpression=$.s('AdditiveExpression',
 const ShiftExpression=$.s('ShiftExpression',
     $.r('AdditiveExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('LeftShift',$.d('<<')),
-                $.s('RightShift',$.d('>>'))
+            $.o('Oper',$.s('ShiftLeft',$.d('<<')),
+                $.s('ShiftRight',$.d('>>'))
             ),$.r('AdditiveExpression'))
     )
 )
@@ -76,8 +77,7 @@ const RelationalExpression=$.s('RelationalExpression',
             $.o('Oper',$.s('Less',$.d('<')),
                 $.s('Greater',$.d('>')),
                 $.s('LessEqual',$.d('<=')),
-                $.s('GreaterEqual',$.d('>=')),
-                $.s('Instanceof',$.d('instanceof'))
+                $.s('GreaterEqual',$.d('>='))
             ),$.r('ShiftExpression'))
     )
 )
@@ -85,9 +85,7 @@ const EqualityExpression=$.s('EqualityExpression',
     $.r('RelationalExpression'),$.l('OperList',
         $.s('OperData',
             $.o('Oper',$.s('Equal',$.d('==')),
-                $.s('NotEqual',$.d('!=')),
-                $.s('StrictEqual',$.d('===')),
-                $.s('StrictNotEqual',$.d('!=='))
+                $.s('NotEqual',$.d('!='))
             ),$.r('RelationalExpression'))
     )
 )

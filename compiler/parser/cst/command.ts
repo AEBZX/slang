@@ -42,6 +42,7 @@ const BasicCommand=$.o('BasicCommand',
     $.r('VM'),
     $.r('Increment'),
     $.r('Decrement'),
+    $.r('Assign'),
     $.r('Expression')
     )
 const Condition=$.s('Condition',$.t('(',$.r('Expression'),')'))
@@ -52,6 +53,9 @@ const DoWhileStatement=$.s('DoWhileStatement',$.d('do'),$.r('Commands'),$.d('whi
 const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
     $.l('Init',$.r('VarDeclaration')),$.r('Expression'),$.d(';'),$.l('Step',$.r('BasicCommand')),
     $.d(')'),$.r('Commands'))
+const ForeachStatement=$.s('ForeachStatement',$.d('foreach'),$.d('('),
+    $.r('Identifier'),$.d(':'),$.r('Expression'),$.d(')'),$.r('Commands')
+)
 const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('{'),
     $.l('CaseList',$.s('Case',
         $.d('case'),$.r('Expression'),$.d('=>'),$.r('Commands')
@@ -60,7 +64,7 @@ const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('
     $.d('}')
 )
 const TryStatement=$.s('TryStatement',$.d('try'),$.r('Commands'),
-    $.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'),
+    $.d('catch'),$.d('('),TokenType.Identifier,$.c($.d(':'),$.r('Type')),$.d(')'),$.r('Commands'),
     $.c($.d('finally'),$.r('Commands')))
 const BlockCommand=$.o('BlockCommand',
     $.r('IfStatement'),
@@ -69,6 +73,7 @@ const BlockCommand=$.o('BlockCommand',
     $.r('ForStatement'),
     $.r('SwitchStatement'),
     $.r('TryStatement'),
+    $.r('ForeachStatement'),
     $.t('{',$.l('Commands',$.r('Commands')),'}')
 )
 const Commands=$.o('Commands',$.r('BasicCommand'),$.r('BlockCommand'))
@@ -95,6 +100,7 @@ export default [
     Increment,
     Decrement,
     BasicCommand,
+    ForeachStatement,
     IfStatement,
     WhileStatement,
     DoWhileStatement,
