@@ -168,7 +168,12 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     let param_num=0
                     let saved=stream.pos
                     try{
-                        ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
+                        let child=parse(stream,data.data[0],ref)
+                        ret.children.set(`param_${param_num}`,child)
+                        if(typeof child=='string')
+                            line.add(stream.code[stream.pos-1].line)
+                        if(typeof child=='object')
+                            for(let j of (child as ast_data).line)line.add(j)
                         param_num++
                     }catch (e) {
                         stream.pos=saved
@@ -179,13 +184,19 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                         saved=stream.pos
                         try{
                             ls=parse(stream,data.data[1],ref)
-                            ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
+                            let child=parse(stream,data.data[0],ref)
+                            ret.children.set(`param_${param_num}`,child)
+                            if(typeof child=='string')
+                                line.add(stream.code[stream.pos-1].line)
+                            if(typeof child=='object')
+                                for(let j of (child as ast_data).line)line.add(j)
                             param_num++
                         }catch (e) {
                             stream.pos=saved
                             break
                         }
                     }
+                    ret.line=[...line]
                     break
                 }
                 case 'loop':{
@@ -193,13 +204,19 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                     while(true){
                         let saved=stream.pos
                         try{
-                            ret.children.set(`param_${param_num}`,parse(stream,data.data[0],ref))
+                            let child=parse(stream,data.data[0],ref)
+                            ret.children.set(`param_${param_num}`,child)
+                            if(typeof child=='string')
+                                line.add(stream.code[stream.pos-1].line)
+                            if(typeof child=='object')
+                                for(let j of (child as ast_data).line)line.add(j)
                         }catch (e){
                             stream.pos=saved
                             break
                         }
                         param_num++
                     }
+                    ret.line=[...line]
                     break
                 }
             }
@@ -232,8 +249,12 @@ class Parser{
 }
 function generate(entry:ast_data,reg:{[key:string]:ast_generate}){
     let g:ast_generate=(data:ast_data,tree:ast_generate)=>{
-        if(data.type in reg)
-            return reg[data.type](data,tree)
+        if(data.type in reg){
+            let ret=reg[data.type](data,tree)
+            if(ret&&typeof ret=='object')
+                ret.line=[...data.line]
+            return ret
+        }
     }
     return g(entry,g)
 }

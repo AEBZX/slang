@@ -41,10 +41,8 @@ slang->
                      identifier.ts:标识语法优化
                      index.ts:入口
              check->语法检查
-                  command.ts:命令语法检查
-                  expr.ts:表达式语法检查
-                  block.ts:块语法检查
-                  identifier.ts:标识语法检查
+                  symbol.ts:符号表构建
+                  type.ts:类型标注以及检查
                   index.ts:入口
              cli->脚手架入口
                 compiler.ts:编译器命令入口

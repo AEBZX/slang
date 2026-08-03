@@ -96,7 +96,9 @@ import {
     VoidType,
     FixType,
     PointFix,
-    LiteralType
+    LiteralType,
+    BlockType,
+    EnumType
 } from './identifier'
 import {
     Link,
@@ -167,6 +169,7 @@ export {
     AAssign,
     AddAssign,
     SubAssign,
+    EnumType,
     MulAssign,
     DivAssign,
     ModAssign,
@@ -206,6 +209,7 @@ export {
     Link,
     Block,
     Variable,
+    BlockType,
     File,
     Modifier,
     Module,

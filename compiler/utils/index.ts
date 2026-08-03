@@ -1,14 +1,15 @@
-import Check,{Checker,Scope,check_visitor} from './lib/check'
+import {Checker,Scope,check_visitor,type_checker} from './lib/check'
 import Desugar,{DesugarVisitor,desugar_visitor} from './lib/desugar'
 import IR,{ASMFactory,BinFactory} from './lib/ir'
 import Parser from './lib/parser'
 import {tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,ast_generate,
-ast_type} from './data'
+ast_type,ASTTree} from './data'
 import {
     ArrayFix,
     Expression,
     PrimaryExpression,
     Literal,
+    BlockType,
     MapFix,
     PointFix,
     NumberLiteral,
@@ -89,6 +90,7 @@ import {
     BasicType,
     LambdaType,
     ModExpression,
+    EnumType,
     BooleanType,
     StringType,
     NumberType,
@@ -109,14 +111,15 @@ import {
     NewPrefix
 } from './model'
 export default {
-    check:Check,
+    check:Checker,
     desugar:Desugar,
     ir:IR,
     parser:Parser
 }
 export {
+    ASTTree,type_checker,
     tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,
-    Checker,Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,Check,ast_generate,ast_type,
+    Checker,Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,ast_generate,ast_type,
     Expression,
     PrimaryExpression,
     Literal,
@@ -127,6 +130,7 @@ export {
     IdentifierExpr,
     ArrayExpression,
     MapExpression,
+    EnumType,
     Postfix,
     IncrementPostfix,
     DecrementPostfix,
@@ -136,6 +140,7 @@ export {
     PostfixExpression,
     Prefix,
     IncrementPrefix,
+    BlockType,
     DecrementPrefix,
     NotPrefix,
     BitNotPrefix,

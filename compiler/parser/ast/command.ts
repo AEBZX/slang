@@ -109,7 +109,7 @@ const G_SwitchStatement:ast_generate=(data,tree)=>{
 }
 const G_TryStatement:ast_generate=(data,tree)=>{
     //catch 带类型时 child_2=Type,无类型时 child_2 即 catch 体 Commands
-    let has_type=data.children.get('child_2')?.type=='Type'
+    let has_type=typeof data.children.get('child_2')=='object'&&(data.children.get('child_2') as ast_data).type=='Type'
     return new TryStatement(
         tree(data.children.get('child_0') as ast_data,tree),
         {

@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "target": "es2016",
-    "module": "es6",
+    "module": "esnext",
     "lib": ["ES2016"],
-    "moduleResolution": "node10",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,

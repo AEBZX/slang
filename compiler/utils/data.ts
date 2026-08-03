@@ -22,6 +22,7 @@ export type ast_type={
 }
 export class ASTTree{
     type:ast_type
+    line:string[]
 }
 export type ast_generate=(data:ast_data,tree:ast_generate)=>ASTTree
 export type ast_rule={

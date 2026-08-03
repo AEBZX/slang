@@ -8,7 +8,7 @@ import {
     GreaterEqualExpression,
     IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, InequalityExpression, LessEqualExpression,
     LogicalAndExpression, LogicalOrExpression, MapExpression, MemberPostfix,
-    MinusPrefix, ModExpression, MultiplicativeExpression, NewPrefix, NotPrefix,
+    AddressPrefix, MinusPrefix, ModExpression, MultiplicativeExpression, NewPrefix, NotPrefix,
     NullLiteral,
     NumberLiteral, Postfix, PostfixExpression, Prefix, PrefixExpression, ReferencePrefix,
     ShiftLeftExpression, ShiftRightExpression,

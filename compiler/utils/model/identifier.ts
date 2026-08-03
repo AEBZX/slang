@@ -20,6 +20,16 @@ export class ClassType extends BasicType{
         super()
     }
 }
+export class BlockType extends BasicType{
+    constructor(public local:string[]){
+        super()
+    }
+}
+export class EnumType extends BasicType{
+    constructor(public local:string[],public value:string){
+        super()
+    }
+}
 export class FixType extends Type{
     constructor(public t:BasicType,public fix:TypeFix[]){
         super()

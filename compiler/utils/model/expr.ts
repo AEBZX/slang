@@ -51,7 +51,7 @@ export class ArgumentsPostfix extends Postfix{
     }
 }
 export class PostfixExpression extends Expression{
-    constructor(public expr:PrimaryExpression,public postfix:Postfix[]) {
+    constructor(public expr:Expression,public postfix:Postfix[]) {
         super()
     }
 }
@@ -65,7 +65,7 @@ export class ReferencePrefix extends Prefix{}
 export class AddressPrefix extends Prefix{}
 export class NewPrefix extends Prefix{}
 export class PrefixExpression extends Expression{
-    constructor(public expr:PrimaryExpression,public prefix:Prefix[]) {
+    constructor(public expr:Expression,public prefix:Prefix[]) {
         super()
     }
 }
