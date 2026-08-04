@@ -17,7 +17,7 @@ function check_code(code: string): string[] {
 
 describe('check 端到端', () => {
     it('正确代码无错误', () => {
-        const errors = check_code('public main:void(a:number){return a;}\n')
+        const errors = check_code('public add:number(a:number,b:number){return a+b;}\n')
         expect(errors).toEqual([])
     })
 
@@ -44,5 +44,27 @@ describe('check 端到端', () => {
     it('重名类报错', () => {
         const errors = check_code('public Foo:class{}\npublic Foo:class{}\n')
         expect(errors.join()).toContain('is defined')
+    })
+
+    it('void 函数 return 值报错', () => {
+        const errors = check_code('public main:void(){return 1;}\n')
+        expect(errors.join()).toContain('return type mismatch')
+    })
+
+    it('if 条件非 boolean 报错', () => {
+        const errors = check_code('public main:void(){if(1){return;}}\n')
+        expect(errors.join()).toContain('condition is not boolean')
+    })
+
+    it('break 在循环外报错,在循环内通过', () => {
+        const errors = check_code('public main:void(){break;}\n')
+        expect(errors.join()).toContain('break outside loop')
+        const ok = check_code('public main:void(){while(true){break;}}\n')
+        expect(ok).toEqual([])
+    })
+
+    it('返回类型不匹配报错', () => {
+        const errors = check_code('public f:number(){return "str";}\n')
+        expect(errors.join()).toContain('return type mismatch')
     })
 })

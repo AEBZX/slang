@@ -1,6 +1,6 @@
 import {ast_data, ast_type, ASTTree} from '../data'
 import {BasicType, ClassType, FixType, Type, VoidType} from '../model'
-export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope?:Scope)=>void)=>void
+export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope:Scope)=>void)=>void
 export type type_checker=(ast:ASTTree,scope:Scope,call:(ast:ASTTree)=>Type)=>Type
 export class Scope{
     parent:Scope
@@ -9,6 +9,7 @@ export class Scope{
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
     error:string[]
+    loop:boolean
     constructor(parent:Scope,global:Scope){
         this.parent=parent
         this.global=global
@@ -16,9 +17,12 @@ export class Scope{
         this.chain=new Map()
         this.symbol=new Map()
         this.error=[]
+        this.loop=false
     }
     enter(){
-        return new Scope(this,this.global)
+        let s=new Scope(this,this.global)
+        s.loop=this.loop
+        return s
     }
     leave(){
         return this.parent
@@ -55,7 +59,7 @@ export class Checker{
     }
 }
 export default Checker
-export function type_merge(type1:Type,type2:Type,scope:Scope){
+export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
     if(type1 instanceof BasicType&&type2 instanceof BasicType){
         //情况1:两个Class
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
