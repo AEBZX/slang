@@ -67,4 +67,45 @@ describe('check 端到端', () => {
         const errors = check_code('public f:number(){return "str";}\n')
         expect(errors.join()).toContain('return type mismatch')
     })
+
+    it('var 声明类型匹配(单元素数组)', () => {
+        const errors = check_code('public main:void(){var a:number[]=[1];}\n')
+        expect(errors).toEqual([])
+    })
+
+    it('throw 与 catch 类型匹配通过/不匹配报错', () => {
+        expect(check_code('public main:void(){try{throw "e";}catch(e:string){return;}}\n')).toEqual([])
+        const bad = check_code('public main:void(){try{throw 1;}catch(e:string){return;}}\n')
+        expect(bad.join()).toContain('throw type mismatch')
+    })
+
+    it('foreach 遍历数组', () => {
+        const errors = check_code('public main:void(){var a:number[]=[1];foreach(i:a){break;}}\n')
+        expect(errors).toEqual([])
+    })
+
+    it('函数内 break 报错(阻断外层循环)', () => {
+        const errors = check_code('public foo:void(){break;}\n')
+        expect(errors.join()).toContain('break outside loop')
+    })
+
+    it('函数内 throw 无 catch 报错', () => {
+        const errors = check_code('public foo:void(){throw 1;}\n')
+        expect(errors.join()).toContain('throw without catch')
+    })
+
+    it('lambda body 命令检查', () => {
+        // 正确 lambda
+        expect(check_code(
+            'public main:void(){var f:(x:number)=>number=(x:number)=>number{return x+1;};}\n'
+        )).toEqual([])
+        // lambda body return 类型不匹配
+        expect(check_code(
+            'public main:void(){var f:(x:number)=>number=(x:number)=>number{return "str";};}\n'
+        ).join()).toContain('return type mismatch')
+        // lambda body 未定义变量
+        expect(check_code(
+            'public main:void(){var f:(x:number)=>number=(x:number)=>number{return y;};}\n'
+        ).join()).toContain('y is not defined')
+    })
 })

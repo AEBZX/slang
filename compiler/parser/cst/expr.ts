@@ -17,11 +17,11 @@ const PrimaryExpression=$.o('PrimaryExpression',
     $.r('BooleanLiteral'),
     $.r('NullLiteral'),
     $.r('Identifier'),
+    $.r('LambdaExpression'),
     $.t('(',$.r('Expression'),')'),
     //TIPS:可以通过.o包裹
     $.r('ArrayExpression'),
-    $.r('MapExpression'),
-    $.r('LambdaExpression')
+    $.r('MapExpression')
 )
 const PostfixExpression=$.s('PostfixExpression',
     $.r('PrimaryExpression'),$.l('PostfixList',

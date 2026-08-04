@@ -53,6 +53,9 @@ const C_Module:check_visitor=(ast:Module,scope,call)=>{
 }
 const C_Function:check_visitor=(ast:Function,scope,call)=>{
     scope=scope.enter()
+    //阻断外层循环/捕获,break/continue/throw 不能跳出函数
+    scope.data.set('while',null as any)
+    scope.data.set('throw',null as any)
     for(let [k,v] of ast.params){
         scope.set(k,v)
         scope.sym(v,v)
@@ -96,11 +99,11 @@ const C_VarDeclaration:check_visitor=(ast:VarDeclaration,scope,call)=>{
     if(scope.get(ast.name))
         scope.thr(`${ast.name} is already defined at line ${ast.line.join('\n')}`)
     scope.set(ast.name,ast.t)
-    scope.sym(ast,ast.t)
+    scope.sym(ast.t,ast.t)
     if(ast.value){
         call(ast.value,scope)
         let value_type=scope.get_sym(ast.value)
-        if(type_merge(value_type,ast.t,scope)!=ast.t)
+        if(type_merge(value_type,ast.t,scope) instanceof VoidType)
             scope.thr(`${ast.name} is not assignable at line ${ast.line.join('\n')}`)
     }
 }
@@ -136,7 +139,7 @@ const C_Throw:check_visitor=(ast:Throw,scope,call)=>{
     let _t:Type=scope.get('throw')
     if(!_t)
         scope.thr(`throw without catch at line ${ast.line.join('\n')}`)
-    if(type_merge(t,_t,scope)!=_t)
+    if(type_merge(t,_t,scope) instanceof VoidType)
         scope.thr(`throw type mismatch at line ${ast.line.join('\n')}`)
 }
 //TODO IR暂未实现,先对%Identifier进行处理
@@ -208,10 +211,10 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     let data_type=scope.get_sym(ast.data)
     let element:Type=new VoidType()
     if(data_type instanceof FixType){
-        if(!(data_type.fix[data_type.fix.length-1] instanceof ArrayFix&&data_type.fix[data_type.fix.length-1] instanceof MapFix))
+        let last=data_type.fix[data_type.fix.length-1]
+        if(!(last instanceof ArrayFix||last instanceof MapFix))
             scope.thr(`foreach can only be applied to array or map at line ${ast.line.join('\n')}`)
-        data_type.fix.shift()
-        element=data_type
+        element=data_type.t
     }
     scope.set(ast.iden,element)
     call(ast.commands,scope)

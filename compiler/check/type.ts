@@ -38,9 +38,9 @@ const S_IdentifierExpression:type_checker=(ast:IdentifierExpr,scope:Scope,call:(
 //求最小公共超类型，不存在则返回VoidType
 const S_ArrayExpression:type_checker=(ast:ArrayExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let element_type=ast.elements.map((element)=>call(element))
-    let type:Type=new VoidType()
-    for(let i=0;i<element_type.length-1;i++)
-        type=type_merge(element_type[i],element_type[i+1],scope)
+    let type:Type=element_type.length?element_type[0]:new VoidType()
+    for(let i=1;i<element_type.length;i++)
+        type=type_merge(type,element_type[i],scope)
     if(type instanceof FixType){
         type.fix.push(new ArrayFix())
         return type
@@ -51,9 +51,9 @@ const S_MapExpression:type_checker=(ast:MapExpression,scope:Scope,call:(ast:ASTT
     let element_type=[]
     for(let [key,value] of ast.elements)
         element_type.push(call(value))
-    let type:Type=new VoidType()
-    for(let i=0;i<element_type.length-1;i++)
-        type=type_merge(element_type[i],element_type[i+1],scope)
+    let type:Type=element_type.length?element_type[0]:new VoidType()
+    for(let i=1;i<element_type.length;i++)
+        type=type_merge(type,element_type[i],scope)
     if(type instanceof FixType){
         type.fix.push(new MapFix())
         return type

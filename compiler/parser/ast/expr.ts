@@ -50,9 +50,9 @@ const G_LambdaExpression:ast_generate=(data,tree)=>{
     for(let [k,v] of ParamIdentifier.children)
         if(typeof v=='object')
             param.set(v.children.get('child_0') as string,
-                      tree(v.children.get('child_2') as ast_data,tree))
-    let type=tree(data.children.get('child_2') as ast_data,tree)
-    let command=tree(data.children.get('child_3') as ast_data,tree)
+                      tree(v.children.get('child_1') as ast_data,tree))
+    let type=tree(data.children.get('child_1') as ast_data,tree)
+    let command=tree(data.children.get('child_2') as ast_data,tree)
     return new LambdaExpression(param,type,command)
 }
 const G_PostfixExpression:ast_generate=(data,tree)=>{

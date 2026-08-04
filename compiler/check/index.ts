@@ -6,11 +6,10 @@ import {
     Type,
     VoidType
 } from '../utils'
+import { LambdaExpression } from '../utils/model/expr'
 import symbol from './symbol'
 import type_map from './type'
 import censor_map from './censor'
-
-//沿构造函数原型链查找注册表(子类命中基类)
 function find_checker(map: Map<any, any>, cls: any): any {
     while (cls) {
         if (map.has(cls)) return map.get(cls)
@@ -18,8 +17,6 @@ function find_checker(map: Map<any, any>, cls: any): any {
     }
     return undefined
 }
-
-//计算表达式类型并缓存到 scope.symbol
 function type_of(ast: ASTTree, scope: Scope): Type {
     let cached = scope.get_sym(ast)
     if (cached) return cached
@@ -28,8 +25,6 @@ function type_of(ast: ASTTree, scope: Scope): Type {
     scope.sym(ast, type)
     return type
 }
-
-//预计算命令节点中的纯表达式子节点(供 C_Assign 等 get_sym 使用)
 function type_expr_children(ast: ASTTree, scope: Scope) {
     for (let key in ast) {
         let v = (ast as any)[key]
@@ -38,11 +33,23 @@ function type_expr_children(ast: ASTTree, scope: Scope) {
         else if (v instanceof Map) v.forEach(x => x instanceof Expression && type_of(x, scope))
     }
 }
-
-//递归遍历:表达式走 type_checker,命令/块走 check_visitor,无注册则 fallback
 function visit(ast: ASTTree, scope: Scope) {
     if (ast instanceof Expression) {
         type_of(ast, scope)
+        //LambdaExpression 的函数体也要做命令级检查
+        if (ast instanceof LambdaExpression && ast.body) {
+            let ls = scope.enter()
+            ls.loop = false
+            ls.data.set('while', null as any)
+            ls.data.set('throw', null as any)
+            for (let [k, v] of ast.params) {
+                ls.set(k, v)
+                ls.sym(v, v)
+            }
+            ls.set('return', ast.ret)
+            ls.sym(ast.ret, ast.ret)
+            visit(ast.body, ls)
+        }
         return
     }
     type_expr_children(ast, scope)
