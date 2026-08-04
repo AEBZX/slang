@@ -1,4 +1,4 @@
-import {Checker,Scope,check_visitor,type_checker} from './lib/check'
+import Check,{Checker,Scope,check_visitor,type_checker,type_merge} from './lib/check'
 import Desugar,{DesugarVisitor,desugar_visitor} from './lib/desugar'
 import IR,{ASMFactory,BinFactory} from './lib/ir'
 import Parser from './lib/parser'
@@ -156,6 +156,7 @@ export {
     GreaterEqualExpression,
     LessEqualExpression,
     InequalityExpression,
+    type_merge,
     ShiftLeftExpression,
     ShiftRightExpression,
     ModExpression,
@@ -217,6 +218,7 @@ export {
     Block,
     Variable,
     File,
+    Check,
     Modifier,
     Module,
     Enum,

@@ -23,7 +23,8 @@ const Assign=$.o('Assign',
     $.r('BitShlAssign'),
     $.r('BitShrAssign'),
 )
-const VarDeclaration=$.s('VarDeclaration',$.d('var'),$.r('Identifier'),$.c($.d('='),$.r('Expression')),$.d(';'))
+const VarDeclaration=$.s('VarDeclaration',$.d('var'),$.r('Identifier'),$.d(':'),$.r('Type')
+    ,$.c($.d('='),$.r('Expression')),$.d(';'))
 const Call=$.s('Call',$.c('await'),$.r('Expression'),$.d(';'))
 const Return=$.s('Return',$.d('return'),$.c($.r('Expression')),$.d(';'))
 const Break=$.s('Break',$.d('break'),$.d(';'))

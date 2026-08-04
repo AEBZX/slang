@@ -89,7 +89,7 @@ describe('Function 转换', () => {
 
     it('嵌套块(递归 t 规则无状态污染)', () => {
         const ast = parse_ast(
-            'public main:void(){var x=1;if(x){return;}else{var y=2;}}\n'
+            'public main:void(){var x:number=1;if(x){return;}else{var y:number=2;}}\n'
         ) as File
         const fn = ast.children[0] as Function
         const cmds = (fn.commands as ListCommand).commands
@@ -161,7 +161,7 @@ describe('Variable 转换', () => {
 describe('表达式转换', () => {
     it('二元表达式 a+b', () => {
         const ast = parse_ast(
-            'public main:void(){var x=a+b;}\n'
+            'public main:void(){var x:number=a+b;}\n'
         ) as File
         const fn = ast.children[0] as Function
         const vd = (fn.commands as ListCommand).commands[0] as VarDeclaration
@@ -174,7 +174,7 @@ describe('表达式转换', () => {
 
     it('优先级 a+b*c', () => {
         const ast = parse_ast(
-            'public main:void(){var x=a+b*c;}\n'
+            'public main:void(){var x:number=a+b*c;}\n'
         ) as File
         const fn = ast.children[0] as Function
         const vd = (fn.commands as ListCommand).commands[0] as VarDeclaration
@@ -263,7 +263,7 @@ describe('块命令转换', () => {
 
     it('for: init/condition/step/body', () => {
         const cmds = commands(
-            'public main:void(){for(var i=0;i<10;i++){break;}}\n'
+            'public main:void(){for(var i:number=0;i<10;i++){break;}}\n'
         )
         const fo = cmds[0] as any
         expect(fo.constructor.name).toBe('ForStatement')

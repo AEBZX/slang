@@ -8,7 +8,7 @@ export class Link extends ASTTree{
     }
 }
 export class Modifier extends ASTTree{
-    constructor(public unstatic:boolean,public sync:boolean,public _private:boolean) {
+    constructor(public unstatic:boolean,public _async:boolean,public _private:boolean) {
         super()
     }
 }

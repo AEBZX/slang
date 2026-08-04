@@ -20,7 +20,7 @@ export class BitXorAssign extends Assign{}
 export class BitShlAssign extends Assign{}
 export class BitShrAssign extends Assign{}
 export class VarDeclaration extends BasicCommand{
-    constructor(public name:string,public value:Expression) {
+    constructor(public name:string,public t:Type,public value:Expression) {
         super()
     }
 }

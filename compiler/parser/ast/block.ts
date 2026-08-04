@@ -81,7 +81,7 @@ const G_Block:ast_generate=(data,tree)=>{
     for(let [k,v] of modifier.children)
         _Modifier.push(v as string)
     let ret=tree(data.children.get('child_3') as ast_data,tree) as Block
-    ret.modifiers=new Modifier(_Modifier.includes('public'),_Modifier.includes('sync'),_Modifier.includes('private'))
+    ret.modifiers=new Modifier(!_Modifier.includes('static'),_Modifier.includes('async'),_Modifier.includes('private'))
     ret.name=data.children.get('child_1') as string
     return ret
 }

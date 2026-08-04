@@ -209,13 +209,13 @@ describe('表达式解析 (Expression)', () => {
 describe('命令解析 (Commands)', () => {
     const all_rules = [...IdentifierRules, ...ExprRules, ...CommandRules]
 
-    it('var 声明 (无类型): var x=5;', () => {
-        const result = parse_entry('VarDeclaration', all_rules, 'var x=5;') as ast_data
+    it('var 声明: var x:number=5;', () => {
+        const result = parse_entry('VarDeclaration', all_rules, 'var x:number=5;') as ast_data
         expect(result.type).toBe('VarDeclaration')
     })
 
-    it('var 声明无初始化: var x;', () => {
-        const result = parse_entry('VarDeclaration', all_rules, 'var x;') as ast_data
+    it('var 声明无初始化: var x:number;', () => {
+        const result = parse_entry('VarDeclaration', all_rules, 'var x:number;') as ast_data
         expect(result.type).toBe('VarDeclaration')
     })
 
@@ -309,8 +309,8 @@ describe('命令解析 (Commands)', () => {
         expect(result.type).toBe('Call')
     })
 
-    it('for 循环: for(var i=0;i<10;i++){break;}', () => {
-        const result = parse_entry('ForStatement', all_rules, 'for(var i=0;i<10;i++){break;}') as ast_data
+    it('for 循环: for(var i:number=0;i<10;i++){break;}', () => {
+        const result = parse_entry('ForStatement', all_rules, 'for(var i:number=0;i<10;i++){break;}') as ast_data
         expect(result.type).toBe('ForStatement')
     })
 

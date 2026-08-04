@@ -1,5 +1,5 @@
 import {
-    AdditiveExpression,
+    AdditiveExpression, Function,
     ArgumentsPostfix,
     ArrayExpression, ArrayFix,
     ast_type,
@@ -7,16 +7,16 @@ import {
     BitwiseXorExpression, BlockType, BooleanLiteral, BooleanType,
     Checker as $,
     Class, ClassType, DecrementPostfix, DecrementPrefix, DivisionExpression, Enum,
-    EnumType, EqualityExpression, FixType, GreaterEqualExpression, IdentifierExpr,
-    IncrementPostfix, IncrementPrefix, IndexPostfix, InequalityExpression, LambdaType,
+    EnumType, EqualityExpression, Expression, FixType, GreaterEqualExpression, IdentifierExpr,
+    IncrementPostfix, IncrementPrefix, IndexPostfix, InequalityExpression, Interface, LambdaType,
     LessEqualExpression, Literal, LogicalAndExpression, LogicalOrExpression, MapExpression,
     MapFix, MemberPostfix, MinusPrefix, ModExpression, Module, MultiplicativeExpression, NewPrefix, NotPrefix,
     NullLiteral,
     NumberLiteral, NumberType, PointFix, PostfixExpression, PrefixExpression, ReferencePrefix,
     Scope, ShiftLeftExpression, ShiftRightExpression, StringLiteral, StringType,
     SubtractiveExpression, TernaryExpression, Type,
-    type_checker,
-    VoidType
+    type_checker, type_merge,
+    VoidType, Variable, AddressPrefix
 } from '../utils'
 import {GreaterExpression, LambdaExpression, LessExpression} from "../utils/model/expr";
 import {number_radix} from "../utils/data";
@@ -36,32 +36,6 @@ const S_IdentifierExpression:type_checker=(ast:IdentifierExpr,scope:Scope,call:(
     return data
 }
 //求最小公共超类型，不存在则返回VoidType
-function type_merge(type1:Type,type2:Type,scope:Scope){
-    if(type1 instanceof BasicType&&type2 instanceof BasicType){
-        //情况1:两个Class
-        if(type1 instanceof ClassType&&type2 instanceof ClassType){
-            let name1=type1.local.join('.')
-            let name2=type2.local.join('.')
-            //name1的子类型中存在name2
-            if(scope.chain.has(name1)&&scope.chain.get(name1).includes(name2))return type1
-            //反之
-            if(scope.chain.has(name2)&&scope.chain.get(name2).includes(name1))return type2
-            //是否是一个类
-            return scope.get(name1)===scope.get(name2)?type1:new VoidType()
-        }
-        //情况2:正常类型且都不是VoidType
-        if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))return type1.constructor==type2.constructor?type1:new VoidType()
-        return type1.constructor==type2.constructor?type1:new VoidType()
-    }
-    //两个FixType
-    if(type1 instanceof FixType&&type2 instanceof FixType){
-        if(type1.fix.length!=type2.fix.length)return new VoidType()
-        //每个fix都一致
-        for(let i=0;i<type1.fix.length;i++)
-            if(type1.fix[i].constructor!=type2.fix[i].constructor)return new VoidType()
-        return type_merge(type1.t,type2.t,scope)
-    }
-}
 const S_ArrayExpression:type_checker=(ast:ArrayExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let element_type=ast.elements.map((element)=>call(element))
     let type:Type=new VoidType()
@@ -173,12 +147,19 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
             type=new NumberType()
         }
         //逻辑运算符可以当作!a=!(a!=null),不检查
+        if(prefix instanceof NotPrefix)
+            type=new BooleanType()
         if(prefix instanceof BitNotPrefix){
             if(!(type instanceof BooleanType||type instanceof NumberType))
                 scope.thr(`~ can only be applied to boolean at line ${ast.line.join('\n')}`)
             type=(type instanceof BooleanType||type instanceof NumberType)?type:new NumberType()
         }
         //&操作不检查
+        if(prefix instanceof AddressPrefix){
+            if(type instanceof FixType)
+                type.fix.push(new PointFix())
+            else type=new FixType(type, [new PointFix()])
+        }
         if(prefix instanceof ReferencePrefix){
             if(!(type instanceof BasicType))
                 scope.thr(`& can only be applied to basic type at line ${ast.line.join('\n')}`)
@@ -275,3 +256,29 @@ const S_TernaryExpression:type_checker=(ast:TernaryExpression,scope:Scope,call:(
         scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
     return type_merge(true_value,false_value,scope)
 }
+const S_Block:type_checker=(ast:Class|Module|Interface|Enum,scope:Scope,call:(ast:ASTTree)=>Type)=>{
+    let name=''
+    for(let [k,v] of scope.global.data)
+        if(v==ast)
+            name=k
+    return new BlockType(name.split('.'))
+}
+const S_Variable:type_checker=(ast:Variable,scope:Scope,call:(ast:ASTTree)=>Type)=>ast.t
+const S_Function:type_checker=(ast:Function,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.return_type)
+export default new Map<any,type_checker>([
+    [Literal,S_Literal],
+    [IdentifierExpr,S_IdentifierExpression],
+    [PrefixExpression,S_PrefixExpression],
+    [PostfixExpression,S_PostfixExpression],
+    [BinaryExpression,S_BinaryExpression],
+    [TernaryExpression,S_TernaryExpression],
+    [ArrayExpression,S_ArrayExpression],
+    [MapExpression,S_MapExpression],
+    [LambdaExpression,S_LambdaExpression],
+    [Class,S_Block],
+    [Module,S_Block],
+    [Interface,S_Block],
+    [Enum,S_Block],
+    [Variable,S_Variable],
+    [Function,S_Function]
+])

@@ -41,8 +41,9 @@ slang->
                      identifier.ts:标识语法优化
                      index.ts:入口
              check->语法检查
+                  censor.ts:检查
                   symbol.ts:符号表构建
-                  type.ts:类型标注以及检查
+                  type.ts:类型标注
                   index.ts:入口
              cli->脚手架入口
                 compiler.ts:编译器命令入口
