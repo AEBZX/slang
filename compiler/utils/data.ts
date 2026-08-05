@@ -20,8 +20,9 @@ export type ast_type={
     data:string
     child:ast_type[]
 }
+import type {Type} from './model'
 export class ASTTree{
-    type:ast_type
+    type:Type
     line:string[]
 }
 export type ast_generate=(data:ast_data,tree:ast_generate)=>ASTTree

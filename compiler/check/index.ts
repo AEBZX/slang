@@ -23,6 +23,7 @@ function type_of(ast: ASTTree, scope: Scope): Type {
     let checker = find_checker(type_map, ast.constructor)
     let type = checker ? checker(ast, scope, (child) => type_of(child, scope)) : new VoidType()
     scope.sym(ast, type)
+    ast.type = type
     return type
 }
 function type_expr_children(ast: ASTTree, scope: Scope) {

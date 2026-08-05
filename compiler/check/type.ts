@@ -5,7 +5,6 @@ import {
     ast_type,
     ASTTree, BasicType, BinaryExpression, BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression,
     BitwiseXorExpression, BlockType, BooleanLiteral, BooleanType,
-    Checker as $,
     Class, ClassType, DecrementPostfix, DecrementPrefix, DivisionExpression, Enum,
     EnumType, EqualityExpression, Expression, FixType, GreaterEqualExpression, IdentifierExpr,
     IncrementPostfix, IncrementPrefix, IndexPostfix, InequalityExpression, Interface, LambdaType,

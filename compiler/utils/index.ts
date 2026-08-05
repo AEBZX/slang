@@ -1,4 +1,4 @@
-import Check,{Checker,Scope,check_visitor,type_checker,type_merge} from './lib/check'
+import {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 import Desugar,{DesugarVisitor,desugar_visitor} from './lib/desugar'
 import IR,{ASMFactory,BinFactory} from './lib/ir'
 import Parser from './lib/parser'
@@ -8,6 +8,7 @@ import {
     ArrayFix,
     Expression,
     PrimaryExpression,
+    LambdaExpression,
     Literal,
     BlockType,
     MapFix,
@@ -111,7 +112,6 @@ import {
     NewPrefix
 } from './model'
 export default {
-    check:Checker,
     desugar:Desugar,
     ir:IR,
     parser:Parser
@@ -119,19 +119,20 @@ export default {
 export {
     ASTTree,type_checker,
     tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,
-    Checker,Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,ast_generate,ast_type,
+    Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,ast_generate,ast_type,
     Expression,
     PrimaryExpression,
     Literal,
     NumberLiteral,
     StringLiteral,
     BooleanLiteral,
-    NullLiteral,
+    NullLiteral,Desugar,
     IdentifierExpr,
     ArrayExpression,
     MapExpression,
     EnumType,
     Postfix,
+    LambdaExpression,
     IncrementPostfix,
     DecrementPostfix,
     MemberPostfix,
@@ -218,7 +219,6 @@ export {
     Block,
     Variable,
     File,
-    Check,
     Modifier,
     Module,
     Enum,

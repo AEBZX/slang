@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lexer'
 import cst_parse from '../../parser/cst'
 import ast_parse from '../../parser/ast'
-import { ast_data, File } from '../../utils'
+import { ast_data, BlockType, File, NumberType } from '../../utils'
 import check from '../../check'
 
 function check_code(code: string): string[] {
@@ -92,6 +92,16 @@ describe('check 端到端', () => {
     it('函数内 throw 无 catch 报错', () => {
         const errors = check_code('public foo:void(){throw 1;}\n')
         expect(errors.join()).toContain('throw without catch')
+    })
+
+    it('AST 节点通过符号表获得 Type', () => {
+        const file = ast_parse(cst_parse(lexer('public add:number(a:number,b:number){return a+b;}\n')) as ast_data) as File
+        check([file])
+        const fn = file.children[0] as any
+        expect(fn.type).toBeInstanceOf(BlockType)
+        const ret = (fn.commands as any).commands[0] as any
+        expect(ret.data.type).toBeInstanceOf(NumberType)
+        expect(ret.data.left.type).toBeInstanceOf(NumberType)
     })
 
     it('lambda body 命令检查', () => {

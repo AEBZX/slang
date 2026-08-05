@@ -47,18 +47,6 @@ export class Scope{
         this.global.error.push(msg)
     }
 }
-export class Checker{
-    scope:Scope
-    visitor:Map<string,check_visitor>
-    constructor(){
-        this.scope=new Scope(null,new Scope(null,null))
-        this.visitor=new Map()
-    }
-    register(name:string,visitor:check_visitor){
-        this.visitor.set(name, visitor)
-    }
-}
-export default Checker
 export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
     if(type1 instanceof BasicType&&type2 instanceof BasicType){
         //情况1:两个Class

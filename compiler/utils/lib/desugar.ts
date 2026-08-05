@@ -1,33 +1,23 @@
-import {ast_data} from '../data'
+import {ast_data, ASTTree} from '../data'
 
-export type desugar_visitor=(node:ast_data)=>ast_data
+export type desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
 
 export class DesugarVisitor{
-    visit:Map<string,desugar_visitor>
+    visit:Map<any,desugar_visitor>
     constructor(){
         this.visit=new Map()
     }
-    visitor(ast:ast_data){
-        let v=(node:ast_data):ast_data=>{
-            for(let [k,_v] of node.children)
-                if(typeof _v=='object')
-                    node.children.set(k,v(_v))
-            if(!this.visit.has(node.type))return node
-            return this.visit.get(node.type)(node)
+    visitor(ast:ASTTree,visit:Map<any,desugar_visitor>){
+        this.visit=visit
+        let g=(ast:ASTTree)=>{
+            for(let [k,v] of this.visit)
+                if(ast instanceof k)
+                    return v(ast,g)
         }
-        return v(ast)
-    }
-    register(name:string,visitor:desugar_visitor){
-        this.visit.set(name,visitor)
+        return g(ast)
     }
 }
 
-export default {
-    visitor:(name:string,visitor:desugar_visitor)=>{return {name,visitor}},
-    desugar:(tree:ast_data,visit:{name:string,visitor:desugar_visitor}[])=>{
-        let v=new DesugarVisitor()
-        for(let i of visit)
-            v.register(i.name,i.visitor)
-        return v.visitor(tree)
-    }
+export default function desugar(tree:ASTTree,visit:Map<any,desugar_visitor>){
+    return new DesugarVisitor().visitor(tree,visit)
 }

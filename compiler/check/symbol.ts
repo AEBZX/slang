@@ -11,13 +11,17 @@ export default function symbol(data:File[],scope:Scope){
                         scope.thr(`${block.name} and ${i.name} modifier not equal at line ${block.line.join('\n')}`)
                     block.children.forEach(v=>i.children.push(v))
                     scope.set(i.name,i)
-                    scope.sym(i,new BlockType(i.name.split('.')))
+                    let block_type=new BlockType(i.name.split('.'))
+                    scope.sym(i,block_type)
+                    i.type=block_type
                 }else
                     scope.thr(`${i.name} is defined at line ${block.line.join('\n')}`)
                 continue
             }
             scope.set(i.name,i)
-            scope.sym(i,new BlockType(i.name.split('.')))
+            let block_type=new BlockType(i.name.split('.'))
+            scope.sym(i,block_type)
+            i.type=block_type
             for(let j of d.children.filter(v=>v instanceof Class||
             v instanceof Interface||v instanceof Module||v instanceof File)) {
                 scope=scope.enter()
@@ -34,7 +38,9 @@ export default function symbol(data:File[],scope:Scope){
             if(!i.modifiers.unstatic){
                 let static_name='name' in i?(name?name+'.'+i.name:i.name):name
                 scope.global.set(static_name,i)
-                scope.global.sym(i,new BlockType(static_name.split('.')))
+                let block_type=new BlockType(static_name.split('.'))
+                scope.global.sym(i,block_type)
+                i.type=block_type
             }
             if(i instanceof Class||i instanceof Interface||i instanceof File)
                 _static(i,name)
