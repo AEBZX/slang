@@ -104,6 +104,61 @@ describe('check 端到端', () => {
         expect(ret.data.left.type).toBeInstanceOf(NumberType)
     })
 
+    it('赋值左值检查', () => {
+        // 可操作的左值:变量/成员/索引
+        expect(check_code('public m:void(x:number){x=1;}\n')).toEqual([])
+        expect(check_code('public A:class{public f:number;}\npublic m:void(x:A){x.f=1;}\n')).toEqual([])
+        expect(check_code('public m:void(a:number[],i:number){a[i]=1;}\n')).toEqual([])
+        // 不可操作的左值:函数返回值/字面量/算术结果
+        expect(check_code('public A:class{public f:number(){return 1;}}\npublic m:void(x:A){x.f()=1;}\n').join()).toContain('not assignable')
+        expect(check_code('public m:void(){1=2;}\n').join()).toContain('not assignable')
+        expect(check_code('public m:void(x:number,y:number){x+y=1;}\n').join()).toContain('not assignable')
+        // 解引用链可赋值,取地址不可
+        expect(check_code('public m:void(p:number*){*p=1;}\n')).toEqual([])
+        expect(check_code('public m:void(p:number**){**p=1;}\n')).toEqual([])
+        expect(check_code('public m:void(x:number){&x=1;}\n').join()).toContain('not assignable')
+    })
+
+    it('implements 链:接口的函数与变量必须实现', () => {
+        // 缺方法
+        expect(check_code(
+            'public I:interface{public f:void(){}}\npublic A:class implements I{public g:void(){}}\n'
+        ).join()).toContain('must implement function f')
+        // 完整实现
+        expect(check_code(
+            'public I:interface{public f:void(){}}\npublic B:class implements I{public f:void(){}}\n'
+        )).toEqual([])
+        // 缺变量
+        expect(check_code(
+            'public I:interface{public x:var:number;}\npublic C:class implements I{}\n'
+        ).join()).toContain('must implement variable x')
+        // 含变量
+        expect(check_code(
+            'public I:interface{public x:var:number;}\npublic D:class implements I{public x:var:number;}\n'
+        )).toEqual([])
+        // 接口继承链传递
+        expect(check_code(
+            'public J:interface{public f:void(){}}\npublic I:interface implements J{}\npublic E:class implements I{public f:void(){}}\n'
+        )).toEqual([])
+    })
+
+    it('嵌套类绝对路径与成员访问', () => {
+        const file = ast_parse(cst_parse(lexer('public A:class{public B:class{}}\n')) as ast_data) as File
+        check([file])
+        const A = file.children[0] as any
+        const B = A.children[0] as any
+        expect((A.type as BlockType).local).toEqual(['A'])
+        expect((B.type as BlockType).local).toEqual(['A', 'B'])
+        // 成员访问与调用
+        expect(check_code('public A:class{public f:void(){}}\npublic m:void(x:A){x.f();}\n')).toEqual([])
+    })
+
+    it('string 索引与 foreach', () => {
+        expect(check_code('public m:string(s:string){return s[0];}\n')).toEqual([])
+        expect(check_code('public m:void(s:string,i:number){var c:string=s[i];}\n')).toEqual([])
+        expect(check_code('public m:void(s:string){foreach(c:s){return;}}\n')).toEqual([])
+    })
+
     it('lambda body 命令检查', () => {
         // 正确 lambda
         expect(check_code(

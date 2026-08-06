@@ -1,33 +1,41 @@
 import {Block, BlockType, Class, File, Interface, Module, Scope} from '../utils'
 export default function symbol(data:File[],scope:Scope){
     //重名检测
-    let _name=(d:Class|Module|Interface|File)=>{
+    let _name=(d:Class|Module|Interface|File,prefix:string='')=>{
+        //先注册本层所有 block(含成员),再递归一次子 block,避免重复处理
         for(let i of d.children){
-            if(scope.data.get(i.name)){
-                let block=scope.data.get(i.name)
+            let abs_name=prefix?prefix+'.'+i.name:i.name
+            //重名只按绝对路径检测,避免不同作用域的同名成员(如 I.f 与 B.f)误判
+            let exists=scope.global.data.get(abs_name)
+            if(exists){
+                let block=exists
                 //合并当作一个检查
                 if(block instanceof Module&&i instanceof Module){
                     if(block.modifiers!=i.modifiers)
                         scope.thr(`${block.name} and ${i.name} modifier not equal at line ${block.line.join('\n')}`)
                     block.children.forEach(v=>i.children.push(v))
-                    scope.set(i.name,i)
-                    let block_type=new BlockType(i.name.split('.'))
-                    scope.sym(i,block_type)
+                    scope.global.set(abs_name,i)
+                    let block_type=new BlockType(abs_name.split('.'))
+                    scope.global.sym(i,block_type)
                     i.type=block_type
                 }else
                     scope.thr(`${i.name} is defined at line ${block.line.join('\n')}`)
                 continue
             }
+            //绝对路径注册到全局,相对名注册到当前作用域
+            scope.global.set(abs_name,i)
             scope.set(i.name,i)
-            let block_type=new BlockType(i.name.split('.'))
-            scope.sym(i,block_type)
+            let block_type=new BlockType(abs_name.split('.'))
+            scope.global.sym(i,block_type)
             i.type=block_type
-            for(let j of d.children.filter(v=>v instanceof Class||
-            v instanceof Interface||v instanceof Module||v instanceof File)) {
-                scope=scope.enter()
-                _name(j)
-                scope=scope.leave()
-            }
+        }
+        for(let j of d.children.filter(v=>v instanceof Class||
+        v instanceof Interface||v instanceof Module||v instanceof File)) {
+            let abs_name=prefix?prefix+'.'+j.name:j.name
+            scope=scope.enter()
+            scope.path=abs_name
+            _name(j,abs_name)
+            scope=scope.leave()
         }
     }
     //扫描所有static

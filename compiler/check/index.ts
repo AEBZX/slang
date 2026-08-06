@@ -8,7 +8,7 @@ import {
     Type,
     VoidType
 } from '../utils'
-import { LambdaExpression } from '../utils/model/expr'
+import { LambdaExpression } from '../utils/model/ast/expr'
 import symbol from './symbol'
 import type_map from './type'
 import censor_map from './censor'

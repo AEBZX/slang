@@ -17,9 +17,11 @@ import {
     IfStatement,
     Increment,
     Interface,
+    LambdaType,
     Module,
     NumberType,
     Return,
+    StringType,
     SwitchStatement,
     Throw,
     TryStatement,
@@ -29,17 +31,39 @@ import {
     VarDeclaration,
     VM,
     VoidType,
-    WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix
+    WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
+    Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
+    PrefixExpression, AddressPrefix
 } from '../utils'
 //各种模块
 const C_Class:check_visitor=(ast:Class,scope,call)=>{
     for(let i of ast.children)
         if(i instanceof Module)
             scope.thr(`${ast.name} is class at line ${ast.line.join('\n')}`)
+    //检查 implements 链:所有接口的函数与变量必须都在 class 中定义
+    let interface_members=new Map<string,string>()
+    let collect=(iface:string[])=>{
+        let impl=scope.get(iface.join('.'))
+        if(impl instanceof Interface){
+            for(let i of impl.children){
+                if(i instanceof Function)interface_members.set(i.name,'function')
+                if(i instanceof Variable)interface_members.set(i.name,'variable')
+            }
+            //接口的父接口
+            collect(impl.implement)
+        }
+    }
+    collect(ast.implement)
+    let class_members=new Set(ast.children.map(i=>i.name))
+    for(let [name,kind] of interface_members)
+        if(!class_members.has(name))
+            scope.thr(`class ${ast.name} must implement ${kind} ${name} at line ${ast.line.join('\n')}`)
     for(let i of ast.children) {
         scope=scope.enter()
-        //增加指向自己的up
-        scope.set('up',new ClassType([ast.name]))
+        //增加指向自己的up(绝对路径)
+        let abs=scope.path?scope.path+'.'+ast.name:ast.name
+        scope.set('up',new ClassType(abs.split('.')))
+        scope.path=abs
         call(i,scope)
         scope=scope.leave()
     }
@@ -47,6 +71,7 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
 const C_Module:check_visitor=(ast:Module,scope,call)=>{
     for(let i of ast.children) {
         scope=scope.enter()
+        scope.path=scope.path?scope.path+'.'+ast.name:ast.name
         call(i,scope)
         scope=scope.leave()
     }
@@ -64,6 +89,8 @@ const C_Function:check_visitor=(ast:Function,scope,call)=>{
     //作为返回值,用户绝对不可能命名出关键字
     scope.set('return',ast.return_type)
     scope.sym(ast.return_type,ast.return_type)
+    //函数本身可作为值/成员调用(存入全局符号表,供跨作用域成员访问)
+    scope.global.sym(ast,new LambdaType(ast.params,ast.return_type,false))
     call(ast.commands,scope)
     scope=scope.leave()
 }
@@ -71,13 +98,18 @@ const C_Interface:check_visitor=(ast:Class,scope,call)=>{
     for(let i of ast.children)
         if(!(i instanceof Function||i instanceof Variable))
             scope.thr(`${ast.name} is interface at line ${ast.line.join('\n')}`)
-    for(let i of ast.children)
+    for(let i of ast.children){
+        scope=scope.enter()
+        scope.path=scope.path?scope.path+'.'+ast.name:ast.name
         call(i,scope)
+        scope=scope.leave()
+    }
 }
 const C_Variable:check_visitor=(ast:Variable,scope,call)=>{
     scope.set(ast.name,ast.t)
     scope.sym(ast.t,ast.t)
-    call(ast.value,scope)
+    if(ast.value)
+        call(ast.value,scope)
 }
 const C_Enum:check_visitor=(ast:Class,scope,call)=>{
     let x=[]
@@ -88,9 +120,24 @@ const C_Enum:check_visitor=(ast:Class,scope,call)=>{
     }
 }
 //各种命令
+//左值判断:赋值目标必须是变量/成员/索引/解引用,不能是函数返回值、字面量、算术结果等
+function is_lvalue(expr:Expression):boolean{
+    if(expr instanceof IdentifierExpr)return true
+    if(expr instanceof PostfixExpression){
+        let last=expr.postfix[expr.postfix.length-1]
+        return last instanceof MemberPostfix||last instanceof IndexPostfix
+    }
+    //解引用链(*p, **p)可赋值,其他前缀(取地址/取负/取反等)不可
+    if(expr instanceof PrefixExpression)
+        return expr.prefix.length>0&&expr.prefix.every(p=>p instanceof AddressPrefix)
+    return false
+}
 const C_Assign:check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,scope)
     call(ast.value,scope)
+    //赋值目标必须是可操作的左值
+    if(!is_lvalue(ast.data))
+        scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
     let left=scope.get_sym(ast.data)
     let right=scope.get_sym(ast.value)
     if(type_merge(left,right,scope) instanceof VoidType)
@@ -211,12 +258,16 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     call(ast.data,scope)
     let data_type=scope.get_sym(ast.data)
     let element:Type=new VoidType()
-    if(data_type instanceof FixType){
+    //遍历 string,元素为字符
+    if(data_type instanceof StringType){
+        element=new StringType()
+    }else if(data_type instanceof FixType){
         let last=data_type.fix[data_type.fix.length-1]
         if(!(last instanceof ArrayFix||last instanceof MapFix))
             scope.thr(`foreach can only be applied to array or map at line ${ast.line.join('\n')}`)
         element=data_type.t
-    }
+    }else
+        scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
     scope.set(ast.iden,element)
     call(ast.commands,scope)
     scope=scope.leave()

@@ -29,7 +29,7 @@ const PostfixExpression=$.s('PostfixExpression',
             $.s('DecrementPostfix',$.d('--')),
             $.s('MemberPostfix',$.d('.'),TokenType.Identifier),
             $.s('IndexPostfix',$.d('['),$.r('Expression'),$.d(']')),
-            $.t('(',$.w('ArgumentsPostfix',$.r('Expression'),','),')')
+            $.s('ArgumentsPostfix',$.d('('),$.w('Args',$.r('Expression'),','),$.d(')'))
             )
     )
 )

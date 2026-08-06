@@ -20,12 +20,18 @@ slang->
              utils->库
                  lexer.ts:分词器
                  data.ts:数据结构定义
-                 model.ts->ast节点定义
-                         command.ts:命令类节点
-                         expr.ts:表达式类节点
-                         block.ts:块类节点
-                         identifier.ts:标识符类节点
-                         index.ts:入口
+                 model.ts->节点定义
+                         ast->ast节点定义
+                            command.ts:命令类节点
+                            expr.ts:表达式类节点
+                            block.ts:块类节点
+                            identifier.ts:标识符类节点
+                            index.ts:入口
+                         hir->hir节点定义
+                            command.ts:命令hir节点
+                            expr.ts:表达式hir节点
+                            block.ts:块hir节点
+                            index.ts:hir节点入口
                  lib->对于其他模块的库实现
                     check.ts
                     cli.ts
@@ -35,11 +41,6 @@ slang->
                     optimize.ts
                  index.ts:库入口
              optimize->优化器
-                     command.ts:命令语法优化
-                     expr.ts:表达式语法优化
-                     block.ts:块语法优化
-                     identifier.ts:标识语法优化
-                     index.ts:入口
              check->语法检查
                   censor.ts:检查
                   symbol.ts:符号表构建
@@ -54,13 +55,11 @@ slang->
                   command.ts:命令语法糖转换
                   expr.ts:表达式语法糖转换
                   block.ts:块语法糖转换
-                  identifier.ts:标识语法糖转换
                   index.ts:入口
              ir->vm字节码生成
                  command.ts:命令字节码生成
                  expr.ts:表达式字节码生成
                  block.ts:块字节码生成
-                 identifier.ts:标识字节码生成
                  index.ts:入口
              parser->解析器:tokens[]->ast
                    cst-> tokens[]->ast_data

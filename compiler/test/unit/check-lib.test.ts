@@ -63,7 +63,7 @@ describe('type_merge', () => {
 
     it('相同 LambdaType 合并返回该 LambdaType', () => {
         const scope = make_scope()
-        const lt = new LambdaType(new Map(), new VoidType())
+        const lt = new LambdaType(new Map(), new VoidType(), false)
         expect(type_merge(lt, lt, scope)).toBeInstanceOf(LambdaType)
     })
 

@@ -122,7 +122,7 @@ const D_TryStatement:desugar_visitor=(node:TryStatement,call)=>{
         [node.catch_.iden,node.catch_.type]
     ]),new VoidType(),new ListCommand([node.catch_.command,node.finally_==null?new ListCommand([]):call(node.finally_)]))
     return call(new ListCommand([
-        new VarDeclaration('catch',new LambdaType(new Map([[node.catch_.iden,node.catch_.type]]),new VoidType())
+        new VarDeclaration('catch',new LambdaType(new Map([[node.catch_.iden,node.catch_.type]]),new VoidType(),false)
             ,_lambda),
         node.commands,
         node.finally_==null?new ListCommand([]):call(node.finally_)

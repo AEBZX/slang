@@ -1,4 +1,4 @@
-import {ASTTree} from '../data'
+import {ASTTree} from '../../data'
 import {Expression} from './expr'
 import {Type} from './identifier'
 export class Command extends ASTTree{}

@@ -29,7 +29,7 @@ import {
     VoidType
 } from '../../utils'
 import type_map from '../../check/type'
-import { GreaterExpression, LessExpression } from '../../utils/model/expr'
+import { GreaterExpression, LessExpression } from '../../utils/model/ast/expr'
 
 // 构造 call: 字面量返回对应类型,标识符查 scope
 function make_call(scope: Scope): (ast: ASTTree) => Type {

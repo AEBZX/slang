@@ -77,7 +77,7 @@ const BlockCommand=$.o('BlockCommand',
     $.r('ForeachStatement'),
     $.t('{',$.l('Commands',$.r('Commands')),'}')
 )
-const Commands=$.o('Commands',$.r('BasicCommand'),$.r('BlockCommand'))
+const Commands=$.o('Commands',$.r('BlockCommand'),$.r('BasicCommand'))
 export default [
     AAssign,
     AddAssign,

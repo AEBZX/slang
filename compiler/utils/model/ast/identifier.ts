@@ -1,4 +1,4 @@
-import {ASTTree} from '../data'
+import {ASTTree} from '../../data'
 export class TypeFix{}
 export class ArrayFix extends TypeFix{}
 export class MapFix extends TypeFix{}
@@ -11,7 +11,7 @@ export class BooleanType extends LiteralType{}
 export class StringType extends LiteralType{}
 export class VoidType extends BasicType{}
 export class LambdaType extends BasicType{
-    constructor(public params:Map<string,Type>,public returnType:Type){
+    constructor(public params:Map<string,Type>,public returnType:Type,public _await:boolean){
         super()
     }
 }

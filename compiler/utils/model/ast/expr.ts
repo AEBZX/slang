@@ -1,6 +1,6 @@
-import {ASTTree} from '../data'
+import {ASTTree} from '../../data'
 import {Type} from './identifier'
-import {Command} from './command.js'
+import {Command} from './command'
 export class Expression extends ASTTree{}
 export class PrimaryExpression extends Expression{}
 export class Literal extends PrimaryExpression{

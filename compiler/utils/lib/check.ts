@@ -1,5 +1,5 @@
 import {ast_data, ast_type, ASTTree} from '../data'
-import {BasicType, ClassType, FixType, Type, VoidType} from '../model'
+import {BasicType, ClassType, FixType, Type, VoidType} from '../model/ast'
 export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope:Scope)=>void)=>void
 export type type_checker=(ast:ASTTree,scope:Scope,call:(ast:ASTTree)=>Type)=>Type
 export class Scope{
@@ -10,6 +10,7 @@ export class Scope{
     symbol:Map<ASTTree,Type>
     error:string[]
     loop:boolean
+    path:string
     constructor(parent:Scope,global:Scope){
         this.parent=parent
         this.global=global
@@ -18,10 +19,12 @@ export class Scope{
         this.symbol=new Map()
         this.error=[]
         this.loop=false
+        this.path=''
     }
     enter(){
         let s=new Scope(this,this.global)
         s.loop=this.loop
+        s.path=this.path
         return s
     }
     leave(){

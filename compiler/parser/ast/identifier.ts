@@ -9,7 +9,7 @@ import {
     Type, TypeFix,
     VoidType
 } from '../../utils'
-import {ArrayFix, MapFix} from "../../utils/model/identifier.js";
+import {ArrayFix, MapFix} from "../../utils/model/ast/identifier";
 const G_NumberType:ast_generate=(data,tree)=>new NumberType()
 const G_StringType:ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:ast_generate=(data,tree)=>new BooleanType()
@@ -22,7 +22,7 @@ const G_LambdaType:ast_generate=(data,tree)=>{
         if(typeof v=='object')
             params.set(v.children.get('child_0') as string,
                        tree(v.children.get('child_2') as ast_data,tree))
-    return new LambdaType(params,ret)
+    return new LambdaType(params,ret,false)
 }
 const G_ClassType:ast_generate=(data,tree)=>{
     let local=new Array<string>()

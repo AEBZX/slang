@@ -13,12 +13,10 @@ import {
     NullLiteral,
     NumberLiteral, NumberType, PointFix, PostfixExpression, PrefixExpression, ReferencePrefix,
     Scope, ShiftLeftExpression, ShiftRightExpression, StringLiteral, StringType,
-    SubtractiveExpression, TernaryExpression, Type,
+    SubtractiveExpression, TernaryExpression, Type,GreaterExpression, LambdaExpression, LessExpression,
     type_checker, type_merge,
     VoidType, Variable, AddressPrefix
 } from '../utils'
-import {GreaterExpression, LambdaExpression, LessExpression} from "../utils/model/expr";
-import {number_radix} from "../utils/data";
 //表达式检查
 const S_Literal:type_checker=(ast:Literal,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     if(ast instanceof NullLiteral)return new VoidType()
@@ -59,7 +57,7 @@ const S_MapExpression:type_checker=(ast:MapExpression,scope:Scope,call:(ast:ASTT
     }
     return new FixType(type, [new MapFix()])
 }
-const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.ret)
+const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.ret,false)
 const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let type=call(ast.expr)
     label:
@@ -69,6 +67,12 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
             type=new NumberType()
         }
         if(postfix instanceof IndexPostfix){
+            if(type instanceof StringType){
+                if(!(call(postfix.index) instanceof NumberType))
+                    scope.thr(`[] can only be applied to number at line ${ast.line.join('\n')}`)
+                type=new StringType()
+                continue
+            }
             if(!(type instanceof FixType))scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
             else{
                 if(type.fix[type.fix.length-1] instanceof ArrayFix){
@@ -153,20 +157,22 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                 scope.thr(`~ can only be applied to boolean at line ${ast.line.join('\n')}`)
             type=(type instanceof BooleanType||type instanceof NumberType)?type:new NumberType()
         }
-        //&操作不检查
+        //*解引用:去掉一个指针
         if(prefix instanceof AddressPrefix){
+            if(type instanceof FixType){
+                if(!(type.fix[type.fix.length-1] instanceof PointFix))
+                    scope.thr(`* can only be applied to point type at line ${ast.line.join('\n')}`)
+                type.fix.pop()
+                if(type.fix.length==0)
+                    type=type.t
+            }else
+                scope.thr(`* can only be applied to point type at line ${ast.line.join('\n')}`)
+        }
+        //&取地址:加一个指针
+        if(prefix instanceof ReferencePrefix){
             if(type instanceof FixType)
                 type.fix.push(new PointFix())
             else type=new FixType(type, [new PointFix()])
-        }
-        if(prefix instanceof ReferencePrefix){
-            if(!(type instanceof BasicType))
-                scope.thr(`& can only be applied to basic type at line ${ast.line.join('\n')}`)
-            if(type instanceof FixType) {
-                if (!(type.fix[type.fix.length - 1] instanceof PointFix))
-                    scope.thr(`& can only be applied to point type at line ${ast.line.join('\n')}`)
-                type.fix.pop()
-            }
         }
         //必须是函数调用
         if(prefix instanceof NewPrefix){
@@ -263,7 +269,7 @@ const S_Block:type_checker=(ast:Class|Module|Interface|Enum,scope:Scope,call:(as
     return new BlockType(name.split('.'))
 }
 const S_Variable:type_checker=(ast:Variable,scope:Scope,call:(ast:ASTTree)=>Type)=>ast.t
-const S_Function:type_checker=(ast:Function,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.return_type)
+const S_Function:type_checker=(ast:Function,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.return_type,false)
 export default new Map<any,type_checker>([
     [Literal,S_Literal],
     [IdentifierExpr,S_IdentifierExpression],

@@ -14,7 +14,7 @@ import {
     ShiftLeftExpression, ShiftRightExpression,
     StringLiteral, SubtractiveExpression, TernaryExpression, Type
 } from '../../utils'
-import {GreaterExpression, LambdaExpression, LessExpression} from "../../utils/model/expr.js";
+import {GreaterExpression, LambdaExpression, LessExpression} from "../../utils/model/ast/expr";
 const G_NumberLiteral:ast_generate=(data,tree)=>{
     return new NumberLiteral(data.children.get('child_0') as string)
 }
@@ -76,9 +76,12 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
                     break
                 case 'ArgumentsPostfix':{
                     let param=[]
+                    //v 里 Args 列表是唯一的 object 子节点,遍历其元素
                     for(let [k,_v] of v.children)
                         if(typeof _v=='object')
-                            param.push(tree(_v,tree))
+                            for(let [__k,arg] of _v.children)
+                                if(typeof arg=='object')
+                                    param.push(tree(arg,tree))
                     fix.push(new ArgumentsPostfix(param))
                     break
                 }
