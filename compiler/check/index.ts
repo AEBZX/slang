@@ -2,6 +2,8 @@ import {
     ASTTree,
     Expression,
     File,
+    ForStatement,
+    ForeachStatement,
     Scope,
     Type,
     VoidType
@@ -53,8 +55,13 @@ function visit(ast: ASTTree, scope: Scope) {
         }
         return
     }
-    type_expr_children(ast, scope)
+    //For/Foreach 的 condition 依赖 init 声明的变量,由检查器自行按序处理,不预计算
     let checker = find_checker(censor_map, ast.constructor)
+    if (ast instanceof ForStatement || ast instanceof ForeachStatement) {
+        if (checker) checker(ast, scope, (child, s) => visit(child, s || scope))
+        return
+    }
+    type_expr_children(ast, scope)
     if (checker) {
         checker(ast, scope, (child, s) => visit(child, s || scope))
     } else {

@@ -1,8 +1,7 @@
 import {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 import Desugar,{DesugarVisitor,desugar_visitor} from './lib/desugar'
-import IR,{ASMFactory,BinFactory} from './lib/ir'
 import Parser from './lib/parser'
-import {tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,ast_generate,
+import {tokens,token,asm_command,asm_args,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,ast_generate,
 ast_type,ASTTree} from './data'
 import {
     ArrayFix,
@@ -113,13 +112,12 @@ import {
 } from './model'
 export default {
     desugar:Desugar,
-    ir:IR,
     parser:Parser
 }
 export {
     ASTTree,type_checker,
-    tokens,token,asm,asm_command,asm_args,asm_type,bin,bin_command,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,
-    Scope,check_visitor,DesugarVisitor,desugar_visitor,IR,ASMFactory,BinFactory,Parser,ast_generate,ast_type,
+    tokens,token,asm_command,asm_args,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,
+    Scope,check_visitor,DesugarVisitor,desugar_visitor,Parser,ast_generate,ast_type,
     Expression,
     PrimaryExpression,
     Literal,

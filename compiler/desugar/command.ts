@@ -107,7 +107,7 @@ const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
 }
 const D_SwitchStatement:desugar_visitor=(node:SwitchStatement,call)=>{
     let g=(index:number)=>{
-        if(node.case_list.length-1<=index)
+        if(node.case_list.length<=index)
             return node.default_==null?new ListCommand([]):call(node.default_)
         return call(new IfStatement(
             new EqualityExpression(node.case_list[index].condition,node.condition),
@@ -139,5 +139,10 @@ export default new Map<any,desugar_visitor>([
     [Decrement,D_Decrement],
     [IfStatement,D_IfStatement],
     [WhileStatement,D_WhileStatement],
-    [DoWhileStatement,D_DoWhileStatement]
+    [DoWhileStatement,D_DoWhileStatement],
+    [ForStatement,D_ForStatement],
+    [ForeachStatement,D_ForeachStatement],
+    [SwitchStatement,D_SwitchStatement],
+    [TryStatement,D_TryStatement],
+    [ListCommand,D_ListCommand]
 ])

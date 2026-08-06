@@ -1,7 +1,7 @@
 import {Parser as $, TokenType} from '../../utils/index'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
-const BooleanLiteral=$.s('BooleanLiteral',$.o('true','false'))
+const BooleanLiteral=$.s('BooleanLiteral',$.o('Boolean','true','false'))
 const NullLiteral=$.s('NullLiteral',$.d('null'))
 const Identifier=$.s('Identifier',TokenType.Identifier)
 const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']'))

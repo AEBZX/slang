@@ -3,5 +3,6 @@ import command from './command'
 import block from './block'
 import {Desugar, File} from '../utils'
 export default function (ast:File[]){
-    return ast.map(x=>Desugar(x,{...expr,...command, ...block}))
+    let visit=new Map([...expr,...command,...block])
+    return ast.map(x=>Desugar(x,visit))
 }

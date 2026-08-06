@@ -32,7 +32,7 @@ const D_Enum:desugar_visitor=(node:Enum,call)=>{
 }
 const D_Function:desugar_visitor=(node:Function,call)=>call(new Variable(node.modifiers, node.name,
         new LambdaType(node.params, node.return_type),
-        call(new LambdaExpression(node.params, node.return_type, call(node.commands)))))
+        new LambdaExpression(node.params, node.return_type, node.commands)))
 const D_Variable:desugar_visitor=(node:Variable,call)=>{
     node.value=node.value==null?new NullLiteral(''):call(node.value)
     return node

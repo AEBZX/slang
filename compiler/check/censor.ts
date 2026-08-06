@@ -53,8 +53,9 @@ const C_Module:check_visitor=(ast:Module,scope,call)=>{
 }
 const C_Function:check_visitor=(ast:Function,scope,call)=>{
     scope=scope.enter()
-    //阻断外层循环/捕获,break/continue/throw 不能跳出函数
+    //阻断外层循环/捕获/switch,break/continue/throw 不能跳出函数
     scope.data.set('while',null as any)
+    scope.data.set('switch',null as any)
     scope.data.set('throw',null as any)
     for(let [k,v] of ast.params){
         scope.set(k,v)
@@ -126,8 +127,8 @@ const C_Return:check_visitor=(ast:Return,scope,call)=>{
     }
 }
 const C_Break:check_visitor=(ast:Break,scope,call)=>{
-    if(!scope.get('while'))
-        scope.thr(`break outside loop at line ${ast.line.join('\n')}`)
+    if(!scope.get('while')&&!scope.get('switch'))
+        scope.thr(`break outside loop or switch at line ${ast.line.join('\n')}`)
 }
 const C_Continue:check_visitor=(ast:Continue,scope,call)=>{
     if(!scope.get('while'))
@@ -221,6 +222,8 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     scope=scope.leave()
 }
 const C_SwitchStatement:check_visitor=(ast:SwitchStatement,scope,call)=>{
+    scope=scope.enter()
+    scope.set('switch',new VoidType())
     call(ast.condition,scope)
     let condition_type=scope.get_sym(ast.condition)
     for(let c of ast.case_list){
@@ -232,6 +235,7 @@ const C_SwitchStatement:check_visitor=(ast:SwitchStatement,scope,call)=>{
     }
     if(ast.default_)
         call(ast.default_,scope)
+    scope=scope.leave()
 }
 const C_TryStatement:check_visitor=(ast:TryStatement,scope,call)=>{
     scope=scope.enter()
