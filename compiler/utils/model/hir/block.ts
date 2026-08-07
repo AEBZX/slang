@@ -12,7 +12,7 @@ export class HClass extends HBlock{
     }
 }
 export class HVariable extends HBlock{
-    constructor(public name:number,public value:HExpr) {
+    constructor(public name:number,public value:HExpr,public unstatic:boolean=true) {
         super()
     }
 }

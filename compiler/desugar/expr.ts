@@ -1,10 +1,10 @@
 import {
     ArgumentsPostfix,
-    ArrayExpression, BinaryExpression,
+    ArrayExpression, BinaryExpression, BooleanType,
     desugar_visitor,
-    IndexPostfix,
-    LambdaExpression,
-    MapExpression,
+    IndexPostfix, InequalityExpression,
+    LambdaExpression, LogicalAndExpression, LogicalOrExpression,
+    MapExpression, NullLiteral,
     PostfixExpression, TernaryExpression
 } from '../utils'
 const D_LambdaExpression:desugar_visitor=(node:LambdaExpression,call)=>{
@@ -32,6 +32,12 @@ const D_PostfixExpression:desugar_visitor=(node:PostfixExpression,call)=>{
 const D_BinaryExpression:desugar_visitor=(node:BinaryExpression,call)=>{
     node.left=call(node.left)
     node.right=call(node.right)
+    if(node instanceof LogicalAndExpression||node instanceof LogicalOrExpression&&
+        !(node.right.type instanceof BooleanType)&&!(node.left.type instanceof BooleanType)){
+        node.right=new InequalityExpression(node.right,new NullLiteral(''))
+        node.left=new InequalityExpression(node.left,new NullLiteral(''))
+        return node
+    }
     return node
 }
 const D_TernaryExpression:desugar_visitor=(node:TernaryExpression,call)=>{

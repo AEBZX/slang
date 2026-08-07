@@ -1,5 +1,5 @@
 import {ASTTree, HIRTree} from '../data'
-import {HModule} from '../model/hir'
+import {HBlock, HClass, HModule, HVariable} from '../model/hir'
 import {File} from '../model/ast'
 export type hir_visitor=(node:ASTTree,scope:HScope,call:(node:ASTTree,scope?:HScope)=>HIRTree)=>HIRTree
 export class HScope{
@@ -61,15 +61,26 @@ export class HIR{
                     return v(node,s,visit)
         }
         let module=[]
+        //对象扁平化:Module/Class的children展开,结果形如[module,...,class,...]
+        //非static的HVariable(实例成员)保留在容器children内不展开
+        let flat=(h:HIRTree)=>{
+            module.push(h)
+            if(h instanceof HModule||h instanceof HClass)
+                for(let c of h.children)
+                    if(!(c instanceof HVariable)||!c.unstatic)
+                        flat(c)
+        }
         for(let node of this.ast){
             this.scope=this.scope.enter()
             this.FileDo(node,this.scope)
             for(let j of node.children)
-                module.push(visit(j,this.scope))
+                flat(visit(j,this.scope))
         }
         return module
     }
 }
 export default (ast:File[],data:Map<any,hir_visitor>,pre:(node:File[],scope:HScope)=>void,
-    FileDo:(node:File,scope:HScope)=>void)=>
-    new HIR(ast,data,pre,FileDo).run()
+    FileDo:(node:File,scope:HScope)=>void):[number,HBlock[]]=> {
+    let ls=new HIR(ast,data,pre,FileDo)
+    return [ls.scope.index,ls.run()]
+}

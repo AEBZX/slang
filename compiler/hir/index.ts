@@ -1,8 +1,8 @@
 import expr from './expr'
 import block from './block'
 import command from './command'
-import {HIR, File, Block, Module, Class} from '../utils'
-export default function (data:File[]){
+import {HIR, File, Block, Module, Class, HBlock} from '../utils'
+export default function (data:File[]):[number,HBlock[]]{
     let map=new Map([...expr,...block,...command])
     return HIR(data,map,(node,scope)=>{
         //所有Static都放到全局作用域

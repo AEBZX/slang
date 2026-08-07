@@ -18,7 +18,7 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
 export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
     let id=scope.id()
     scope.set(node.name,id)
-    return new HVariable(id,call(node.value,scope))
+    return new HVariable(id,call(node.value,scope),node.modifiers.unstatic)
 }
 export default new Map<any,hir_visitor>([
     [Module,H_Module],

@@ -57,4 +57,12 @@ describe('HIR 生成', () => {
         expect(x_id).toBeTypeOf('number')
         expect((ret.data as HIdentifierExpr).name).toBe(x_id)
     })
+
+    it('对象扁平化:Module/Class 展开为顶层数组,static HVariable 展开', () => {
+        // static 成员展开,非 static(实例成员/普通变量)保留在容器 children 内
+        const h = hir_of('public M:module public A:class{public static f:number(){return 1;}}\npublic B:class{public g:number(){return 2;}}\npublic m:number(a:number){return a+1;}\n')
+        const types = h.map(i => (i as any).constructor.name)
+        // M吞入A/B/m;展开A的static f;B的g非static保留;m非static保留在M内
+        expect(types).toEqual(['HModule', 'HClass', 'HVariable', 'HClass'])
+    })
 })

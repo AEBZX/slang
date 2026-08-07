@@ -34,9 +34,9 @@ export type ast_rule={
 }
 export type ast_rule_param=ast_rule|string|TokenType
 //三地址码形式
-export type asm_args =['value'|'reg',string]
+export type asm_args =['value'|'reg',number]
 export type asm_command=[string,asm_args,asm_args,asm_args]
-export type asm_pool=Map<number,string|number>
+export type asm_pool=Map<string|number,number>
 export let radix_map={
     'x':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],
     'X':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],
