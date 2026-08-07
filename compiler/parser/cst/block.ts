@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../../utils/index'
+import {Parser as $, TokenType} from '../../utils'
 const ModuleName=$.w('ModuleName',TokenType.Identifier,'.')
 const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
 const Modifier=$.l('Modifiers',$.o('Modifier',

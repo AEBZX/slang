@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../../utils/index'
+import {Parser as $, TokenType} from '../../utils'
 const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.d(';'))
 const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.d(';'))
 const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.d(';'))
@@ -65,7 +65,7 @@ const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('
     $.d('}')
 )
 const TryStatement=$.s('TryStatement',$.d('try'),$.r('Commands'),
-    $.d('catch'),$.d('('),TokenType.Identifier,$.c($.d(':'),$.r('Type')),$.d(')'),$.r('Commands'),
+    $.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'),
     $.c($.d('finally'),$.r('Commands')))
 const BlockCommand=$.o('BlockCommand',
     $.r('IfStatement'),

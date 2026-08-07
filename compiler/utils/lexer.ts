@@ -34,6 +34,10 @@ class CharStream{
 let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     //考虑+-
     if(stream.now()=='+'||stream.now()=='-'){
+        //前一个字符是标识符/数字/闭括号时,+/- 是二元操作符而非数字符号(如 a+1)
+        let prev=stream.code[stream.index-1]
+        if(prev!=undefined&&(identifier_continue_white_list.includes(prev)||prev==')'||prev==']'||prev=='}'))
+            return [false,'',TokenType.Number]
         let sign=stream.next()
         let ret=number_match(stream)
         if(ret[0])

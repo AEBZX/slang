@@ -310,20 +310,20 @@ describe('lexer - 关键字/运算符解析', () => {
 
 describe('lexer - 复合输入', () => {
     it('应该正确解析包含数字和运算符的表达式', () => {
+        // 1+2 中 + 是二元操作符,而非 +2 数字符号
         const result = lexer('1+2')
-        // 注意: 当前 number_match 将 + 作为数字符号消费，因此 1+2 被解析为 1 和 +2
         const numberTokens = result.filter(t => t.type === TokenType.Number)
-        expect(numberTokens.length).toBe(2)
-        expect(numberTokens[0].value).toBe('1')
-        expect(numberTokens[1].value).toBe('+2')
+        const keywordTokens = result.filter(t => t.type === TokenType.Keyword)
+        expect(numberTokens.map(t => t.value)).toEqual(['1', '2'])
+        expect(keywordTokens.map(t => t.value)).toEqual(['+'])
     })
 
     it('应该正确解析减号表达式', () => {
         const result = lexer('3-1')
         const numberTokens = result.filter(t => t.type === TokenType.Number)
-        expect(numberTokens.length).toBe(2)
-        expect(numberTokens[0].value).toBe('3')
-        expect(numberTokens[1].value).toBe('-1')
+        const keywordTokens = result.filter(t => t.type === TokenType.Keyword)
+        expect(numberTokens.map(t => t.value)).toEqual(['3', '1'])
+        expect(keywordTokens.map(t => t.value)).toEqual(['-'])
     })
 
     it('应该正确解析独立运算符与数字的组合', () => {

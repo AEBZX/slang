@@ -12,9 +12,8 @@ import {
     NullLiteral,
     NumberLiteral, Postfix, PostfixExpression, Prefix, PrefixExpression, ReferencePrefix,
     ShiftLeftExpression, ShiftRightExpression,
-    StringLiteral, SubtractiveExpression, TernaryExpression, Type
+    StringLiteral, SubtractiveExpression, TernaryExpression, Type,GreaterExpression, LambdaExpression, LessExpression
 } from '../../utils'
-import {GreaterExpression, LambdaExpression, LessExpression} from "../../utils/model/ast/expr";
 const G_NumberLiteral:ast_generate=(data,tree)=>{
     return new NumberLiteral(data.children.get('child_0') as string)
 }

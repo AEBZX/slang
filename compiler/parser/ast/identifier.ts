@@ -7,9 +7,8 @@ import {
     NumberType, PointFix,
     StringType,
     Type, TypeFix,
-    VoidType
+    VoidType,ArrayFix, MapFix
 } from '../../utils'
-import {ArrayFix, MapFix} from "../../utils/model/ast/identifier";
 const G_NumberType:ast_generate=(data,tree)=>new NumberType()
 const G_StringType:ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:ast_generate=(data,tree)=>new BooleanType()

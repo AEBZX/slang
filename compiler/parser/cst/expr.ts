@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../../utils/index'
+import {Parser as $, TokenType} from '../../utils'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
 const BooleanLiteral=$.s('BooleanLiteral',$.o('Boolean','true','false'))
@@ -19,7 +19,6 @@ const PrimaryExpression=$.o('PrimaryExpression',
     $.r('Identifier'),
     $.r('LambdaExpression'),
     $.t('(',$.r('Expression'),')'),
-    //TIPS:可以通过.o包裹
     $.r('ArrayExpression'),
     $.r('MapExpression')
 )

@@ -109,16 +109,14 @@ const G_SwitchStatement:ast_generate=(data,tree)=>{
     return new SwitchStatement(cond,cases,data.children.has('child_2')?tree(data.children.get('child_2') as ast_data,tree):null)
 }
 const G_TryStatement:ast_generate=(data,tree)=>{
-    //catch 带类型时 child_2=Type,无类型时 child_2 即 catch 体 Commands
-    let has_type=typeof data.children.get('child_2')=='object'&&(data.children.get('child_2') as ast_data).type=='Type'
     return new TryStatement(
         tree(data.children.get('child_0') as ast_data,tree),
         {
             iden:data.children.get('child_1') as string,
-            type:has_type?tree(data.children.get('child_2') as ast_data,tree):null,
-            command:tree(data.children.get(has_type?'child_3':'child_2') as ast_data,tree)
+            type:tree(data.children.get('child_2') as ast_data,tree),
+            command:tree(data.children.get('child_3') as ast_data,tree)
         },
-        data.children.has(has_type?'child_4':'child_3')?tree(data.children.get(has_type?'child_4':'child_3') as ast_data,tree):null
+        data.children.has('child_4')?tree(data.children.get('child_4') as ast_data,tree):null
     )
 }
 const G_Commands:ast_generate=(data,tree)=>{

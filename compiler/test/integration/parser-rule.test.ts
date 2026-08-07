@@ -279,13 +279,13 @@ describe('命令解析 (Commands)', () => {
         expect(result.type).toBe('DoWhileStatement')
     })
 
-    it('try-catch: try{return;}catch(e){return;}', () => {
-        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e){return;}') as ast_data
+    it('try-catch: try{return;}catch(e:number){return;}', () => {
+        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e:number){return;}') as ast_data
         expect(result.type).toBe('TryStatement')
     })
 
     it('try-catch-finally', () => {
-        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e){return;}finally{break;}') as ast_data
+        const result = parse_entry('TryStatement', all_rules, 'try{return;}catch(e:number){return;}finally{break;}') as ast_data
         expect(result.type).toBe('TryStatement')
     })
 

@@ -122,7 +122,7 @@ const C_Enum:check_visitor=(ast:Class,scope,call)=>{
     }
 }
 //各种命令
-//左值判断:赋值目标必须是变量/成员/索引/解引用,不能是函数返回值、字面量、算术结果等
+//左值判断:赋值目标必须是变量/成员/索引/解引用,不能是函数返回,字面量,算术结果等
 function is_lvalue(expr:Expression):boolean{
     if(expr instanceof IdentifierExpr)return true
     if(expr instanceof PostfixExpression){

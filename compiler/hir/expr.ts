@@ -27,13 +27,24 @@ const H_BooleanLiteral:hir_visitor=(node:BooleanLiteral,scope,call)=>new HBoolea
 const H_NullLiteral:hir_visitor=(node:NullLiteral,scope,call)=>new HNullLiteral()
 const H_IdentifierExpr:hir_visitor=(node:IdentifierExpr,scope,call)=>{
     let name=scope.get(node.name)
-    if(scope.get(node.name))
-        name=scope.lnk_get(name)
+    //link别名走lnk表,普通变量无lnk则保留自身id
+    let linked=name!=null?scope.lnk_get(name):null
+    if(linked!=null)name=linked
     return new HIdentifierExpr(name)
 }
-const H_ArrayExpr:hir_visitor=(node:ArrayExpression,scope,call)=>new HArrayExpr(node.elements.map(i=>call(i)))
-const H_MapExpr:hir_visitor=(node:MapExpression,scope,call)=>new HMapExpr(new Map(Array.from(node.elements.entries()).map(i=>[i[0],call(i[1])])))
-const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>new HLambdaExpr(Array.from(node.params.entries()).map(i=>scope.id()),call(node.body))
+const H_ArrayExpr:hir_visitor=(node:ArrayExpression,scope,call)=>new HArrayExpr(node.elements.map(i=>call(i,scope)))
+const H_MapExpr:hir_visitor=(node:MapExpression,scope,call)=>new HMapExpr(new Map(Array.from(node.elements.entries()).map(i=>[i[0],call(i[1],scope)])))
+const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>{
+    scope=scope.enter()
+    let params=Array.from(node.params.entries()).map(i=>{
+        let id=scope.id()
+        scope.set(i[0],id)
+        return id
+    })
+    let cmd=call(node.body,scope)
+    scope=scope.leave()
+    return new HLambdaExpr(params,cmd)
+}
 const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     let _primary=node.expr
     //如果primary是identifier,那么尽量的匹配足够多的Member作为一整个Identifier
@@ -52,12 +63,12 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
         //去掉
         node.postfix=node.postfix.slice(delete_index)
     }
-    let primary=call(_primary)
+    let primary=call(_primary,scope)
     for(let i of node.postfix){
         if(i instanceof IndexPostfix)
-            primary=new HIndexExpr(primary,call(i.index))
+            primary=new HIndexExpr(primary,call(i.index,scope))
         if(i instanceof ArgumentsPostfix)
-            primary=new HArgumentsExpr(primary,i.args.map(i=>call(i)))
+            primary=new HArgumentsExpr(primary,i.args.map(i=>call(i,scope)))
         if(i instanceof MemberPostfix)
             primary=new HMemberExpr(primary,new HIdentifierExpr(scope.get(i.name)))
         if(i instanceof IncrementPostfix)
@@ -68,7 +79,7 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     return primary
 }
 const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
-    let primary=call(node.expr)
+    let primary=call(node.expr,scope)
     for(let i of node.prefix){
         if(i instanceof IncrementPrefix)
             primary=new HPreIncrementExpr(primary)
@@ -91,45 +102,45 @@ const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
 const H_BinaryExpr:hir_visitor=(node:BinaryExpression,scope,call)=>{
     switch (node.constructor) {
         case AdditiveExpression:
-            return new HBinaryExpr(call(node.left),'+',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'+',call(node.right,scope))
         case SubtractiveExpression:
-            return new HBinaryExpr(call(node.left),'-',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'-',call(node.right,scope))
         case MultiplicativeExpression:
-            return new HBinaryExpr(call(node.left),'*',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'*',call(node.right,scope))
         case ModExpression:
-            return new HBinaryExpr(call(node.left),'%',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'%',call(node.right,scope))
         case DivisionExpression:
-            return new HBinaryExpr(call(node.left),'/',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'/',call(node.right,scope))
         case ShiftLeftExpression:
-            return new HBinaryExpr(call(node.left),'<<',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'<<',call(node.right,scope))
         case ShiftRightExpression:
-            return new HBinaryExpr(call(node.left),'>>',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'>>',call(node.right,scope))
         case GreaterExpression:
-            return new HBinaryExpr(call(node.left),'>',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'>',call(node.right,scope))
         case LessExpression:
-            return new HBinaryExpr(call(node.left),'<',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'<',call(node.right,scope))
         case GreaterEqualExpression:
-            return new HBinaryExpr(call(node.left),'>=',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'>=',call(node.right,scope))
         case LessEqualExpression:
-            return new HBinaryExpr(call(node.left),'<=',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'<=',call(node.right,scope))
         case EqualityExpression:
-            return new HBinaryExpr(call(node.left),'==',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'==',call(node.right,scope))
         case InequalityExpression:
-            return new HBinaryExpr(call(node.left),'!=',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'!=',call(node.right,scope))
         case BitwiseAndExpression:
-            return new HBinaryExpr(call(node.left),'&',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'&',call(node.right,scope))
         case BitwiseOrExpression:
-            return new HBinaryExpr(call(node.left),'|',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'|',call(node.right,scope))
         case BitwiseXorExpression:
-            return new HBinaryExpr(call(node.left),'^',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'^',call(node.right,scope))
         case LogicalOrExpression:
-            return new HBinaryExpr(call(node.left),'||',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'||',call(node.right,scope))
         case LogicalAndExpression:
-            return new HBinaryExpr(call(node.left),'&&',call(node.right))
+            return new HBinaryExpr(call(node.left,scope),'&&',call(node.right,scope))
     }
 }
 const H_TernaryExpr:hir_visitor=(node:TernaryExpression,scope,call)=>{
-    return new HTernaryExpr(call(node.condition),call(node.trueExpr),call(node.falseExpr))
+    return new HTernaryExpr(call(node.condition,scope),call(node.trueExpr,scope),call(node.falseExpr,scope))
 }
 export default new Map<any,hir_visitor>([
     [NullLiteral,H_NullLiteral],

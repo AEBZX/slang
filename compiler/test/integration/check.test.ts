@@ -107,7 +107,7 @@ describe('check 端到端', () => {
     it('赋值左值检查', () => {
         // 可操作的左值:变量/成员/索引
         expect(check_code('public m:void(x:number){x=1;}\n')).toEqual([])
-        expect(check_code('public A:class{public f:number;}\npublic m:void(x:A){x.f=1;}\n')).toEqual([])
+        expect(check_code('public A:class{public f:var:number;}\npublic m:void(x:A){x.f=1;}\n')).toEqual([])
         expect(check_code('public m:void(a:number[],i:number){a[i]=1;}\n')).toEqual([])
         // 不可操作的左值:函数返回值/字面量/算术结果
         expect(check_code('public A:class{public f:number(){return 1;}}\npublic m:void(x:A){x.f()=1;}\n').join()).toContain('not assignable')

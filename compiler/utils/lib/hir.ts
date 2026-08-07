@@ -1,7 +1,7 @@
 import {ASTTree, HIRTree} from '../data'
 import {HModule} from '../model/hir'
 import {File} from '../model/ast'
-export type hir_visitor=(node:ASTTree,scope:HScope,call:(node:ASTTree)=>HIRTree)=>HIRTree
+export type hir_visitor=(node:ASTTree,scope:HScope,call:(node:ASTTree,scope?:HScope)=>HIRTree)=>HIRTree
 export class HScope{
     symbol:Map<string,number>
     index:number
@@ -19,12 +19,12 @@ export class HScope{
             return this.link.get(id)
         if(this.parent!=null)
             return this.parent.lnk_get(id)
-        if(this.global!=null)
+        if(this.global!=null&&this.global!==this)
             return this.global.lnk_get(id)
         return null
     }
     id(){
-        if(this.global!=null)return this.global.id()
+        if(this.global!=null&&this.global!==this)return this.global.id()
         return this.index++
     }
     get(name:string):number{
@@ -49,20 +49,23 @@ export class HIR{
     constructor(public ast:File[],public data:Map<any,hir_visitor>,public pre:(node:File[],scope:HScope)=>void,
                 public FileDo:(node:File,scope:HScope)=>void){
         this.scope=new HScope(null,null)
+        this.scope.global=this.scope
     }
     run(){
         this.pre(this.ast,this.scope)
-        let visit=(node:ASTTree)=>{
+        //visitor内enter出的子作用域经call下传
+        let visit=(node:ASTTree,scope?:HScope)=>{
+            let s=scope||this.scope
             for(let [k,v] of this.data)
                 if(node instanceof k)
-                    return v(node,this.scope,visit)
+                    return v(node,s,visit)
         }
         let module=[]
         for(let node of this.ast){
             this.scope=this.scope.enter()
             this.FileDo(node,this.scope)
             for(let j of node.children)
-                module.push(visit(j))
+                module.push(visit(j,this.scope))
         }
         return module
     }

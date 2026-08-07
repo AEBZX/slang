@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../../utils/index'
+import {Parser as $, TokenType} from '../../utils'
 const NumberType=$.s('NumberType',$.d('number'))
 const BooleanType=$.s('BooleanType',$.d('boolean'))
 const StringType=$.s('StringType',$.d('string'))

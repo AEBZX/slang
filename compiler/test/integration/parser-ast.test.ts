@@ -250,14 +250,15 @@ describe('块命令转换', () => {
         expect(tr.finally_).toBeInstanceOf(ListCommand)
     })
 
-    it('try-catch 无类型', () => {
+    it('try-catch 带类型', () => {
         const cmds = commands(
-            'public main:void(){try{return;}catch(e){return;}}\n'
+            'public main:void(){try{return;}catch(e:number){return;}}\n'
         )
         const tr = cmds[0] as any
         expect(tr.constructor.name).toBe('TryStatement')
         expect(tr.catch_.iden).toBe('e')
-        expect(tr.catch_.type).toBeNull()
+        expect(tr.catch_.type?.constructor?.name).toBe('NumberType')
+        expect(tr.catch_.command).toBeInstanceOf(ListCommand)
         expect(tr.finally_).toBeNull()
     })
 
