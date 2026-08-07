@@ -111,6 +111,12 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
             }
         }
         if(postfix instanceof MemberPostfix){
+            //up链:外层类的up再向上取一层
+            if(postfix.name=='up'&&type instanceof ClassType){
+                type=type.local.length>1?new ClassType(type.local.slice(0,-1)):type
+                ast.types.push(type)
+                continue label
+            }
             //情况1:Class Member
             if(type instanceof ClassType){
                 let class_=scope.get(type.local.join('.'))
@@ -145,7 +151,9 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
     return type
 }
 const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
-    let type=call(ast.expr)
+    //new会吞掉expr最外层的(),expr的求值交给NewPrefix分支
+    let is_new=ast.prefix[0] instanceof NewPrefix
+    let type=is_new?null:call(ast.expr)
     let index=0
     for(let prefix of ast.prefix){
         if(prefix instanceof IncrementPrefix||prefix instanceof DecrementPrefix){
@@ -193,6 +201,7 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                     let fix=ast.expr.postfix[ast.expr.postfix.length-1] as ArgumentsPostfix
                     ast.expr.postfix.pop()
                     let _type=call(ast.expr)
+                    ast.expr.postfix.push(fix)
                     let iden_param=[]
                     let real_param=[]
                     for(let v of fix.args)
@@ -215,7 +224,8 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                             }
                         }
                         type=new ClassType(_type.local)
-                    }
+                    }else
+                        type=_type
                     //参数是否对应
                     if(iden_param.length!=real_param.length)
                         scope.thr(`new can only be applied to class at line ${ast.line.join('\n')}`)

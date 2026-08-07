@@ -54,13 +54,14 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
                 return new IdentifierExpr(a.name+'.'+fix.name)
             return a
         }
-        let delete_index:number=node.postfix.length
+        let delete_index:number=0
         for(let i=0;i<node.postfix.length;i++)
             if(g(<IdentifierExpr>_primary,node.postfix[i])!=_primary){
                 _primary=g(<IdentifierExpr>_primary,node.postfix[i])
-                delete_index=i
-            }
-        //去掉
+                delete_index=i+1
+            }else
+                break
+        //去掉已折叠的Member,保留Arguments/Index等
         node.postfix=node.postfix.slice(delete_index)
     }
     let primary=call(_primary,scope)

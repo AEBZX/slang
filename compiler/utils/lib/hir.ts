@@ -82,5 +82,7 @@ export class HIR{
 export default (ast:File[],data:Map<any,hir_visitor>,pre:(node:File[],scope:HScope)=>void,
     FileDo:(node:File,scope:HScope)=>void):[number,HBlock[]]=> {
     let ls=new HIR(ast,data,pre,FileDo)
-    return [ls.scope.index,ls.run()]
+    let module=ls.run()
+    //run()里scope已enter,id总数取真正的根
+    return [ls.scope.global.index,module]
 }

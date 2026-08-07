@@ -1,9 +1,11 @@
 import Parser from './lib/parser'
-import Desugar from '../desugar'
+import Desugar from './lib/desugar'
 export {asm_factory} from './lib/ir'
 export {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 export {DesugarVisitor,desugar_visitor} from './lib/desugar'
-export {hir_visitor,HScope} from './lib/hir'
+export {Desugar}
+import HIR,{hir_visitor,HScope} from './lib/hir'
+export {HIR}
 export {
     HExpr,
     HArrayExpr,
@@ -46,6 +48,7 @@ export {
 } from './model/hir'
 export {tokens,token,asm_command,asm_args,ast_data,ast_rule,ast_rule_param,pre_token,TokenType,ast_generate,
 ast_type,ASTTree} from './data'
+export {Parser}
 export {
     ArrayFix,
     LessExpression,GreaterExpression,

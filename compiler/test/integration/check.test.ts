@@ -185,4 +185,43 @@ describe('check 端到端', () => {
             'public main:void(){var f:(x:number)=>number=(x:number)=>number{return y;};}\n'
         ).join()).toContain('y is not defined')
     })
+
+    it('up 外层引用与 up.up 链式', () => {
+        // 单层类 up 指向自己
+        expect(check_code('public A:class{public f:A(){return up;}}\n')).toEqual([])
+        // 单层 up.up 保持顶层
+        expect(check_code('public A:class{public f:A(){return up.up;}}\n')).toEqual([])
+        // 嵌套类 up 指向外层
+        expect(check_code('public A:class{public B:class{public f:A(){return up;}}}\n')).toEqual([])
+        // 嵌套类 up.up 再向上
+        expect(check_code('public A:class{public B:class{public f:A(){return up.up;}}}\n')).toEqual([])
+        // 三层 up.up.up
+        expect(check_code('public A:class{public B:class{public C:class{public f:A(){return up.up.up;}}}}\n')).toEqual([])
+        // up 类型不匹配时报错
+        expect(check_code('public A:class{public f:void(){var x:number=up;}}\n').join()).toContain('not assignable')
+    })
+
+    it('this 成员内指向当前类', () => {
+        expect(check_code('public A:class{public f:A(){return this;}}\n')).toEqual([])
+        expect(check_code('public A:class{public f:void(){var a:A=this;}}\n')).toEqual([])
+        // this 类型不匹配时报错
+        expect(check_code('public A:class{public f:void(){var x:number=this;}}\n').join()).toContain('not assignable')
+    })
+
+    it('new 表达式检查:无/有 constructor、参数匹配', () => {
+        // 无 constructor 的类也可 new
+        expect(check_code('public A:class{}\npublic m:void(){var a:A=new A();}\n')).toEqual([])
+        // 有 constructor,参数匹配通过
+        expect(check_code(
+            'public A:class{public constructor:void(x:number){}}\npublic m:void(){var a:A=new A(1);}\n'
+        )).toEqual([])
+        // 参数个数不匹配报错
+        expect(check_code(
+            'public A:class{public constructor:void(x:number){}}\npublic m:void(){var a:A=new A();}\n'
+        ).join()).toContain('new can only be applied to class')
+        // new 的返回值类型可用(赋值给 A 类型变量)
+        expect(check_code(
+            'public A:class{}\npublic m:A(){var a:A=new A();return a;}\n'
+        )).toEqual([])
+    })
 })

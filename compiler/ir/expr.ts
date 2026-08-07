@@ -39,13 +39,10 @@ const I_ArrayExpr:asm_factory=(data:HArrayExpr,tool)=>{
     let id=tool.cache.pop()
     let index=0
     let ls=tool.id()
-    let of_ls=tool.id()
     for(let i of data.elements){
         tool.cache.push(ls)
         tool.gen(i)
-        tool.cache.push(of_ls)
-        tool.gen(new HNumberLiteral(index++))
-        tool.code.push(['offset',['value',id],['value',of_ls],['value',ls]])
+        tool.code.push(['offset',['value',id],['reg',index++],['value',ls]])
     }
 }
 const I_MapExpr:asm_factory=(data:HMapExpr,tool)=>{
@@ -66,7 +63,6 @@ const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
     //代码生成
     tool.asm.set(block_id,[[],data.params])
     tool.push(block_id)
-    let ls_id=tool.id()
     /**
      * 等价于:
      * param_load 参数1 固定参数注入区第一个元素
@@ -75,9 +71,7 @@ const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
      * 0预留给return
      */
     for(let i=1;i<tool.param.length+1;i++){
-        tool.cache.push(ls_id)
-        tool.gen(new HNumberLiteral(i))
-        tool.code.push(['param_load',['value',tool.param[i-1]],['value',ls_id],['value',0]])
+        tool.code.push(['param_load',['value',tool.param[i-1]],['value',i],['value',0]])
     }
     tool.gen(data.commands)
     tool.pop()
@@ -123,20 +117,15 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     tool.gen(data.target)
     //用于参数设置
     let ls_id=tool.id()
-    let ls_id2=tool.id()
     let index=1
     for(let i of data.args){
         tool.cache.push(ls_id)
         tool.gen(i)
-        tool.cache.push(ls_id2)
-        tool.gen(new HNumberLiteral(index++))
-        tool.code.push(['param_set',['value',ls_id2],['value',ls_id],['value',0]])
+        tool.code.push(['param_set',['reg',index++],['value',ls_id],['value',0]])
     }
-    tool.push(ls_id)
-    tool.gen(new HNumberLiteral(0))
     //拿到返回值
-    tool.code.push(['call',['reg',id],['value',0],['value',0]])
-    tool.code.push(['param_load',['value',id],['value',ls_id],['value',0]])
+    tool.code.push(['call',['reg',id],['reg',1],['value',0]])
+    tool.code.push(['param_load',['value',id],['reg',0],['value',0]])
 }
 const I_NotExpr:asm_factory=(data:HNotExpr,tool)=>{
     let id=tool.cache.pop()
@@ -154,10 +143,7 @@ const I_MinusExpr:asm_factory=(data:HMinusExpr,tool)=>{
     let id=tool.cache.pop()
     tool.cache.push(id)
     tool.gen(data.target)
-    let ls=tool.id()
-    tool.cache.push(ls)
-    tool.gen(new HNumberLiteral(0))
-    tool.code.push(['sub',['value',id],['value',ls],['value',id]])
+    tool.code.push(['sub',['value',id],['reg',0],['value',id]])
 }
 const I_ReferenceExpr:asm_factory=(data:HReferenceExpr,tool)=>{
     let id=tool.cache.pop()
@@ -201,12 +187,8 @@ const I_BinaryExpr:asm_factory=(data:HBinaryExpr,tool)=>{
     if(BinaryDict.has(data.op))
         tool.code.push([BinaryDict.get(data.op),['value',id],['value',right_id],['value',0]])
     //==,!=,>=,<=,>,<
-    if(CmpDict.has(data.op)){
-        let ls=tool.id()
-        tool.cache.push(ls)
-        tool.gen(new HNumberLiteral(CmpDict.get(data.op)))
-        tool.code.push(['cmp',['value',id],['value',right_id],['value',ls]])
-    }
+    if(CmpDict.has(data.op))
+        tool.code.push(['cmp',['value',id],['value',right_id],['reg',CmpDict.get(data.op)]])
     //&&,||
     if(data.op=='&&')
         tool.gen(new HIfStatement(

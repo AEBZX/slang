@@ -7,10 +7,17 @@ import check from '../../check'
 import desugar from '../../desugar'
 import hir from '../../hir'
 import {
-    HBinaryExpr, HIdentifierExpr, HLambdaExpr, HListCommand, HNumberLiteral, HReturn, HVariable
+    HArgumentsExpr, HBinaryExpr, HClass, HIdentifierExpr, HLambdaExpr, HListCommand, HNumberLiteral, HReturn, HVariable
 } from '../../utils'
 
 function hir_of(code: string): any[] {
+    const files = [ast_parse(cst_parse(lexer(code)) as ast_data) as File]
+    check(files)
+    //HIR返回[id总数,扁平数组],取扁平数组
+    return hir(desugar(files))[1]
+}
+
+function hir_count(code: string): [number, any[]] {
     const files = [ast_parse(cst_parse(lexer(code)) as ast_data) as File]
     check(files)
     return hir(desugar(files))
@@ -64,5 +71,51 @@ describe('HIR 生成', () => {
         const types = h.map(i => (i as any).constructor.name)
         // M吞入A/B/m;展开A的static f;B的g非static保留;m非static保留在M内
         expect(types).toEqual(['HModule', 'HClass', 'HVariable', 'HClass'])
+    })
+
+    it('HClass 收集 constructor 的 id,供 IR 匹配', () => {
+        const [, h] = hir_count('public A:class{public constructor:void(x:number){}}\npublic B:class{}\n')
+        // 扁平数组:两个 HClass
+        expect(h.length).toBe(2)
+        const A = h[0] as HClass
+        const B = h[1] as HClass
+        // A 有 constructor 成员,constructor_id 指向其 HVariable 的 name
+        expect(A.constructor_id).toBeTypeOf('number')
+        expect(A.constructor_id).toBeGreaterThan(0)
+        const cons = A.children.find(c => (c as any).name === A.constructor_id)
+        expect(cons).toBeInstanceOf(HVariable)
+        // B 无 constructor
+        expect(B.constructor_id).toBe(-1)
+    })
+
+    it('new 表达式的实参保留,且 id 总数为所有分配 id 的数量', () => {
+        const [count, h] = hir_count('public A:class{public constructor:void(x:number){}}\npublic m:void(){var a:A=new A(1);}\n')
+        // m 的 HVariable.value 是 HLambdaExpr,内含 HAssign(a, new A(1))
+        const m = h[1] as HVariable
+        const lambda = m.value as HLambdaExpr
+        const list = lambda.commands as HListCommand
+        const assign = list.commands[0] as any
+        // new A(1) → HArgumentsExpr(target=A的id, args=[1])
+        expect(assign.value).toBeInstanceOf(HArgumentsExpr)
+        expect((assign.value as HArgumentsExpr).args.length).toBe(1)
+        expect((assign.value as HArgumentsExpr).args[0]).toBeInstanceOf(HNumberLiteral)
+        // id 总数等于扁平数组中出现的最大 id,且大于 0
+        expect(count).toBeGreaterThan(0)
+    })
+
+    it('HClass 标记 this_id,成员内 this 解析为该 id', () => {
+        const [count, h] = hir_count('public A:class{public f:void(){var x:A=this;}}\n')
+        const A = h[0] as HClass
+        // HClass 有 this_id,且大于 0
+        expect(A.this_id).toBeTypeOf('number')
+        expect(A.this_id).toBeGreaterThan(0)
+        // 成员方法 f 的 HVariable
+        const f = A.children[0] as HVariable
+        const lambda = f.value as HLambdaExpr
+        const list = lambda.commands as HListCommand
+        const assign = list.commands[0] as any
+        // this 引用解析为 this_id
+        expect(assign.value).toBeInstanceOf(HIdentifierExpr)
+        expect((assign.value as HIdentifierExpr).name).toBe(A.this_id)
     })
 })

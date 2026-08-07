@@ -60,9 +60,16 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
             scope.thr(`class ${ast.name} must implement ${kind} ${name} at line ${ast.line.join('\n')}`)
     for(let i of ast.children) {
         scope=scope.enter()
-        //增加指向自己的up(绝对路径)
+        //up指向外层类(顶层指向自己),支持up.up链式向上
         let abs=scope.path?scope.path+'.'+ast.name:ast.name
-        scope.set('up',new ClassType(abs.split('.')))
+        let up_local=scope.path?scope.path.split('.'):abs.split('.')
+        let up_type=new ClassType(up_local)
+        scope.set('up',up_type)
+        scope.sym(up_type,up_type)
+        //this指向当前类实例
+        let this_type=new ClassType(abs.split('.'))
+        scope.set('this',this_type)
+        scope.sym(this_type,this_type)
         scope.path=abs
         call(i,scope)
         scope=scope.leave()

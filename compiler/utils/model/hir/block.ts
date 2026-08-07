@@ -7,7 +7,7 @@ export class HModule extends HBlock{
     }
 }
 export class HClass extends HBlock{
-    constructor(public name:number,public children:HBlock[]) {
+    constructor(public name:number,public children:HBlock[],public constructor_id:number=-1,public this_id:number=-1) {
         super()
     }
 }
