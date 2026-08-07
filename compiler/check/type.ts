@@ -60,6 +60,7 @@ const S_MapExpression:type_checker=(ast:MapExpression,scope:Scope,call:(ast:ASTT
 const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.ret,false)
 const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let type=call(ast.expr)
+    ast.types=ast.types||[]
     label:
     for(let postfix of ast.postfix){
         if(postfix instanceof IncrementPostfix||postfix instanceof DecrementPostfix){
@@ -71,6 +72,7 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 if(!(call(postfix.index) instanceof NumberType))
                     scope.thr(`[] can only be applied to number at line ${ast.line.join('\n')}`)
                 type=new StringType()
+                ast.types.push(type)
                 continue
             }
             if(!(type instanceof FixType))scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
@@ -79,12 +81,14 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                     if(!(call(postfix.index) instanceof NumberType))
                         scope.thr(`[] can only be applied to number at line ${ast.line.join('\n')}`)
                     type=type.t
+                    ast.types.push(type)
                     continue
                 }
                 if(type.fix[type.fix.length-1] instanceof MapFix){
                     if(!(call(postfix.index) instanceof StringType))
                         scope.thr(`[] can only be applied to string at line ${ast.line.join('\n')}`)
                     type= type.t
+                    ast.types.push(type)
                     continue
                 }
                 scope.thr(`[] can only be applied to map or array at line ${ast.line.join('\n')}`)
@@ -114,6 +118,7 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                     for(let i of class_.children)
                         if(i.name==postfix.name) {
                             type = scope.get_sym(i)
+                            ast.types.push(type)
                             continue label
                         }
                 scope.thr(`${postfix.name} is not defined at line ${ast.line.join('\n')}`)
@@ -126,6 +131,7 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                     for(let i of block.children)
                         if(i==postfix.name) {
                             type = new EnumType(type.local, i)
+                            ast.types.push(type)
                             continue label
                         }
                     scope.thr(`${postfix.name} is not defined at line ${ast.line.join('\n')}`)
@@ -134,6 +140,7 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 type=scope.get_sym(scope.get([...type.local,postfix.name].join('.')))
             }
         }
+        ast.types.push(type)
     }
     return type
 }

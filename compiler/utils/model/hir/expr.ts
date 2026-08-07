@@ -35,7 +35,7 @@ export class HMapExpr extends HPrimaryExpr{
     }
 }
 export class HLambdaExpr extends HPrimaryExpr{
-    constructor(public params:number[],public commands:HCommand[]) {
+    constructor(public params:number[],public commands:HCommand) {
         super()
     }
 }

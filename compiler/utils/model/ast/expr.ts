@@ -51,7 +51,7 @@ export class ArgumentsPostfix extends Postfix{
     }
 }
 export class PostfixExpression extends Expression{
-    constructor(public expr:Expression,public postfix:Postfix[]) {
+    constructor(public expr:Expression,public postfix:Postfix[],public types:Type[]=[]) {
         super()
     }
 }

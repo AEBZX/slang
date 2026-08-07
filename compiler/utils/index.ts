@@ -1,5 +1,6 @@
 import {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 import Desugar,{DesugarVisitor,desugar_visitor} from './lib/desugar'
+import HIR,{hir_visitor,HScope} from './lib/hir'
 import Parser from './lib/parser'
 import {
     HExpr,
@@ -203,6 +204,7 @@ export {
     ModExpression,
     ArrayFix,
     EqualityExpression,
+    HIR,
     BitwiseAndExpression,
     BitwiseXorExpression,
     MapFix,
@@ -303,5 +305,6 @@ export {
     HClass,
     HVariable,
     HBlock,
-    HModule
+    HModule,
+    hir_visitor,HScope
 }

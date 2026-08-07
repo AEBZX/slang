@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lexer'
 import cst_parse from '../../parser/cst'
 import ast_parse from '../../parser/ast'
-import { ast_data, BlockType, File, NumberType } from '../../utils'
+import { ast_data, BlockType, File, NumberType, PostfixExpression } from '../../utils'
 import check from '../../check'
 
 function check_code(code: string): string[] {
@@ -117,6 +117,18 @@ describe('check 端到端', () => {
         expect(check_code('public m:void(p:number*){*p=1;}\n')).toEqual([])
         expect(check_code('public m:void(p:number**){**p=1;}\n')).toEqual([])
         expect(check_code('public m:void(x:number){&x=1;}\n').join()).toContain('not assignable')
+    })
+
+    it('PostfixExpression 记录逐步类型', () => {
+        const file = ast_parse(cst_parse(lexer(
+            'public A:class{public b:var:number[];}\npublic m:void(x:A){var y:number=x.b[0];}\n'
+        )) as ast_data) as File
+        check([file])
+        const m = file.children[1] as any
+        const vd = (m.commands as any).commands[0] as any
+        const postfix = vd.value as PostfixExpression
+        // types 记录 primary 应用每个 postfix 后的类型:x.b → FixType, x.b[0] → NumberType
+        expect(postfix.types.map(t => t.constructor.name)).toEqual(['FixType', 'NumberType'])
     })
 
     it('implements 链:接口的函数与变量必须实现', () => {

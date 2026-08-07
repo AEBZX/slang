@@ -107,7 +107,9 @@ const C_Interface:check_visitor=(ast:Class,scope,call)=>{
 }
 const C_Variable:check_visitor=(ast:Variable,scope,call)=>{
     scope.set(ast.name,ast.t)
-    scope.sym(ast.t,ast.t)
+    //成员类型存入全局符号表,供跨作用域 MemberPostfix 访问
+    scope.global.sym(ast.t,ast.t)
+    scope.global.sym(ast,ast.t)
     if(ast.value)
         call(ast.value,scope)
 }
