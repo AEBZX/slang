@@ -20,5 +20,5 @@ import expr from './expr'
 import block from './block'
 import {ASMFactory, HBlock} from '../utils'
 export default function (index:number,HIR:HBlock[]){
-    return new ASMFactory(index,{...command,...expr,...block}).run(HIR)
+    return new ASMFactory(index,new Map([...command,...expr,...block])).run(HIR)
 }

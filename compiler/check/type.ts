@@ -85,8 +85,9 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                     continue
                 }
                 if(type.fix[type.fix.length-1] instanceof MapFix){
+                    //map键必须是字符串,如m['a']或m[key]
                     if(!(call(postfix.index) instanceof StringType))
-                        scope.thr(`[] can only be applied to string at line ${ast.line.join('\n')}`)
+                        scope.thr(`map key must be string at line ${ast.line.join('\n')}`)
                     type= type.t
                     ast.types.push(type)
                     continue

@@ -9,7 +9,7 @@ import {
     HBooleanLiteral, HExpr, HIdentifierExpr, HIndexExpr,
     hir_visitor, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNotExpr, HNullLiteral,
     HNumberLiteral, HPostDecrementExpr, HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr, HReferenceExpr,
-    HStringLiteral, HTernaryExpr, IdentifierExpr,
+    HStringLiteral, HTernaryExpr, ClassType, IdentifierExpr,
     IncrementPostfix, IncrementPrefix, IndexPostfix,
     InequalityExpression, LambdaExpression,
     LessEqualExpression, LessExpression,
@@ -49,14 +49,17 @@ const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>{
 const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     let _primary=node.expr
     //如果primary是identifier,那么尽量的匹配足够多的Member作为一整个Identifier
+    //实例成员(x.f)不折叠,保留Member走成员访问;模块路径(A.B)折叠
     if(_primary instanceof IdentifierExpr){
+        let _type=_primary.type
+        let is_instance=_type instanceof ClassType
         let g=(a:IdentifierExpr,fix:Postfix):IdentifierExpr=>{
             if(fix instanceof MemberPostfix)
                 return new IdentifierExpr(a.name+'.'+fix.name)
             return a
         }
         let delete_index:number=0
-        for(let i=0;i<node.postfix.length;i++)
+        for(let i=0;i<node.postfix.length&&!is_instance;i++)
             if(g(<IdentifierExpr>_primary,node.postfix[i])!=_primary){
                 _primary=g(<IdentifierExpr>_primary,node.postfix[i])
                 delete_index=i+1
@@ -71,8 +74,13 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
             primary=new HIndexExpr(primary,call(i.index,scope))
         if(i instanceof ArgumentsPostfix)
             primary=new HArgumentsExpr(primary,i.args.map(i=>call(i,scope)))
-        if(i instanceof MemberPostfix)
-            primary=new HMemberExpr(primary,new HIdentifierExpr(scope.get(i.name)))
+        if(i instanceof MemberPostfix){
+            //实例成员:通过primary的类型解析成员id
+            let member_id=scope.get(i.name)
+            if(_primary instanceof IdentifierExpr&&_primary.type instanceof ClassType)
+                member_id=scope.get((_primary.type as ClassType).local.join('.')+'.'+i.name)
+            primary=new HMemberExpr(primary,new HIdentifierExpr(member_id))
+        }
         if(i instanceof IncrementPostfix)
             primary=new HPostIncrementExpr(primary)
         if(i instanceof DecrementPostfix)

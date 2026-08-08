@@ -199,8 +199,8 @@ describe('表达式解析 (Expression)', () => {
         expect(result.type).toBe('BinaryExpression')
     })
 
-    it('Map字面量: {key : 1}', () => {
-        const result = parse_entry('Expression', rules, '{key : 1}') as ast_data
+    it('Map字面量: [key : 1]', () => {
+        const result = parse_entry('Expression', rules, '[key : 1]') as ast_data
         expect(result.type).toBe('BinaryExpression')
     })
 })

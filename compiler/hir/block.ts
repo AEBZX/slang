@@ -20,6 +20,10 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
         scope.set('up',scope.get(up_local.slice(0,-1).join('.')))
     let children=node.children.map(i=>call(i,scope)) as HModule[]
     scope=scope.leave()
+    //成员id注册到全局,供实例成员访问x.f解析
+    for(let i=0;i<node.children.length;i++)
+        if(children[i] instanceof HVariable)
+            scope.global.set((node.type as BlockType).local.join('.')+'.'+node.children[i].name,(children[i] as HVariable).name)
     //收集constructor的id,方便IR匹配
     let constructor_id=-1
     for(let i=0;i<node.children.length;i++)
@@ -30,7 +34,10 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
 export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
     let id=scope.id()
     scope.set(node.name,id)
-    return new HVariable(id,call(node.value,scope),node.modifiers.unstatic)
+    //第一个static的main标记为入口
+    let entry=node.name=='main'&&!node.modifiers.unstatic&&!scope.global.entry
+    if(entry)scope.global.entry=true
+    return new HVariable(id,call(node.value,scope),node.modifiers.unstatic,entry)
 }
 export default new Map<any,hir_visitor>([
     [Module,H_Module],

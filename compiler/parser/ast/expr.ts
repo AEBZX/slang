@@ -40,7 +40,7 @@ const G_MapExpression:ast_generate=(data,tree)=>{
     for(let [k,v] of data.children)
         if(typeof v=='object')
             children.set(v.children.get('child_0') as string,
-                         tree(v.children.get('child_2') as ast_data,tree))
+                         tree(v.children.get('child_1') as ast_data,tree))
     return new MapExpression(children)
 }
 const G_LambdaExpression:ast_generate=(data,tree)=>{

@@ -171,6 +171,19 @@ describe('check 端到端', () => {
         expect(check_code('public m:void(s:string){foreach(c:s){return;}}\n')).toEqual([])
     })
 
+    it('map 键必须是字符串', () => {
+        // m['a'] 字符串字面量键通过
+        expect(check_code('public foo:number(m:number{}){return m["a"];}\n')).toEqual([])
+        expect(check_code('public foo:void(m:number{}){m["a"]=1;}\n')).toEqual([])
+        // m[key] string 变量键通过
+        expect(check_code('public foo:number(m:number{},key:string){return m[key];}\n')).toEqual([])
+        expect(check_code('public foo:void(m:number{},key:string){m[key]=1;}\n')).toEqual([])
+        // m[1] 数字键报错
+        expect(check_code('public foo:number(m:number{}){return m[1];}\n').join()).toContain('map key must be string')
+        // m[a] 未定义标识符报错
+        expect(check_code('public foo:number(m:number{}){return m[a];}\n').join()).toContain('a is not defined')
+    })
+
     it('lambda body 命令检查', () => {
         // 正确 lambda
         expect(check_code(

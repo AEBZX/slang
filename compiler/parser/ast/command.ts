@@ -48,7 +48,7 @@ const G_Assign:ast_generate=(data,tree)=>{
 const G_VarDeclaration:ast_generate=(data,tree)=>{
     let name=(data.children.get('child_0') as ast_data).children.get('child_0') as string
     let type=tree(data.children.get('child_1') as ast_data,tree)
-    let value=data.children.has('child_1')?tree(data.children.get('child_2') as ast_data,tree):null
+    let value=data.children.has('child_2')?tree(data.children.get('child_2') as ast_data,tree):null
     return new VarDeclaration(name,type,value)
 }
 const G_Call:ast_generate=(data,tree)=>{

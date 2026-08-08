@@ -6,6 +6,12 @@ export class ASMTool{
         this.cache=[]
         this.asm=new Map()
         this.list=[]
+        this.entry=false
+        //根块:入口块,id为0
+        this.name=0
+        this.code=[]
+        this.param=[]
+        this.asm.set(0,[[],[]])
     }
     BinaryDict=new Map([
         ['+','add'],
@@ -34,6 +40,7 @@ export class ASMTool{
     list:[number,[asm_command[],number[]]][]
     asm:Map<number,[asm_command[],number[]]>
     cache:number[]
+    entry:boolean
     id(){
         return this.index++
     }
@@ -43,6 +50,9 @@ export class ASMTool{
     push(id:number){
         this.list.push([this.name,[this.code,this.param]])
         this.name=id
+        //id不存在则自动建空块
+        if(!this.asm.has(id))
+            this.asm.set(id,[[],[]])
         this.code=this.asm.get(id)[0]
         this.param=this.asm.get(id)[1]
     }
@@ -58,10 +68,11 @@ export type asm_factory=(data:HIRTree,tool:ASMTool)=>void
 export class ASMFactory{
     tool:ASMTool
     constructor(index:number,public data:Map<any,asm_factory>) {
+        let self=this
         this.tool=new ASMTool(index,(data:HIRTree)=>{
-            for(let [k,v] of this.data)
+            for(let [k,v] of self.data)
                 if(data instanceof k)
-                    v(data,this.tool)
+                    v(data,self.tool)
         })
     }
     run(entry:HIRTree[]){

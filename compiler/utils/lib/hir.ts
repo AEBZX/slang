@@ -6,10 +6,12 @@ export class HScope{
     symbol:Map<string,number>
     index:number
     link:Map<number,number>
+    entry:boolean
     constructor(public parent:HScope,public global:HScope){
         this.index=0
         this.symbol=new Map()
         this.link=new Map()
+        this.entry=false
     }
     lnk(id:number,data:number){
         this.link.set(id,data)

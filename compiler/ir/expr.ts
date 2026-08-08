@@ -52,7 +52,8 @@ const I_NullLiteral:asm_factory=(data:HNullLiteral,tool)=>{
     tool.code.push(['load',['reg',name],['value',id],['value',0]])
 }
 const I_IdentifierExpr:asm_factory=(data:HIdentifierExpr,tool)=>{
-    tool.code.push(['mov',['value',tool.cache.pop()],['value',data.name],['value',0]])
+    //变量id即存储槽,读变量:目标reg=变量的值
+    tool.code.push(['mov',['reg',tool.cache.pop()],['value',data.name],['value',0]])
 }
 //offset [array/map] [index] [value]=>array/map[index]=value
 const I_ArrayExpr:asm_factory=(data:HArrayExpr,tool)=>{
@@ -79,7 +80,9 @@ const I_MapExpr:asm_factory=(data:HMapExpr,tool)=>{
 }
 const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
     let id=tool.id()
-    let block_id=tool.id()
+    //入口main的lambda独占块id 0
+    let block_id=tool.entry?0:tool.id()
+    tool.entry=false
     tool.code.push(['mov',['reg',id],['value',block_id],['value',0]])
     tool.gen(new HNumberLiteral(block_id))
     //代码生成
@@ -182,10 +185,15 @@ const I_ReferenceExpr:asm_factory=(data:HReferenceExpr,tool)=>{
     tool.code.push(['mov',['value',id],['value',ls],['value',0]])
 }
 const I_AddressExpr:asm_factory=(data:HAddressExpr,tool)=>{
+    //变量id即存储槽,取地址=把变量id作为地址值赋给目标
     let id=tool.cache.pop()
-    tool.cache.push(id)
-    tool.gen(data.target)
-    tool.code.push(['mov',['reg',id],['reg',id],['value',0]])
+    if(data.target instanceof HIdentifierExpr)
+        tool.code.push(['mov',['reg',id],['value',data.target.name],['value',0]])
+    else {
+        tool.cache.push(id)
+        tool.gen(data.target)
+        tool.code.push(['mov',['reg',id],['value',id],['value',0]])
+    }
 }
 const I_BinaryExpr:asm_factory=(data:HBinaryExpr,tool)=>{
     let id=tool.cache.pop()

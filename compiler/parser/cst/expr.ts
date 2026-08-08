@@ -5,9 +5,9 @@ const BooleanLiteral=$.s('BooleanLiteral',$.o('Boolean','true','false'))
 const NullLiteral=$.s('NullLiteral',$.d('null'))
 const Identifier=$.s('Identifier',TokenType.Identifier)
 const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']'))
-const MapExpression=$.o('MapExpression',$.t('{',
+const MapExpression=$.o('MapExpression',$.t('[',
     $.w('MapExpression',$.s('MapData',TokenType.Identifier,$.d(':'),$.r('Expression')),',')
-    ,'}'))
+    ,']'))
 const LambdaExpression=$.s('LambdaExpression',
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'),$.r('Commands'))
