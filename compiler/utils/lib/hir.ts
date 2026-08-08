@@ -8,7 +8,7 @@ export class HScope{
     link:Map<number,number>
     entry:boolean
     constructor(public parent:HScope,public global:HScope){
-        this.index=0
+        this.index=1
         this.symbol=new Map()
         this.link=new Map()
         this.entry=false

@@ -199,12 +199,15 @@ const C_Throw:check_visitor=(ast:Throw,scope,call)=>{
     if(type_merge(t,_t,scope) instanceof VoidType)
         scope.thr(`throw type mismatch at line ${ast.line.join('\n')}`)
 }
-//TODO IR暂未实现,先对%Identifier进行处理
+const CommandList=['mov','add','sub','mul','div','mod','and','or','xor','not','bit_not','cmp','jmp','call','thread',
+'offset_set','offset_get','ret','push','pop','in','out','gc','load']
 const C_VM:check_visitor=(ast:VM,scope,call)=>{
     let data=ast.data.split('.').filter(i=>i.startsWith('%'))
     for(let i of data)
         if(!scope.get(i.substring(1)))
             scope.thr(`${i} is not defined at line ${ast.line.join('\n')}`)
+    if(!CommandList.includes(ast.data.split(' ')[0]))
+        scope.thr(`${ast.data} is not a valid VM command at line ${ast.line.join('\n')}`)
 }
 const C_Increment:check_visitor=(ast:Increment,scope,call)=>{
     call(ast.data,scope)

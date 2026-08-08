@@ -32,6 +32,7 @@ slang->
                             expr.ts:表达式hir节点
                             block.ts:块hir节点
                             index.ts:hir节点入口
+                         ir.ts:字节码节点
                  lib->对于其他模块的库实现
                     check.ts
                     cli.ts

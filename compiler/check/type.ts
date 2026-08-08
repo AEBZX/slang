@@ -32,7 +32,6 @@ const S_IdentifierExpression:type_checker=(ast:IdentifierExpr,scope:Scope,call:(
     }
     return data
 }
-//求最小公共超类型，不存在则返回VoidType
 const S_ArrayExpression:type_checker=(ast:ArrayExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let element_type=ast.elements.map((element)=>call(element))
     let type:Type=element_type.length?element_type[0]:new VoidType()
@@ -116,7 +115,7 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
             if(postfix.name=='up'&&type instanceof ClassType){
                 type=type.local.length>1?new ClassType(type.local.slice(0,-1)):type
                 ast.types.push(type)
-                continue label
+                continue
             }
             //情况1:Class Member
             if(type instanceof ClassType){

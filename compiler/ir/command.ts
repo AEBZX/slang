@@ -14,11 +14,12 @@ const I_Assign:asm_factory=(data:HAssign,tool)=>{
     let left_id=tool.id()
     let right_id=tool.id()
     tool.cache.push(left_id)
-    //拿到地址
+    //left_id=&a
     tool.gen(new HAddressExpr(data.data))
     tool.cache.push(right_id)
     tool.gen(data.value)
-    tool.code.push(['mov',['reg',left_id],['value',right_id],['value',0]])
+    //*left_id=right
+    tool.code.push(['mov',['value',left_id],['value',right_id],['value',0]])
 }
 const I_Call:asm_factory=(data:HCall,tool)=>{
     let id=tool.id()
@@ -32,7 +33,7 @@ const I_Call:asm_factory=(data:HCall,tool)=>{
         tool.gen(i)
         tool.code.push(['param_set',['reg',index++],['value',ls_data],['value',0]])
     }
-    tool.code.push(['call',['reg',id],['reg',1],['value',0]])
+    tool.code.push(['call',['value',id],['reg',1],['value',0]])
 }
 const I_Thread:asm_factory=(data:HThread,tool)=>{
     let id=tool.id()
@@ -49,7 +50,7 @@ const I_Thread:asm_factory=(data:HThread,tool)=>{
     //将param全部压入栈
     for(let i=0;i<tool.param.length;i++)
         tool.code.push(['push',['reg',tool.param[i]],['value',0],['value',0]])
-    tool.code.push(['thread',['reg',id],['reg',1],['value',0]])
+    tool.code.push(['thread',['value',id],['reg',1],['value',0]])
     for(let i=tool.param.length-1;i>=0;i--)
         tool.code.push(['pop',['reg',tool.param[i]],['value',0],['value',0]])
 }

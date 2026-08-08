@@ -157,7 +157,7 @@ function match(input:TokenParam|string):(stream:CharStream)=>pre_token{
 }
 export function lexer(code:string):token[]{
     let ret:token[]=[]
-    code=code.replace('\r\n','\n')
+    code=code.replace(/\r\n/g,'\n')
     let stream=new CharStream(code)
     let list:((stream:CharStream)=>pre_token)[]=[]
     tokens.forEach((item)=>{

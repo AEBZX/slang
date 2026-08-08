@@ -43,11 +43,11 @@ const I_BooleanLiteral:asm_factory=(data:HBooleanLiteral,tool)=>{
 const I_NullLiteral:asm_factory=(data:HNullLiteral,tool)=>{
     let id:number
     let name=tool.cache.pop()
-    if(tool.pool.has(0))
-        id=tool.pool.get(0)
+    if(tool.pool.has('\0'))
+        id=tool.pool.get('\0')
     else {
         id=tool.id()
-        tool.pool.set(0,id)
+        tool.pool.set('\0',id)
     }
     tool.code.push(['load',['reg',name],['value',id],['value',0]])
 }
@@ -202,8 +202,9 @@ const I_BinaryExpr:asm_factory=(data:HBinaryExpr,tool)=>{
     let right_id=tool.id()
     tool.cache.push(right_id)
     tool.gen(data.right)
+    //改为了a=b+c,更加好优化
     if(tool.BinaryDict.has(data.op))
-        tool.code.push([tool.BinaryDict.get(data.op),['reg',id],['value',right_id],['value',0]])
+        tool.code.push([tool.BinaryDict.get(data.op),['reg',id],['value',id],['value',right_id]])
     //==,!=,>=,<=,>,<
     if(tool.CmpDict.has(data.op))
         tool.code.push(['cmp',['reg',id],['value',right_id],['reg',tool.CmpDict.get(data.op)]])

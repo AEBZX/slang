@@ -5,7 +5,7 @@ export {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 export {DesugarVisitor,desugar_visitor} from './lib/desugar'
 export {Desugar}
 import HIR,{hir_visitor,HScope} from './lib/hir'
-import {ASMFactory} from "./lib/ir";
+export {hir_visitor}
 export {HIR}
 export {
     HExpr,

@@ -2,7 +2,7 @@
  * 命令文档:
  * reg的含义:直接取ID作为值,value:取ID存储的值
  * mov a b:a=b
- * add等二元运算: a b:a=a xxx b
+ * add等二元运算: a b c:a=b xxx c
  * not a:!a
  * cmp a b c,比较a和b,以c为操作符,c为操作符ID,结果存储在a
  * jmp a b,当b==1,跳转到a
@@ -14,11 +14,20 @@
  * offset_set a b c:a[b]=c
  * offset_get a b c:a=b[c]
  * mov,push,pop,add等二元运算,not,cmp,offset_xxx等类似的都需要传入a的id(reg a)而不是a的值
+ * in,out,gc:除了vm内嵌就不需要管
+ * load a id:加载id对应的常量到a
  */
 import command from './command'
 import expr from './expr'
 import block from './block'
-import {ASMFactory, HBlock} from '../utils'
+import {asm_command, ASMFactory, HBlock} from '../utils'
 export default function (index:number,HIR:HBlock[]){
-    return new ASMFactory(index,new Map([...command,...expr,...block])).run(HIR)
+    let data=new ASMFactory(index,new Map([...command,...expr,...block])).run(HIR)
+    let ret=new Map<number,asm_command[]>()
+    for(let [k,v] of data.code)
+        ret.set(k,v[0])
+    return {
+        pool:data.pool,
+        code:ret
+    }
 }

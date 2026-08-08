@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lexer'
-import { ast_data, TokenType } from '../../utils/data'
+import { ast_data, TokenType } from '../../utils'
 import $ from '../../utils'
 import ExprRules from '../../parser/cst/expr.js'
 import IdentifierRules from '../../parser/cst/identifier.js'
