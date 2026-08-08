@@ -37,7 +37,8 @@ const H_MapExpr:hir_visitor=(node:MapExpression,scope,call)=>new HMapExpr(new Ma
 const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>{
     scope=scope.enter()
     let params=Array.from(node.params.entries()).map(i=>{
-        let id=scope.id()
+        //this参数复用类作用域已分配的this_id,保持成员内this与类实例一致
+        let id=i[0]=='this'&&scope.get('this')!=null?scope.get('this'):scope.id()
         scope.set(i[0],id)
         return id
     })

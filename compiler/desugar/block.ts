@@ -1,6 +1,7 @@
 import {
     Block,
     Class,
+    ClassType,
     desugar_visitor,
     Enum,
     File,
@@ -17,6 +18,10 @@ const D_Module:desugar_visitor=(node:Module,call)=>{
     return node
 }
 const D_Class:desugar_visitor=(node:Class,call)=>{
+    //成员函数加this参数:this指向当前类实例;constructor特殊处理不加
+    for(let i of node.children)
+        if(i instanceof Function&&i.modifiers.unstatic&&i.name!='constructor'&&!i.params.has('this'))
+            i.params=new Map([['this',new ClassType((node.type as any).local)],...i.params])
     node.children=node.children.map(i=>call(i)) as Block[]
     return node
 }

@@ -8,7 +8,7 @@ import {
     FixType, ForeachStatement, ForStatement, IdentifierExpr, IfStatement,
     Increment,
     IndexPostfix, InequalityExpression,
-    LambdaExpression, LambdaType, ListCommand, ModAssign, ModExpression, MulAssign, MultiplicativeExpression,
+    LambdaExpression, LambdaType, ListCommand, MemberPostfix, ModAssign, ModExpression, MulAssign, MultiplicativeExpression,
     NullLiteral, NumberLiteral, NumberType, PostfixExpression, Return,
     ShiftLeftExpression, ShiftRightExpression,
     SubAssign,
@@ -35,6 +35,20 @@ const D_VarDeclaration:desugar_visitor=(node:VarDeclaration,call)=>{
 }
 const D_Call:desugar_visitor=(node:Call,call)=>{
     node.data=call(node.data)
+    //ClassType.call(args)转换为call(ClassType,args),ClassType作为第一个参数
+    if(node.data instanceof PostfixExpression){
+        let postfix=node.data.postfix
+        let member=postfix.find(i=>i instanceof MemberPostfix&&i.name=='call')
+        if(member){
+            let index=postfix.indexOf(member)
+            if(postfix[index+1] instanceof ArgumentsPostfix){
+                let args=(postfix[index+1] as ArgumentsPostfix).args
+                node.data=new PostfixExpression(
+                    new IdentifierExpr('call'),
+                    [new ArgumentsPostfix([node.data.expr,...args])])
+            }
+        }
+    }
     return node
 }
 const D_Return:desugar_visitor=(node:Return,call)=>{

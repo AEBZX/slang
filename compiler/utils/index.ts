@@ -1,10 +1,11 @@
 import Parser from './lib/parser'
 import Desugar from './lib/desugar'
-export {asm_factory} from './lib/ir'
+export {asm_factory,ASMTool,ASMFactory} from './lib/ir'
 export {Scope,check_visitor,type_checker,type_merge} from './lib/check'
 export {DesugarVisitor,desugar_visitor} from './lib/desugar'
 export {Desugar}
 import HIR,{hir_visitor,HScope} from './lib/hir'
+import {ASMFactory} from "./lib/ir";
 export {HIR}
 export {
     HExpr,

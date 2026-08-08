@@ -5,12 +5,16 @@ import ast_parse from '../../parser/ast'
 import {
     AAssign,
     AdditiveExpression,
+    ArgumentsPostfix,
     ast_data,
+    Call,
     File,
     ForStatement,
+    IdentifierExpr,
     IfStatement,
     LambdaType,
     ListCommand,
+    PostfixExpression,
     Variable,
     WhileStatement
 } from '../../utils'
@@ -42,6 +46,25 @@ describe('desugar 语法糖转换', () => {
         const cmds = fn_body(out)
         expect(cmds[0]).toBeInstanceOf(AAssign)
         expect(cmds[0].value).toBeInstanceOf(AdditiveExpression)
+    })
+
+    it('ClassType.call(args) → call(ClassType,args)', () => {
+        const out = desugar_code('public A:class{public call:void(x:number,y:number){}}\npublic m:void(){A.call(1,2);}\n')
+        const m = out[0].children[1] as any
+        const cmds = m.value.body.commands as any[]
+        const call = cmds[0]
+        expect(call).toBeInstanceOf(Call)
+        const pe = (call as Call).data
+        expect(pe).toBeInstanceOf(PostfixExpression)
+        // expr 变为 'call'
+        expect((pe as PostfixExpression).expr).toBeInstanceOf(IdentifierExpr)
+        expect(((pe as PostfixExpression).expr as IdentifierExpr).name).toBe('call')
+        // 实参变为 [A, 1, 2],A 作为第一个参数
+        const ap = (pe as PostfixExpression).postfix.find(p => p instanceof ArgumentsPostfix) as ArgumentsPostfix
+        expect(ap).toBeInstanceOf(ArgumentsPostfix)
+        expect(ap.args.length).toBe(3)
+        expect(ap.args[0]).toBeInstanceOf(IdentifierExpr)
+        expect((ap.args[0] as IdentifierExpr).name).toBe('A')
     })
 
     it('do-while → while', () => {
