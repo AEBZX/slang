@@ -70,9 +70,8 @@ const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
      * ...
      * 0预留给return
      */
-    for(let i=1;i<tool.param.length+1;i++){
-        tool.code.push(['param_load',['value',tool.param[i-1]],['value',i],['value',0]])
-    }
+    for(let i=1;i<tool.param.length+1;i++)
+        tool.code.push(['param_load',['value',tool.param[i-1]],['reg',i],['value',0]])
     tool.gen(data.commands)
     tool.pop()
 }
@@ -110,6 +109,9 @@ const I_PrefixDecrementExpr:asm_factory=(data:HPreDecrementExpr,tool)=>{
     tool.gen(new HAssign(data.target,new HBinaryExpr(data.target,'-',new HNumberLiteral(1))))
     tool.gen(data.target)
 }
+/**
+ * 此处需要兼容Class.Call(),将param_0
+ */
 const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //要call的区域的指针
     let id=tool.cache.pop()
