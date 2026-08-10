@@ -16,7 +16,7 @@ const I_NumberLiteral:asm_factory=(data:HNumberLiteral,tool)=>{
         id=tool.id()
         tool.pool.set(data.value,id)
     }
-    tool.code.push(['load',['reg',name],['value',id],['value',0]])
+    tool.code.push(['load',['reg',name],['reg',id],['value',0]])
 }
 const I_StringLiteral:asm_factory=(data:HStringLiteral,tool)=>{
     let name=tool.cache.pop()
@@ -27,7 +27,7 @@ const I_StringLiteral:asm_factory=(data:HStringLiteral,tool)=>{
         id=tool.id()
         tool.pool.set(data.value,id)
     }
-    tool.code.push(['load',['reg',name],['value',id],['value',0]])
+    tool.code.push(['load',['reg',name],['reg',id],['value',0]])
 }
 const I_BooleanLiteral:asm_factory=(data:HBooleanLiteral,tool)=>{
     let name=tool.cache.pop()
@@ -38,7 +38,7 @@ const I_BooleanLiteral:asm_factory=(data:HBooleanLiteral,tool)=>{
         id=tool.id()
         tool.pool.set(data.value?1:0,id)
     }
-    tool.code.push(['load',['reg',name],['value',id],['value',0]])
+    tool.code.push(['load',['reg',name],['reg',id],['value',0]])
 }
 const I_NullLiteral:asm_factory=(data:HNullLiteral,tool)=>{
     let id:number
@@ -49,7 +49,7 @@ const I_NullLiteral:asm_factory=(data:HNullLiteral,tool)=>{
         id=tool.id()
         tool.pool.set('\0',id)
     }
-    tool.code.push(['load',['reg',name],['value',id],['value',0]])
+    tool.code.push(['load',['reg',name],['reg',id],['value',0]])
 }
 const I_IdentifierExpr:asm_factory=(data:HIdentifierExpr,tool)=>{
     //变量id即存储槽,读变量:目标reg=变量的值
@@ -156,7 +156,7 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //出栈
     for(let i=tool.param.length-1;i>=0;i--)
         tool.code.push(['pop',['reg',tool.param[i]],['value',0],['value',0]])
-    tool.code.push(['param_load',['value',id],['reg',0],['value',0]])
+    tool.code.push(['param_load',['reg',id],['reg',0],['value',0]])
 }
 const I_NotExpr:asm_factory=(data:HNotExpr,tool)=>{
     let id=tool.cache.pop()

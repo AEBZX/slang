@@ -13,21 +13,25 @@
  * pop a:出栈
  * offset_set a b c:a[b]=c
  * offset_get a b c:a=b[c]
- * mov,push,pop,add等二元运算,not,cmp,offset_xxx等类似的都需要传入a的id(reg a)而不是a的值
+ * mov,push,pop,add等二元运算,not,cmp,offset_xxx等类似的都需要传入a的id(reg a)而不是a的值,如果是操作除外
  * in,out,gc:除了vm内嵌就不需要管
  * load a id:加载id对应的常量到a
+ * param_set number data:设param[number]=data
+ * param_get a number:设a=param[number]
  */
 import command from './command'
 import expr from './expr'
 import block from './block'
 import {asm_command, ASMFactory, HBlock} from '../utils'
 export default function (index:number,HIR:HBlock[]){
-    let data=new ASMFactory(index,new Map([...command,...expr,...block])).run(HIR)
+    let factory=new ASMFactory(index,new Map([...command,...expr,...block]))
+    let data=factory.run(HIR)
     let ret=new Map<number,asm_command[]>()
     for(let [k,v] of data.code)
         ret.set(k,v[0])
     return {
         pool:data.pool,
-        code:ret
+        code:ret,
+        id:factory.tool.index
     }
 }

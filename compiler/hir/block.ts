@@ -32,7 +32,7 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
     let constructor_id=-1
     for(let i=0;i<node.children.length;i++)
         if(node.children[i].name=='constructor'&&children[i] instanceof HVariable)
-            constructor_id=(children[i] as HVariable).name
+            constructor_id=(children[i] as unknown as HVariable).name
     return new HClass(id,children,constructor_id,this_id)
 }
 export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{

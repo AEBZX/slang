@@ -22,7 +22,7 @@ import {
     StringLiteral, SubtractiveExpression, TernaryExpression
 } from '../utils'
 const H_NumberLiteral:hir_visitor=(node:NumberLiteral,scope,call)=>new HNumberLiteral(parseFloat(node.value))
-const H_StringLiteral:hir_visitor=(node:StringLiteral,scope,call)=>new HStringLiteral(JSON.parse(node.value))
+const H_StringLiteral:hir_visitor=(node:StringLiteral,scope,call)=>new HStringLiteral(node.value)
 const H_BooleanLiteral:hir_visitor=(node:BooleanLiteral,scope,call)=>new HBooleanLiteral(node.value=='true')
 const H_NullLiteral:hir_visitor=(node:NullLiteral,scope,call)=>new HNullLiteral()
 const H_IdentifierExpr:hir_visitor=(node:IdentifierExpr,scope,call)=>{

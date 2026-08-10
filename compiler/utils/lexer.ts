@@ -59,12 +59,28 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
                 ret+=stream.next()
             }
             return [true,ret,TokenType.Number]
-        }else
-            return [true,'0',TokenType.Number]
+        }
+        //0.5:'.'后是数字则作小数
+        if(stream.now()=='.'&&stream.code[stream.index+1]>='0'&&stream.code[stream.index+1]<='9'){
+            let ret='0'
+            ret+=stream.next()
+            while(stream.now()>='0'&&stream.now()<='9'){
+                ret+=stream.next()
+            }
+            return [true,ret,TokenType.Number]
+        }
+        return [true,'0',TokenType.Number]
     }
     let ret=''
     while(stream.now()>='0'&&stream.now()<='9'){
         ret+=stream.next()
+    }
+    //小数:'.'后必须是数字,避免与成员访问a.b混淆
+    if(stream.now()=='.'&&stream.code[stream.index+1]>='0'&&stream.code[stream.index+1]<='9'){
+        ret+=stream.next()
+        while(stream.now()>='0'&&stream.now()<='9'){
+            ret+=stream.next()
+        }
     }
     return [ret != '',ret,TokenType.Number]
 }

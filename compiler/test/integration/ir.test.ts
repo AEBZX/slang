@@ -8,7 +8,7 @@ import desugar from '../../desugar'
 import hir from '../../hir'
 import ir from '../../ir'
 
-function ir_of(src: string): { count: number; code: Map<number, [any[], number[]]>; h: any[] } {
+function ir_of(src: string): { count: number; code: Map<number, any[]>; h: any[] } {
     const files = [ast_parse(cst_parse(lexer(src)) as ast_data) as File]
     check(files)
     const [count, h] = hir(<File[]>desugar(files))
@@ -16,7 +16,7 @@ function ir_of(src: string): { count: number; code: Map<number, [any[], number[]
 }
 
 function body_blocks(src: string): any[] {
-    // 返回所有非根块(block 0 是根)
+    // 返回所有非根块(block 0 是根),值为指令数组
     const r = ir_of(src)
     return [...r.code.entries()].filter(([k]) => k !== 0)
 }
@@ -26,7 +26,7 @@ describe('IR 字节码生成', () => {
         const blocks = body_blocks('public m:number(){return 1+2;}\n')
         // 只有一个函数块
         expect(blocks.length).toBe(1)
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'add')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'param_set')).toBe(true)
@@ -36,9 +36,7 @@ describe('IR 字节码生成', () => {
     it('函数定义生成独立块并加载参数', () => {
         const blocks = body_blocks('public add:number(a:number,b:number){return a+b;}\n')
         expect(blocks.length).toBe(1)
-        const [cmds, params] = blocks[0][1]
-        // 两个参数
-        expect(params.length).toBe(2)
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'param_load')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'add')).toBe(true)
     })
@@ -46,7 +44,7 @@ describe('IR 字节码生成', () => {
     it('变量声明与读取生成 mov', () => {
         const blocks = body_blocks('public m:number(){var x:number=5;return x;}\n')
         expect(blocks.length).toBe(1)
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'mov')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
     })
@@ -59,7 +57,7 @@ describe('IR 字节码生成', () => {
 
     it('字符串字面量生成 load/ret', () => {
         const blocks = body_blocks('public m:string(){return "hi";}\n')
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'param_set')).toBe(true)
         expect(cmds.some((c: any) => c[0] == 'ret')).toBe(true)
@@ -67,13 +65,13 @@ describe('IR 字节码生成', () => {
 
     it('比较运算符生成 cmp', () => {
         const blocks = body_blocks('public m:boolean(a:number,b:number){return a>b;}\n')
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'cmp')).toBe(true)
     })
 
     it('取反生成 not', () => {
         const blocks = body_blocks('public m:boolean(a:boolean){return !a;}\n')
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'not')).toBe(true)
     })
 
@@ -83,7 +81,7 @@ describe('IR 字节码生成', () => {
         expect(r.h.some((e: any) => e.entry)).toBe(true)
         // main 的 lambda 块独占 id 0(含 main 的 body 指令)
         expect(r.code.has(0)).toBe(true)
-        const cmds = r.code.get(0)![0]
+        const cmds = r.code.get(0)!
         expect(cmds.length).toBeGreaterThan(0)
     })
 
@@ -94,7 +92,7 @@ describe('IR 字节码生成', () => {
 
     it('map 字面量 [k:v] 生成 offset_set', () => {
         const blocks = body_blocks('public foo:void(){var m:number{}= [a:1];}\n')
-        const cmds = blocks[0][1][0]
+        const cmds = blocks[0][1]
         expect(cmds.some((c: any) => c[0] == 'offset_set')).toBe(true)
     })
 
@@ -102,10 +100,9 @@ describe('IR 字节码生成', () => {
         const blocks = body_blocks('public A:class{public f:number(){return 1;}}\n')
         // 类块 + 成员方法块
         expect(blocks.length).toBe(2)
-        const clsBlock = blocks.find(([k]) => (k as number) != 0 && blocks.indexOf(blocks.find(b => b[1][0].some((c: any) => c[0] == 'offset_set')))!=-1)
         // 构造块含 offset_set(成员初始化)和 ret
-        const clsCmds = blocks.find(([, v]) => v[0].some((c: any) => c[0] == 'offset_set'))?.[1][0]
-        expect(clsCmds?.some((c: any) => c[0] == 'offset_set')).toBe(true)
-        expect(clsCmds?.some((c: any) => c[0] == 'ret')).toBe(true)
+        const clsCmds = blocks.find(([, v]) => (v as any[]).some((c: any) => c[0] == 'offset_set'))?.[1]
+        expect((clsCmds as any[])?.some((c: any) => c[0] == 'offset_set')).toBe(true)
+        expect((clsCmds as any[])?.some((c: any) => c[0] == 'ret')).toBe(true)
     })
 })

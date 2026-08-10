@@ -33,7 +33,12 @@ const I_Call:asm_factory=(data:HCall,tool)=>{
         tool.gen(i)
         tool.code.push(['param_set',['reg',index++],['value',ls_data],['value',0]])
     }
+    //将param全部压入栈
+    for(let i=0;i<tool.param.length;i++)
+        tool.code.push(['push',['reg',tool.param[i]],['value',0],['value',0]])
     tool.code.push(['call',['value',id],['reg',1],['value',0]])
+    for(let i=tool.param.length-1;i>=0;i--)
+        tool.code.push(['pop',['reg',tool.param[i]],['value',0],['value',0]])
 }
 const I_Thread:asm_factory=(data:HThread,tool)=>{
     let id=tool.id()
