@@ -2,7 +2,7 @@ import {
     asm_command,
     asm_pool,
     BINARY,
-    BIT_NOT, CALL, CMP, CZ, IN,
+    BIT_NOT, CALL, CMP, opt_visitor, CZ, IN,
     IR,
     IRTool, JMP, JZ,
     LOAD,
@@ -32,115 +32,95 @@ export const _CMP=new Map<number,(a:number,b:number)=>number>([
     [4,(a:number,b:number)=>a>=b?1:0],
     [5,(a:number,b:number)=>a<=b?1:0]
 ])
-//常量折叠和传播,提前计算
-export default (tool: IRTool) => {
-    let index = 0
-    let $ = tool.$
-    for (let [k, v] of tool.command) {
-        for (let now of v) {
-            //提供
-            if (now instanceof LOAD) {
-                if($.value(now.data)&&$.value(now.reg)&&$.value(now.reg)==$.p(now.data))
-                    tool._mark(k,index)
-                $.set(now.reg, now.data, true)
-            }
-            if (now instanceof MOV) {
-                if($.value(now.left)&&$.value(now.right)&&$.value(now.left)==$.v(now.right))
-                    tool._mark(k,index)
-                $.set(now.left, now.right)
-            }
-            if (now instanceof OFFSET_SET){
-                if($.value(now.offset)&&$.value(now.target)&&$.value(now.value)&&
-                   $.mvalue(now.target,now.offset)&&$.mvalue(now.target,now.offset)==$.value(now.value))
-                    tool._mark(k,index)
-                $.mset(now.target,now.offset,now.value)
-            }
-            if(now instanceof PARAM_SET) {
-                if($.value(now.value)&&$.value(now.param)&&$.pvalue(now.value)&&$.value(now.param)==$.pvalue(now.value))
-                    tool._mark(k,index)
-                $.pset(now.param, now.value)
-            }
-            //消费
-            if (now instanceof BIT_NOT)
-                if($.s(now.data)!=null) {
-                    let id=tool._id()
-                    tool.state.set(now.data[1], ~$.s(now.data))
-                    tool.pool.set(id,~$.s(now.data))
-                    tool.replace(k,index,new LOAD(now.data,['reg',id]))
-                }
-            if(now instanceof NOT)
-                if($.value(now.data)) {
-                    let id=tool._id()
-                    tool.state.set(now.data[1],!($.value(now.data))?1:0)
-                    tool.pool.set(id,!($.value(now.data))?1:0)
-                    tool.replace(k,index,new LOAD(now.data,['reg',id]))
-                }
-            if (now instanceof BINARY){
-                now.left = $.z(now.left)
-                now.right = $.z(now.right)
-                if($.value(now.left)&&$.value(now.right)) {
-                    let id = tool._id()
-                    $.set(now.result, ['reg', _BINARY.get(now.id)($.value(now.left) as number, $.value(now.right) as number)])
-                    tool.pool.set(id, _BINARY.get(now.id)($.value(now.left) as number, $.value(now.right) as number))
-                    tool.replace(k, index, new LOAD(now.result, ['reg', id]))
-                }
-            }
-            if (now instanceof PARAM_LOAD) {
-                now.param = $.z(now.param)
-                now.data = $.z(now.data)
-                if ($.pvalue(now.param) != null) {
-                    let id = tool._id()
-                    tool.state.set(now.data[1], $.pvalue(now.param))
-                    tool.pool.set(id, $.pvalue(now.param))
-                    tool.replace(k, index, new LOAD(now.data, ['reg', id]))
-                }
-            }
-            if (now instanceof IN){
-                now.data=$.z(now.data)
-                now.oper=$.z(now.oper)
-            }
-            if(now instanceof OUT){
-                now.target=$.z(now.target)
-                now.oper=$.z(now.oper)
-            }
-            if(now instanceof JZ) {
-                now.target=$.z(now.target)
-                now.cond=$.z(now.cond)
-                if(now.cond[1]==1&&now.cond[0]=='reg')tool.replace(k, index, new JMP(now.target))
-            }
-            if(now instanceof CZ&&$.value(now.cond)==1){
-                now.target=$.z(now.target)
-                now.cond=$.z(now.cond)
-                if(now.cond[1]==1&&now.cond[0]=='reg')tool.replace(k, index, new CALL(now.target))
-            }
-            if(now instanceof TZ&&$.value(now.cond)==1){
-                now.target=$.z(now.target)
-                now.cond=$.z(now.cond)
-                if(now.cond[1]==1&&now.cond[0]=='reg')tool.replace(k, index, new THREAD(now.target))
-            }
-            if(now instanceof CMP) {
-                now.oper=$.z(now.oper)
-                now.right=$.z(now.right)
-                now.left=$.z(now.left)
-                if ($.value(now.oper) && typeof $.value(now.oper) == 'number' && $.value(now.right) && $.value(now.left))
-                    tool.replace(k, index, new MOV(now.oper, ['reg', _CMP.get($.value(now.oper) as number)
-                    ($.value(now.right) as number, $.value(now.left) as number)]))
-            }
-            if(now instanceof PUSH)
-                now.target=$.z(now.target)
-            if(now instanceof OFFSET_GET){
-                now.data=$.z(now.data)
-                now.offset=$.z(now.offset)
-                now.target=$.z(now.target)
-                if ($.mvalue(now.data, now.offset) != null) {
-                    let id = tool._id()
-                    tool.state.set(now.target[1], $.mvalue(now.data, now.offset))
-                    tool.pool.set(id, $.mvalue(now.data, now.offset))
-                    tool.replace(k, index, new LOAD(now.target, ['reg', id]))
-                }
-            }
-            index++
-        }
-        index = 0
-    }
+const C_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.left,data.right)
+    $.set(data.left, data.right)
+}
+const C_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data,data.reg)
+    $.pset(data.reg, data.data)
+}
+const C_OFFSET_SET:opt_visitor=(data:OFFSET_SET, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.target,data.offset,data.value)
+    $.mset(data.target, data.offset, data.value)
+}
+const C_PARAM_SET:opt_visitor=(data:PARAM_SET, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.param,data.value)
+    $.set(data.param, data.value)
+}
+const C_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.result,data.right,data.left)
+    let res=_BINARY.get(data.id)($.value(data.left) as number,$.value(data.right) as number)
+    let id=tool._id()
+    $.set(data.result,['reg',res])
+    tool.pool.set(id,res)
+    tool.replace(bid,index,new LOAD(data.result,['reg',id]))
+}
+const C_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data)
+    if($.pvalue(data.data)==null)return
+    let res=!($.pvalue(data.data)==1?1:0)
+    let id=tool._id()
+    tool.pool.set(id,res?1:0)
+    $.set(data.data,['reg',res?1:0])
+    tool.replace(bid,index,new LOAD(data.data,['reg',id]))
+}
+const C_BIT_NOT:opt_visitor=(data:BIT_NOT, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data)
+    if($.pvalue(data.data)==null)return
+    let res=~$.pvalue(data.data)
+    let id=tool._id()
+    tool.pool.set(id,res)
+    $.set(data.data,['reg',res?1:0])
+    tool.replace(bid,index,new LOAD(data.data,['reg',id]))
+}
+const C_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.left,data.right,data.oper)
+    let o=$.value(data.oper),r=$.value(data.right),l=$.rvalue(data.left)
+    if(o==null||r==null||l==null)return
+    let res=_CMP.get(o as number)(l as number,r as number)
+    let id=tool._id()
+    tool.pool.set(id,res)
+    $.set(data.left,['reg',res])
+    tool.replace(bid,index,new LOAD(data.left,['reg',id]))
+}
+const C_JZ_CZ_TZ:opt_visitor=(data:JZ|TZ|CZ, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.cond,data.target)
+}
+const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data,data.offset,data.target)
+    let v=$.mvalue(data.data, data.offset)
+    if(v==null)return
+    let id=tool._id()
+    tool.pool.set(id,v)
+    tool.state.set($.value(data.target) as number,v)
+    tool.replace(bid,index,new LOAD(data.target,['reg',id]))
+}
+const C_IN:opt_visitor=(data:IN, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.oper,data.data)
+}
+const C_OUT:opt_visitor=(data:OUT, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.oper,data.target)
+}
+const C_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data,data.param)
+    let value=$.value(data.param)
+    if(value==null)return
+    let id=tool._id()
+    tool.pool.set(id,value)
+    tool.state.set($.value(data.data) as number,value)
+    tool.replace(bid,index,new LOAD(data.data,['reg',id]))
 }

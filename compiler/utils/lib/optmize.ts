@@ -46,6 +46,7 @@ export const t:{[name:string]:(data:asm_command)=>IR}={
     'offset_set':(data:asm_command)=>new OFFSET_SET(data[1],data[2],data[3]),
     'offset_get':(data:asm_command)=>new OFFSET_GET(data[1],data[2],data[3])
 }
+export type opt_visitor =(data:IR, tool:IRTool, bid:number, index:number)=>void
 //准备工作
 export function to(data:Map<number,asm_command[]>){
     let ret=new Map<number,IR[]>()
@@ -59,16 +60,15 @@ export class IRTool{
     mark:[number,number][]
     changed:boolean
     state:Map<number,number|string|null>
-    mem_state:Map<[number,number|string],number|string|null>
+    mem_state:Map<number,Map<number|string,number|string|null>>
     param_state:Map<number, number | string | null>
+    last_touch:Map<number,[number,number,boolean,IR]>
     id:number
     private _replace:[number,number,IR][]
     $={
         p:(data:asm_args)=>this.pool.get(data[1]),
         v:(data:asm_args)=>data[1],
-        s:(data:asm_args)=>this.state.get(data[1])||null,
-        ps:(id:asm_args)=>this.param_state.get(id[1])||null,
-        ms:(data:asm_args,index:asm_args)=>this.mem_state.get([data[1],index[1]])||null,
+        s:(data:asm_args)=>this.state.get(data[1]),
         set:(key:asm_args,value:asm_args,p:boolean=false)=>{
             let left:number
             let c=true
@@ -100,7 +100,7 @@ export class IRTool{
             else if(this.state.get(value[1])!=null)
                 v=this.state.get(value[1])
             if(t==null||o==null||v==null)return
-            this.mem_state.set([t,o],v)
+            this.mem_state.set(t,this.mem_state.has(t)?new Map([...this.mem_state.get(t),[o,v]]):new Map([[o,v]]))
         },
         pset:(id:asm_args,value:asm_args)=>{
             let left:number
@@ -112,14 +112,21 @@ export class IRTool{
             else c=false
             if(!c)return
             if(IR.isNumber(value))
-                this.state.set(left,value[1])
+                this.param_state.set(left,value[1])
             else if(this.state.get(value[1])!=null)
-                this.state.set(left,this.state.get(value[1]))
+                this.param_state.set(left,this.state.get(value[1]))
         },
-        value:(data:asm_args)=>IR.isNumber(data)?data[1]:this.state.get(data[1])||null,
-        mvalue:(target:asm_args,offset:asm_args)=>this.mem_state.get([this.$.value(target) as number,this.$.value(offset)])||null,
-        pvalue:(id:asm_args)=>this.state.get(this.$.value(id) as number)||null,
-        z:(data:asm_args):asm_args=>this.$.value(data)&&typeof this.$.value(data)=='number'?['reg',this.$.value(data) as number]:data
+        rvalue:(data:asm_args)=>this.state.get(this.$.value(data) as number),
+        value:(data:asm_args)=>IR.isNumber(data)?data[1]:this.state.get(data[1]),
+        mvalue:(target:asm_args,offset:asm_args)=>this.mem_state.get(this.$.value(target) as number).get(this.$.value(offset)),
+        pvalue:(id:asm_args)=>this.state.get(this.$.value(id) as number),
+        z:(data:asm_args):asm_args=>this.$.value(data)&&typeof this.$.value(data)=='number'?['reg',this.$.value(data) as number]:data,
+        Z:(...data:asm_args[])=>{
+            for(let i of data)
+                this.$.z(i)
+        },
+        t:(id:asm_args)=>this.last_touch.get(this.$.value(id) as number),
+        tset:(id:asm_args,bid:number,index:number,w:boolean,ir:IR)=>this.last_touch.set(this.$.value(id) as number,[bid,index,w,ir])
     }
     constructor(id:number,command:Map<number,IR[]>,pool:Map<number,number|string>) {
         this.id=id
@@ -130,10 +137,8 @@ export class IRTool{
         this._replace=[]
         this.state=new Map<number, number | string | null>()
         this.param_state=new Map<number, number | string | null>()
-        this.mem_state=new Map<[number, number | string], number | string | null>()
-    }
-    dead(bid:number,index:number){
-        return this.mark.includes([bid,index])
+        this.mem_state=new Map()
+        this.last_touch=new Map()
     }
     _id(){
         return this.id++
@@ -142,6 +147,9 @@ export class IRTool{
     replace(bid:number,index:number,ir:IR){
         this.changed=true
         this._replace.push([bid,index,ir])
+    }
+    dead(bid:number,index:number){
+        return this.mark.includes([bid,index])
     }
     _mark(bid:number,index:number){
         this.changed=true
@@ -155,10 +163,17 @@ export class IRTool{
             this.command.get(bid)[index]=IR
         //删除
         let groups=new Map<number,number[]>()
+        for(let i of this.mark)
+            groups.set(i[0],groups.has(i[0])?[...groups.get(i[0]),i[1]]:[i[1]])
         for(let [bid,idx] of groups)
             for(let i of idx.sort((a,b)=>b-a))
                 this.command.get(bid).splice(i,1)
         this.mark=[]
+        this.changed=false
         this._replace=[]
+        this.state=new Map<number, number | string | null>()
+        this.param_state=new Map<number, number | string | null>()
+        this.mem_state=new Map()
+        this.last_touch=new Map()
     }
 }
