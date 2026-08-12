@@ -1,7 +1,6 @@
 import {
     BINARY,
     BIT_NOT,
-    CALL,
     CMP,
     CZ,
     IR,
@@ -17,8 +16,9 @@ import {
 } from '../utils'
 const P_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
     const $=tool.$
-    if(data.left==data.right)tool._mark(bid,index)
-    if($.rvalue(data.left)==$.value(data.right)&&$.value(data.right)!=null)tool._mark(bid,index)
+    //仅当源和目标参数完全一致(mov x x)才冗余
+    //state比较会把"mov执行后的记录值"误当"mov前已冗余",误删取地址(&a)与写入
+    if(data.left[0]==data.right[0]&&data.left[1]==data.right[1])tool._mark(bid,index)
     if(!tool.dead(bid,index)){
         $.tset(data.left,bid,index,true,data)
         $.tset(data.right,bid,index,false,data)
@@ -26,7 +26,10 @@ const P_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
 }
 const P_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>{
     const $=tool.$
-    if($.rvalue(data.reg)==$.pvalue(data.data))tool._mark(bid,index)
+    //仅当目标槽已有确定值且等于该常量才算冗余
+    //rvalue/pvalue 同为 undefined 时(字符串、未初始化)误判相等会删掉必需load
+    let r=$.rvalue(data.reg)
+    if(r!=null&&r==$.pvalue(data.data))tool._mark(bid,index)
     if(!tool.dead(bid,index)){
         $.tset(data.reg,bid,index,true,data)
         $.tset(data.data,bid,index,false,data)
@@ -119,14 +122,16 @@ const P_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
         let a=$.value(data.left)
         let b=$.value(last[3].left)
         if(a==b&&a!=null){
+            //对0/1值x再做0/1比较:x==1或x!=0结果=x(x已在槽),删当前cmp;
+            //x==0或x!=1结果=!x,替换为NOT(原两个分支写反,导致if恒真条件被NOT取反,控制流断裂)
             if((o==0&&r==0)||(o==1&&r==1)){
-                tool._mark(bid,index)
-                return
-            }
-            if((o==1&&r==0)||(o==0&&r==1)){
                 _data=new NOT(data.left)
                 tool.replace(bid,index,_data)
                 $.tset(data.left,bid,index,true,_data)
+            }
+            else{
+                tool._mark(bid,index)
+                return
             }
         }
     }
@@ -144,11 +149,7 @@ const P_JZ:opt_visitor=(data:JZ, tool, bid, index)=>{
 const P_CZ:opt_visitor=(data:CZ, tool, bid, index)=>{
     const $=tool.$
     let c=$.value(data.cond)
-    if(c==1){
-        let _data=new CALL(data.target)
-        tool.replace(bid,index,_data)
-        $.tset(data.target,bid,index,true,_data)
-    }
+    //恒真CZ保持为块调用(压块帧);不能换成CALL——CALL是函数帧,return(RE TN)会被误停在函数调用点
     if(c==0)tool._mark(bid,index)
 }
 const P_TZ:opt_visitor=(data:TZ, tool, bid, index)=>{

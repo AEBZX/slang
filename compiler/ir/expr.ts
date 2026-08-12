@@ -79,14 +79,16 @@ const I_MapExpr:asm_factory=(data:HMapExpr,tool)=>{
     }
 }
 const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
-    let id=tool.id()
     //入口main的lambda独占块id 0
     let block_id=tool.entry?0:tool.id()
     tool.entry=false
-    tool.code.push(['mov',['reg',id],['value',block_id],['value',0]])
+    //函数变量槽=块id常量,供call/引用解引用;原mov reg{id}=value{block_id}读未初始化槽,删除
     tool.gen(new HNumberLiteral(block_id))
-    //代码生成
-    tool.asm.set(block_id,[[],data.params])
+    //代码生成;entry main的块id为0(根块),块已存在时不能重置,否则清空根块里其他函数的槽初始化
+    if(!tool.asm.has(block_id))
+        tool.asm.set(block_id,[[],data.params])
+    else
+        tool.asm.get(block_id)[1]=data.params
     tool.push(block_id)
     /**
      * 等价于:
@@ -140,6 +142,8 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     let id=tool.cache.pop()
     tool.cache.push(id)
     tool.gen(data.target)
+    //栈帧:保存当前函数局部槽(跳过槽0返回值),返回后恢复——递归不再覆盖caller的槽
+    let frame=tool.frame_push()
     //用于参数设置
     let ls_id=tool.id()
     let index=1
@@ -148,14 +152,16 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
         tool.gen(i)
         tool.code.push(['param_set',['reg',index++],['value',ls_id],['value',0]])
     }
-    //将param全部压入栈
+    //将param全部压入栈(push用value压槽值,reg形式压的是槽号)
     for(let i=0;i<tool.param.length;i++)
-        tool.code.push(['push',['reg',tool.param[i]],['value',0],['value',0]])
+        tool.code.push(['push',['value',tool.param[i]],['value',0],['value',0]])
     //拿到返回值
     tool.code.push(['call',['value',id],['reg',1],['value',0]])
     //出栈
     for(let i=tool.param.length-1;i>=0;i--)
         tool.code.push(['pop',['reg',tool.param[i]],['value',0],['value',0]])
+    //恢复栈帧
+    tool.frame_pop(frame)
     tool.code.push(['param_load',['reg',id],['reg',0],['value',0]])
 }
 const I_NotExpr:asm_factory=(data:HNotExpr,tool)=>{

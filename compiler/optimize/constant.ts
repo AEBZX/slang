@@ -41,6 +41,13 @@ const C_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data,data.reg)
     $.pset(data.reg, data.data)
+    //数字常量同步到state,供后续二元运算/比较折叠
+    let pid=$.value(data.data)
+    if(typeof pid=='number'){
+        let v=tool.pool.get(pid)
+        if(typeof v=='number')
+            $.set(data.reg,['reg',v])
+    }
 }
 const C_OFFSET_SET:opt_visitor=(data:OFFSET_SET, tool, bid, index)=>{
     const $=tool.$
@@ -55,7 +62,10 @@ const C_PARAM_SET:opt_visitor=(data:PARAM_SET, tool, bid, index)=>{
 const C_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.result,data.right,data.left)
-    let res=_BINARY.get(data.id)($.value(data.left) as number,$.value(data.right) as number)
+    //操作数未知(参数/未初始化)不可折叠,否则 undefined 参与运算得到 NaN
+    let l=$.value(data.left),r=$.value(data.right)
+    if(l==null||r==null)return
+    let res=_BINARY.get(data.id)(l as number,r as number)
     let id=tool._id()
     $.set(data.result,['reg',res])
     tool.pool.set(id,res)
@@ -122,12 +132,8 @@ const C_OUT:opt_visitor=(data:OUT, tool, bid, index)=>{
 const C_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data,data.param)
-    let value=$.value(data.param)
-    if(value==null)return
-    let id=tool._id()
-    tool.pool.set(id,value)
-    tool.state.set($.value(data.data) as number,value)
-    tool.replace(bid,index,new LOAD(data.data,['reg',id]))
+    //param_load 从运行期参数表取值,值在编译期未知,不可折叠成常量
+    //data.param 是参数索引(['reg',i]),并非常量池id,误折叠会把参数值错算成索引
 }
 export default new Map<any,opt_visitor>([
     [MOV,C_MOV],

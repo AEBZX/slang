@@ -14,13 +14,13 @@ function hir_of(code: string): any[] {
     const files = [ast_parse(cst_parse(lexer(code)) as ast_data) as File]
     check(files)
     //HIR返回[id总数,扁平数组],取扁平数组
-    return hir(desugar(files))[1]
+    return hir(<File[]>desugar(files))[1]
 }
 
 function hir_count(code: string): [number, any[]] {
     const files = [ast_parse(cst_parse(lexer(code)) as ast_data) as File]
     check(files)
-    return hir(desugar(files))
+    return hir(<File[]>desugar(files))
 }
 
 describe('HIR 生成', () => {

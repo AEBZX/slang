@@ -36,10 +36,11 @@ export function build(block:IR[],slots:Map<any,slot>,tool:IRTool){
                 let ls=v(i,tool)
                 ls[0]=ls[0].filter(t=>t!=null)
                 ls[1]=ls[1].filter(t=>t!=null)
+                //def/use以槽为键,记录该槽在哪些指令index处被定义/使用
                 for(let j of ls[0])
-                    ud.def.has(index)?ud.def.get(index).push(j):ud.def.set(index,[j])
+                    ud.def.has(j)?ud.def.get(j).push(index):ud.def.set(j,[index])
                 for(let j of ls[1])
-                    ud.def.has(index)?ud.def.get(index).push(j):ud.def.set(index,[j])
+                    ud.use.has(j)?ud.use.get(j).push(index):ud.use.set(j,[index])
             }
         index++
     }
@@ -48,8 +49,20 @@ export function build(block:IR[],slots:Map<any,slot>,tool:IRTool){
 const S_MOV:slot=(data:MOV, tool)=>tool.$._s([data.left],[data.right])
 const S_LOAD:slot=(data:LOAD, tool)=>tool.$._s([data.reg],[data.data])
 const S_BINARY:slot=(data:BINARY,tool)=>tool.$._s([data.result],[data.left,data.right])
-const S_NOT_BIT_NOT:slot=(data:NOT|BIT_NOT,tool)=>tool.$._s([data.data],[data.data])
-const S_CMP:slot=(data:CMP,tool)=>tool.$._s([data.left],[data.left,data.right,data.oper])
+//NOT/BIT_NOT的data是reg,语义=读slots[data]再写,use须补记data槽
+const S_NOT_BIT_NOT:slot=(data:NOT|BIT_NOT,tool)=>{
+    let ls=tool.$._s([data.data],[])
+    let r=tool.$.rs(data.data)
+    if(r!=null)ls[1].push(r)
+    return ls
+}
+//CMP的left是reg:先读slots[left]再写,use须补记left槽(否则前驱定值被DCE误删)
+const S_CMP:slot=(data:CMP,tool)=>{
+    let ls=tool.$._s([data.left],[data.right,data.oper])
+    let r=tool.$.rs(data.left)
+    if(r!=null)ls[1].push(r)
+    return ls
+}
 const S_BZ:slot=(data:CZ|TZ|JZ,tool)=>tool.$._s([],[data.target,data.cond])
 const S_B:slot=(data:JMP|CALL|THREAD,tool)=>tool.$._s([],[data.target])
 const S_PUSH:slot=(data:PUSH,tool)=>tool.$._s([],[data.target])
@@ -84,13 +97,25 @@ export const slots=new Map<any,slot>([
     [PARAM_SET,S_PARAM_SET],
     [PARAM_LOAD,S_PARAM_LOAD]
 ])
+//收集所有块中被读取(use)的槽集合,供DCE跨块保护
+//单块ud看不到其他块的use,函数槽初始化等跨块定值会被误删
+export function global_use(tool:IRTool){
+    let g=new Set<number>()
+    for(let [,block] of tool.command){
+        for(let i of block)
+            for(let [k,v] of slots)
+                if(i instanceof k)
+                    for(let j of v(i,tool)[1])
+                        if(j!=null)g.add(j)
+    }
+    return g
+}
 const D_MOV:opt_visitor=(data:MOV, tool, bid, index)=>tool.$.dce(data.left,bid,index)
 const D_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>tool.$.dce(data.reg,bid,index)
 const D_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>tool.$.dce(data.result,bid,index)
 const D_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>tool.$.dce(data.data,bid,index)
 const D_NOT_BIT_NOT:opt_visitor=(data:NOT|BIT_NOT, tool, bid, index)=>tool.$.dce(data.data,bid,index)
 const D_CMP:opt_visitor=(data:CMP, tool, bid, index)=>tool.$.dce(data.left,bid,index)
-const D_POP:opt_visitor=(data:POP, tool, bid, index)=>tool.$.dce(data.target,bid,index)
 const D_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>tool.$.dce(data.target,bid,index)
 const D_OFFSET_ADDR:opt_visitor=(data:OFFSET_ADDR, tool, bid, index)=>tool.$.dce(data.target,bid,index)
 export const DCE=new Map<any,opt_visitor>([
@@ -102,6 +127,6 @@ export const DCE=new Map<any,opt_visitor>([
     [CMP,D_CMP],
     [PARAM_LOAD,D_PARAM_LOAD],
     [OFFSET_GET,D_OFFSET_GET],
-    [OFFSET_ADDR,D_OFFSET_ADDR],
-    [POP,D_POP]
+    [OFFSET_ADDR,D_OFFSET_ADDR]
+    //POP不参与DCE:帧恢复的pop必须保留,否则栈失衡(删除后对应push多压栈)
 ])

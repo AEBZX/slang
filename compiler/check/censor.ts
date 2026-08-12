@@ -200,7 +200,7 @@ const C_Throw:check_visitor=(ast:Throw,scope,call)=>{
         scope.thr(`throw type mismatch at line ${ast.line.join('\n')}`)
 }
 const CommandList=['mov','add','sub','mul','div','mod','and','or','xor','not','bit_not','cmp','jmp','call','thread',
-'offset_set','offset_get','offset_addr','ret','push','pop','in','out','gc','load']
+'offset_set','offset_get','offset_addr','ret','retn','cz','push','pop','in','out','gc','load']
 const C_VM:check_visitor=(ast:VM,scope,call)=>{
     let data=ast.data.split('.').filter(i=>i.startsWith('%'))
     for(let i of data)

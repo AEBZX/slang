@@ -1,55 +1,63 @@
 import {asm_args, asm_command, bin} from '../data'
 export const BinMap=new Map([
-    //占用4个单位
+    //按参数组合数连续分配:3参8单位,2参4单位,1参2单位,0参1单位,避免opcode重叠
     ['mov',0],
-    ['add',8],
-    ['sub',16],
-    ['mul',24],
-    ['div',32],
-    ['mod',40],
-    ['shr',48],
-    ['shl',56],
-    ['and',64],
-    ['or',72],
-    ['xor',80],
-    ['load',88],
-    ['cz',90],
-    ['jz',94],
-    ['tz',98],
-    ['in',102],
-    ['out',104],
-    ['offset_set',108],
-    ['offset_get',116],
-    ['offset_addr',163],
-    ['cmp',124],
-    ['push',132],
-    ['pop',140],
-    ['ret',142],
-    ['gc',143],
-    ['not',144],
-    ['bit_not',146],
-    //无条件跳
-    ['jmp',147],
-    ['call',149],
-    ['thread',151],
-    ['block_start',153],
-    ['block_end',154],
-    ['param_set',155],
-    ['param_load',159]
+    ['add',4],
+    ['sub',12],
+    ['mul',20],
+    ['div',28],
+    ['mod',36],
+    ['shr',44],
+    ['shl',52],
+    ['and',60],
+    ['or',68],
+    ['xor',76],
+    ['load',84],
+    ['cz',88],
+    ['jz',92],
+    ['tz',96],
+    //1参
+    ['call',100],
+    ['jmp',102],
+    ['thread',104],
+    ['not',106],
+    ['bit_not',108],
+    //3参
+    ['cmp',110],
+    //1参
+    ['push',118],
+    ['pop',120],
+    ['ret',122],
+    //121 空闲:0参区未占用的槽,retn=函数返回(弹到函数帧)
+    ['retn',121],
+    ['gc',123],
+    //3参
+    ['offset_set',124],
+    ['offset_get',132],
+    ['offset_addr',140],
+    //2参
+    ['in',148],
+    ['out',152],
+    ['block_start',156],
+    ['block_end',158],
+    ['param_set',159],
+    ['param_load',163]
 ])
-export const ParamOffset=new Map([
-    [['reg','reg'],0],
-    [['reg','value'],1],
-    [['value','reg'],2],
-    [['value','value'],3],
-    [['reg','reg','reg'],0],
-    [['reg','reg','value'],1],
-    [['reg','value','reg'],2],
-    [['reg','value','value'],3],
-    [['value','reg','reg'],4],
-    [['value','reg','value'],5],
-    [['value','value','reg'],6],
-    [['value','value','value'],7]
+export const ParamOffset=new Map<string,number>([
+    ['reg',0],
+    ['value',1],
+    ['regreg',0],
+    ['regvalue',1],
+    ['valuereg',2],
+    ['valuevalue',3],
+    ['regregreg',0],
+    ['regregvalue',1],
+    ['regvaluereg',2],
+    ['regvaluevalue',3],
+    ['valueregerg',4],
+    ['valueregvalue',5],
+    ['valuevaluereg',6],
+    ['valuevaluevalue',7]
 ])
 export const Null=0
 export class IR{
@@ -62,13 +70,13 @@ export class IR{
         return null
     }
     generate_two(one:asm_args,two:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get([one[0],two[0]])
+        return BinMap.get(this.id)+ParamOffset.get(one[0]+two[0])
     }
     generate_three(one:asm_args,two:asm_args,three:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get([one[0],two[0],three[0]])
+        return BinMap.get(this.id)+ParamOffset.get(one[0]+two[0]+three[0])
     }
     generate_one(data:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get([data[0]])
+        return BinMap.get(this.id)+ParamOffset.get(data[0])
     }
     generate_zero():number{
         return BinMap.get(this.id)
@@ -173,6 +181,16 @@ export class THREAD extends IR{
 export class RET extends IR{
     constructor() {
         super('ret')
+    }
+    generate(): bin {
+        return [super.generate_zero(),Null,Null,Null]
+    }
+}
+//函数返回:弹出所有块帧,直到函数帧(或栈空),再返回调用者;
+//与RET(弹一帧,break用)区分,解决if/while分支内return只弹块帧的缺陷
+export class RETN extends IR{
+    constructor() {
+        super('retn')
     }
     generate(): bin {
         return [super.generate_zero(),Null,Null,Null]
