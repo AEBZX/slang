@@ -20,6 +20,7 @@ export const BinMap=new Map([
     ['out',104],
     ['offset_set',108],
     ['offset_get',116],
+    ['offset_addr',163],
     ['cmp',124],
     ['push',132],
     ['pop',140],
@@ -204,6 +205,14 @@ export class OFFSET_SET extends IR{
 export class OFFSET_GET extends IR{
     constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
         super('offset_get')
+    }
+    generate(): bin {
+        return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]
+    }
+}
+export class OFFSET_ADDR extends IR{
+    constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
+        super('offset_addr')
     }
     generate(): bin {
         return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]

@@ -105,4 +105,33 @@ describe('IR 字节码生成', () => {
         expect((clsCmds as any[])?.some((c: any) => c[0] == 'offset_set')).toBe(true)
         expect((clsCmds as any[])?.some((c: any) => c[0] == 'ret')).toBe(true)
     })
+
+    it('变量赋值走取地址+解引用写,不生成 offset_addr', () => {
+        const blocks = body_blocks('public m:void(){var a:number=1;a=2;}\n')
+        const cmds = blocks[0][1]
+        // &a 用 reg 取地址(id 数字),mov value 解引用写
+        expect(cmds.some((c: any) => c[0] == 'mov' && c[1][0] == 'value')).toBe(true)
+        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(false)
+    })
+
+    it('索引左值赋值生成 offset_addr', () => {
+        const blocks = body_blocks('public m:void(){var a:number[]=[1,2];a[0]=5;}\n')
+        const cmds = blocks[0][1]
+        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(true)
+        // 左值赋值不产生读值 offset_get
+        expect(cmds.some((c: any) => c[0] == 'offset_get')).toBe(false)
+    })
+
+    it('索引右值读取仍生成 offset_get', () => {
+        const blocks = body_blocks('public m:void(){var a:number[]=[1];var x:number=a[0];}\n')
+        const cmds = blocks[0][1]
+        expect(cmds.some((c: any) => c[0] == 'offset_get')).toBe(true)
+        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(false)
+    })
+
+    it('成员左值赋值生成 offset_addr', () => {
+        const blocks = body_blocks('public A:class{public f:var:number;}\npublic m:void(x:A){x.f=1;}\n')
+        const cmds = blocks.flatMap(([, v]) => v as any[])
+        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(true)
+    })
 })

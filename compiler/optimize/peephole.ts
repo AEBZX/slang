@@ -10,7 +10,7 @@ import {
     LOAD,
     MOV,
     NOT,
-    number_radix, OFFSET_GET, OFFSET_SET,
+    number_radix, OFFSET_ADDR, OFFSET_GET, OFFSET_SET,
     opt_visitor,
     THREAD,
     TZ
@@ -178,4 +178,11 @@ const P_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     $.tset(data.target,bid,index,true,_data)
     $.tset(data.data,bid,index,false,_data)
     $.tset(data.offset,bid,index,false,_data)
+}
+//取地址不是值,不参与折叠,只记录依赖
+const P_OFFSET_ADDR:opt_visitor=(data:OFFSET_ADDR, tool, bid, index)=>{
+    const $=tool.$
+    $.tset(data.target,bid,index,true,data)
+    $.tset(data.data,bid,index,false,data)
+    $.tset(data.offset,bid,index,false,data)
 }

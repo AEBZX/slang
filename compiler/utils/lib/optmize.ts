@@ -1,4 +1,4 @@
-import {asm_args, asm_command, asm_pool} from '../data'
+import {asm_args, asm_command, asm_pool, number_radix} from '../data'
 import {
     BINARY,
     BIT_NOT,
@@ -10,7 +10,7 @@ import {
     JZ,
     LOAD,
     MOV,
-    NOT, OFFSET_GET,
+    NOT, OFFSET_ADDR, OFFSET_GET,
     OFFSET_SET,
     OUT,
     POP,
@@ -44,9 +44,16 @@ export const t:{[name:string]:(data:asm_command)=>IR}={
     'ret':(data:asm_command)=>new RET(),
     'gc':(data:asm_command)=>new GC(),
     'offset_set':(data:asm_command)=>new OFFSET_SET(data[1],data[2],data[3]),
-    'offset_get':(data:asm_command)=>new OFFSET_GET(data[1],data[2],data[3])
+    'offset_get':(data:asm_command)=>new OFFSET_GET(data[1],data[2],data[3]),
+    'offset_addr':(data:asm_command)=>new OFFSET_ADDR(data[1],data[2],data[3])
 }
 export type opt_visitor =(data:IR, tool:IRTool, bid:number, index:number)=>void
+export type ud_table={
+    def:Map<number,number[]>,
+    use:Map<number,number[]>,
+    barrier:number[]
+}
+export type slot=(data:IR,tool:IRTool)=>[number[],number[]]
 //准备工作
 export function to(data:Map<number,asm_command[]>){
     let ret=new Map<number,IR[]>()
@@ -63,6 +70,7 @@ export class IRTool{
     mem_state:Map<number,Map<number|string,number|string|null>>
     param_state:Map<number, number | string | null>
     last_touch:Map<number,[number,number,boolean,IR]>
+    ud:ud_table
     id:number
     private _replace:[number,number,IR][]
     $={
@@ -126,7 +134,58 @@ export class IRTool{
                 this.$.z(i)
         },
         t:(id:asm_args)=>this.last_touch.get(this.$.value(id) as number),
-        tset:(id:asm_args,bid:number,index:number,w:boolean,ir:IR)=>this.last_touch.set(this.$.value(id) as number,[bid,index,w,ir])
+        tset:(id:asm_args,bid:number,index:number,w:boolean,ir:IR)=>this.last_touch.set(this.$.value(id) as number,[bid,index,w,ir]),
+        rs:(id:asm_args)=>id[0]=='reg'?id[1]:this.$.value(id),
+        ws:(data:asm_args)=>data[0]=='reg'?null:this.$.value(data),
+        _s:(left:asm_args[],right:asm_args[]):[number[],number[]]=>[left.map(i=>this.$.rs(i) as number)
+            ,right.map(i=>this.$.ws(i) as number)],
+        //在[index,def]之内是否存在读data,如果无,mark data
+        dce:(data:asm_args,bid:number,index:number)=>{
+            let interval=this.ud.def.get(this.$.rs(data) as number)
+            let b=interval.filter(i=>i>index)[0]
+            if(b==null)b=this.command.get(bid).length
+            let c=false
+            this.ud.barrier.forEach(i=>{
+                if(index<=i&&i<b)
+                    c=true
+            })
+            if(c)return
+            for(let i of this.ud.use.get(this.$.rs(data) as number))
+                if(index<=i&&i<b)
+                    return
+            this._mark(bid,index)
+        },
+        cp1:(data:asm_args,bid:number,index:number)=>{
+            let _data=this.$.ws(data) as number
+            let w=this.ud.def.get(_data).filter(i=>i<index)
+            if(w==null||w.length==0)return null
+            let end=w[w.length-1]
+            //如果index~end有barrier,return null
+            for(let i of this.ud.barrier)
+                if(index<=i&&i<end)
+                    return null
+            let ir=this.command.get(bid)[end]
+            if(!(ir instanceof MOV||ir instanceof LOAD))
+                return null
+            if(ir instanceof LOAD&&typeof this.$.value(ir.data)!='number')
+                return null
+            data=ir instanceof MOV?ir.right:['reg',this.pool.get(this.$.value(ir.data) as number) as number]
+        },
+        cp2:(data:asm_args,bid:number,index:number,reg:asm_args)=>{
+            let _data=this.$.ws(data) as number
+            let w=this.ud.def.get(_data).filter(i=>i<index)
+            if(w==null||w.length==0)return
+            let end=w[w.length-1]
+            for(let i of this.ud.barrier)
+                if(index<=i&&i<end)
+                    return
+            let ir=this.command.get(bid)[end]
+            if(!(ir instanceof MOV||ir instanceof LOAD))
+                return
+            if(ir instanceof LOAD&&typeof this.$.value(ir.data)!='number')
+                return
+            this.replace(bid,index,ir instanceof LOAD?new LOAD(reg,ir.data):new MOV(reg,ir.right))
+        }
     }
     constructor(id:number,command:Map<number,IR[]>,pool:Map<number,number|string>) {
         this.id=id
@@ -168,6 +227,7 @@ export class IRTool{
         for(let [bid,idx] of groups)
             for(let i of idx.sort((a,b)=>b-a))
                 this.command.get(bid).splice(i,1)
+        this.ud=null
         this.mark=[]
         this.changed=false
         this._replace=[]

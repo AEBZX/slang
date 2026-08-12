@@ -188,7 +188,24 @@ const I_AddressExpr:asm_factory=(data:HAddressExpr,tool)=>{
     //变量id即存储槽,取地址=把变量id作为地址值赋给目标
     let id=tool.cache.pop()
     if(data.target instanceof HIdentifierExpr)
-        tool.code.push(['mov',['reg',id],['value',data.target.name],['value',0]])
+        tool.code.push(['mov',['reg',id],['reg',data.target.name],['value',0]])
+    //索引/成员取地址:offset_addr返回槽地址,后续mov value解引用写入
+    else if(data.target instanceof HIndexExpr){
+        let index_id=tool.id()
+        tool.cache.push(id)
+        tool.gen(data.target.target)
+        tool.cache.push(index_id)
+        tool.gen(data.target.index)
+        tool.code.push(['offset_addr',['reg',id],['value',id],['value',index_id]])
+    }
+    else if(data.target instanceof HMemberExpr){
+        let index_id=tool.id()
+        tool.cache.push(id)
+        tool.gen(data.target.target)
+        tool.cache.push(index_id)
+        tool.gen(data.target.member)
+        tool.code.push(['offset_addr',['reg',id],['value',id],['value',index_id]])
+    }
     else {
         tool.cache.push(id)
         tool.gen(data.target)

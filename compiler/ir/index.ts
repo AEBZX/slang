@@ -13,6 +13,7 @@
  * pop a:出栈
  * offset_set a b c:a[b]=c
  * offset_get a b c:a=b[c]
+ * offset_addr a b c:a=&b[c]
  * mov,push,pop,add等二元运算,not,cmp,offset_xxx等类似的都需要传入a的id(reg a)而不是a的值,如果是操作除外
  * in,out,gc:除了vm内嵌就不需要管
  * load a id:加载id对应的常量到a

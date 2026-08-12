@@ -7,7 +7,7 @@ import {
     IRTool, JMP, JZ,
     LOAD,
     MOV,
-    NOT, OFFSET_GET,
+    NOT, OFFSET_ADDR, OFFSET_GET,
     OFFSET_SET, OUT,
     PARAM_LOAD,
     PARAM_SET, PUSH, THREAD, TZ
@@ -105,6 +105,11 @@ const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     tool.pool.set(id,v)
     tool.state.set($.value(data.target) as number,v)
     tool.replace(bid,index,new LOAD(data.target,['reg',id]))
+}
+//取地址不是常量(依赖运行期容器位置),只记录依赖不折叠
+const C_OFFSET_ADDR:opt_visitor=(data:OFFSET_ADDR, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.data,data.offset,data.target)
 }
 const C_IN:opt_visitor=(data:IN, tool, bid, index)=>{
     const $=tool.$
