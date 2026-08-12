@@ -129,3 +129,21 @@ const C_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>{
     tool.state.set($.value(data.data) as number,value)
     tool.replace(bid,index,new LOAD(data.data,['reg',id]))
 }
+export default new Map<any,opt_visitor>([
+    [MOV,C_MOV],
+    [LOAD,C_LOAD],
+    [OFFSET_SET,C_OFFSET_SET],
+    [PARAM_SET,C_PARAM_SET],
+    [BINARY,C_BINARY],
+    [NOT,C_NOT],
+    [BIT_NOT,C_BIT_NOT],
+    [CMP,C_CMP],
+    [JZ,C_JZ_CZ_TZ],
+    [CZ,C_JZ_CZ_TZ],
+    [TZ,C_JZ_CZ_TZ],
+    [OFFSET_GET,C_OFFSET_GET],
+    [OFFSET_ADDR,C_OFFSET_ADDR],
+    [IN,C_IN],
+    [OUT,C_OUT],
+    [PARAM_LOAD,C_PARAM_LOAD]
+])

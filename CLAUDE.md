@@ -42,6 +42,12 @@ slang->
                     optimize.ts
                  index.ts:库入口
              optimize->优化器
+                     constant.ts:常量折叠,常量传播
+                     cp.ts:赋值传播
+                     peephole.ts:窥孔优化
+                     dce.ts:DCE优化
+                     cfg.ts:块优化
+                     index.ts:优化以及bin生成
              check->语法检查
                   censor.ts:检查
                   symbol.ts:符号表构建
@@ -105,3 +111,6 @@ slang->
 - 库引用规范:对于默认导出,import $ from 'xxx'
 - import统一使用单引号
 - 不要写分号
+## 其他
+- 暂时没有作者能实现o3优化的风险
+- 暂时没有实现CLI的云端包管理的风险

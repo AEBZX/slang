@@ -53,6 +53,7 @@ export type ud_table={
     use:Map<number,number[]>,
     barrier:number[]
 }
+export type cfg={[block:number]:{last:[number,boolean,boolean,number][],next:[number,boolean,boolean,number][],call:number}}
 export type slot=(data:IR,tool:IRTool)=>[number[],number[]]
 //准备工作
 export function to(data:Map<number,asm_command[]>){
@@ -71,6 +72,7 @@ export class IRTool{
     param_state:Map<number, number | string | null>
     last_touch:Map<number,[number,number,boolean,IR]>
     ud:ud_table
+    cfg:cfg
     id:number
     private _replace:[number,number,IR][]
     $={
@@ -198,6 +200,7 @@ export class IRTool{
         this.param_state=new Map<number, number | string | null>()
         this.mem_state=new Map()
         this.last_touch=new Map()
+        this._kill=[]
     }
     _id(){
         return this.id++
@@ -214,6 +217,11 @@ export class IRTool{
         this.changed=true
         this.mark.push([bid,index])
     }
+    private _kill:number[]
+    kill(bid:number){
+        this.changed=true
+        this._kill.push(bid)
+    }
     //集体删除和替换
     sweep(){
         this.changed=false
@@ -227,6 +235,8 @@ export class IRTool{
         for(let [bid,idx] of groups)
             for(let i of idx.sort((a,b)=>b-a))
                 this.command.get(bid).splice(i,1)
+        for(let i of this._kill)
+            this.command.delete(i)
         this.ud=null
         this.mark=[]
         this.changed=false
@@ -235,5 +245,6 @@ export class IRTool{
         this.param_state=new Map<number, number | string | null>()
         this.mem_state=new Map()
         this.last_touch=new Map()
+        this._kill=[]
     }
 }

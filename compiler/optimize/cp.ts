@@ -61,3 +61,22 @@ export const C_PARAM_SET:opt_visitor=(data:PARAM_SET,tool,bid,index)=>{
 export const C_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD,tool,bid,index)=>{
     tool.$.cp1(data.param,bid,index)
 }
+export default new Map<any,opt_visitor>([
+    [MOV, C_MOV],
+    [BINARY, C_BINARY],
+    [CMP, C_CMP],
+    [JZ, C_BZ],
+    [CZ, C_BZ],
+    [TZ, C_BZ],
+    [JMP, C_B],
+    [CALL, C_B],
+    [THREAD, C_B],
+    [PUSH, C_PUSH],
+    [OFFSET_SET, C_OFFSET_SET],
+    [OFFSET_GET, C_OFFSET_GET],
+    [OFFSET_ADDR, C_OFFSET_ADDR],
+    [IN, C_IN],
+    [OUT, C_OUT],
+    [PARAM_SET, C_PARAM_SET],
+    [PARAM_LOAD, C_PARAM_LOAD],
+])

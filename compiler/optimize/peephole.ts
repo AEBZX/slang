@@ -186,3 +186,17 @@ const P_OFFSET_ADDR:opt_visitor=(data:OFFSET_ADDR, tool, bid, index)=>{
     $.tset(data.data,bid,index,false,data)
     $.tset(data.offset,bid,index,false,data)
 }
+export default new Map<any,opt_visitor>([
+    [MOV,P_MOV],
+    [LOAD,P_LOAD],
+    [OFFSET_SET,P_OFFSET_SET],
+    [BINARY,P_BINARY],
+    [NOT,P_NOT],
+    [BIT_NOT,P_BIT_NOT],
+    [CMP,P_CMP],
+    [JZ,P_JZ],
+    [CZ,P_CZ],
+    [TZ,P_TZ],
+    [OFFSET_GET,P_OFFSET_GET],
+    [OFFSET_ADDR,P_OFFSET_ADDR],
+])
