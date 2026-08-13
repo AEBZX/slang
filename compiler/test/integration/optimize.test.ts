@@ -23,7 +23,7 @@ function opt_bin(src: string, level = 0): any[] {
     const files = [ast_parse(cst_parse(lexer(src)) as ast_data) as File]
     check(files)
     const [count, h] = hir(<File[]>desugar(files))
-    return optimize(ir(count, h), level)
+    return optimize(ir(count, h), level).bin
 }
 const count_op = (bin: any[], name: string) => bin.filter((c: any) => in_range(c, RANGE(name))).length
 //按block_start/block_end切块,返回块id→指令列表

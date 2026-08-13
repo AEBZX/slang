@@ -82,6 +82,7 @@ slang->
                       identifier.ts:标识解析
                       index.ts:入口
                    index.ts:入口
+             index.ts:引用库入口
              test->测试
                  unit:单元测试,文件命名要求:功能所属功能集-功能.test.ts,如desugar-command.test.ts
                  integration:集成测试,文件命名要求:功能所属功能集.test.ts,如parser-ast.test.ts,parser.test.ts

@@ -52,5 +52,5 @@ export default function (data:{pool:Map<number|string,number>,code:Map<number,as
             ret.push(command.generate())
         ret.push(new BLOCK_END().generate())
     }
-    return ret
+    return {bin:ret,pool:tool.pool}
 }
