@@ -18,12 +18,10 @@ const o1=(tool:IRTool)=>{
         each(CONSTANT,bid,data)
         each(PEEPHOLE,bid,data)
         tool.sweep()
-        //赋值传播+死代码消除,依赖ud表,须先重建
         d_build(data,slots,tool)
         each(CP,bid,data)
         tool.sweep()
         d_build(data,slots,tool)
-        //DCE前收集全局use,保护跨块定值(如根块的函数槽初始化)
         tool.guse=global_use(tool)
         each(DCE,bid,data)
         tool.sweep()
@@ -40,7 +38,7 @@ export default function (data:{pool:Map<number|string,number>,code:Map<number,as
     for(let [k,v] of data.pool)pool.set(v,k)
     let code=to(data.code)
     let tool=new IRTool(data.id,code,pool)
-    //o1可多轮收敛;o2的kill不可逆,多轮会误删被调用块(第二轮调用者已删,call计数归零),只kill一次
+    //o1可多轮收敛;kill为从块0出发的可达剪枝(块0不可删),可达集一次稳定,重复执行无副作用
     for(let i=0;i<round;i++)o1(tool)
     if(level>=1){
         build(tool.command,tool)

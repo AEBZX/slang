@@ -38,9 +38,26 @@ export function build(code:Map<number,IR[]>,tool:IRTool){
     tool.cfg=CFG
 }
 export function kill(tool:IRTool){
+    //可达剪枝:块0不可删,从块0沿调用/跳转边BFS,保留可达块,删除其余
+    //替代原call计数方案——计数依赖调用者存活,删调用者后计数失真、不可逆;可达集重复执行稳定
+    let alive=new Set<number>()
+    let queue=[0]
+    alive.add(0)
+    while(queue.length){
+        let k=queue.pop() as number
+        let cfg=tool.cfg[k]
+        if(!cfg)continue
+        for(let edge of cfg.next){
+            let t=edge[0]
+            if(t==null)continue
+            if(!alive.has(t)){
+                alive.add(t)
+                queue.push(t)
+            }
+        }
+    }
     for(let [k] of tool.command)
-        //保留入口根块(0),其余未被调用/跳转的块删除
-        if(k!=0&&tool.cfg[k].call==0)tool.command.delete(k)
+        if(!alive.has(k))tool.command.delete(k)
 }
 export function merge(tool:IRTool){
     for(let [k] of tool.command) {

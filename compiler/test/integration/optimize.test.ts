@@ -155,14 +155,22 @@ describe('optimize o2 块优化', () => {
     })
 
     it('被调用函数块保留(call 目标跨块解析)', () => {
-        const bin = opt_bin('public add:number(a:number,b:number){return a+b;}\npublic m:number(){return add(1,2);}\n', 1)
+        const bin = opt_bin('public add:number(a:number,b:number){return a+b;}\npublic static main:number(){return add(1,2);}\n', 1)
         const bs = blocks(bin)
-        //根块(含函数槽初始化) + add函数块;m无调用被删
+        //入口根块(main,含函数槽初始化) + add函数块;main的call跨块解析使add可达保留
         expect(bs.has(0)).toBe(true)
         expect(bs.size).toBe(2)
         //add函数体保留(含param_load)
         const add = [...bs.entries()].filter(([k]) => k != 0)[0]?.[1]
         expect(add?.some((c: any) => in_range(c, RANGE('param_load')))).toBe(true)
+    })
+
+    it('无入口调用时不可达函数全删(可达剪枝)', () => {
+        const bin = opt_bin('public add:number(a:number,b:number){return a+b;}\npublic m:number(){return add(1,2);}\n', 1)
+        const bs = blocks(bin)
+        //根块不调用任何函数,m/add均不可达,全部删除
+        expect(bs.has(0)).toBe(true)
+        expect(bs.size).toBe(1)
     })
 
     it('函数槽初始化 load 跨块保留(根块非空)', () => {
