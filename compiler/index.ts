@@ -5,29 +5,41 @@ import desugar from './desugar'
 import hir from './hir'
 import ir from './ir'
 import optimize from './optimize'
-export default function (code:string[],optimize_level:number):number[]{
-    let file:File[]=code.map(c=>parser(lexer(c)) as File)
+import * as process from 'node:process'
+export default function (code:string[],optimize_level:number,output:boolean=false,file_name:string[]=[]){
+    let index=0
+    let global_start=performance.now()
+    if(output)console.log('compiler:parser')
+    let parser_start=performance.now()
+    let file:File[]=code.map(c=>{
+        let file_start=performance.now()
+        let ret=parser(lexer(c)) as File
+        file_start = performance.now()-file_start
+        if(output)console.log(`   parser:${file_name[index]} ${performance.now() - file_start}ms`)
+        return ret
+    })
+    parser_start=performance.now()-parser_start
+    if(output)console.log(`parser OK:${parser_start}ms`)
+    if(output)console.log('compiler:check')
+    let check_start=performance.now()
     let scope=check(file)
+    check_start=performance.now()-check_start
+    if(output)console.log(`check OK:${check_start}ms,${scope.error.length} errors:`)
     if(scope.error.length!=0){
         console.log(scope.error.join('\n'))
-        throw new Error()
+        process.exit(0)
     }
+    if(output)console.log('compiler:desugar and hir')
+    let desugar_start=performance.now()
     let _hir=hir(desugar(file) as File[])
+    desugar_start=performance.now()-desugar_start
+    if(output)console.log(`desugar and hir OK:${desugar_start}ms`)
+    if(output)console.log('compiler:ir')
+    let ir_start=performance.now()
     let {bin,pool}=optimize(ir(_hir[0],_hir[1]),optimize_level)
-    let bytes:number[]=[]
-    bytes.push(pool.size)
-    for(let [id,v] of pool){
-        bytes.push(id)
-        if(typeof v=='number'){
-            bytes.push(0,v)
-        }else{
-            bytes.push(1,v.length)
-            for(let i=0;i<v.length;i++)bytes.push(v.charCodeAt(i))
-        }
-    }
-    //命令段(操作数为任意int,槽号/池id全局递增,可能超byte)
-    for(let c of bin)
-        if(c!=null)for(let n of c)
-            bytes.push(n)
-    return bytes
+    ir_start=performance.now()-ir_start
+    if(output)console.log(`ir OK:${ir_start}ms`)
+    global_start=performance.now()-global_start
+    if(output)console.log(`compiler OK:${global_start}ms`)
+    return {BIN:bin,POOL:pool}
 }

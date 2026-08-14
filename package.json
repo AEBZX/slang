@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "commander": "^15.0.0",
+    "inquirer": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
+  }
+}

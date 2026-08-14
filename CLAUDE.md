@@ -54,10 +54,10 @@ slang->
                   type.ts:类型标注
                   index.ts:入口
              cli->脚手架入口
-                compiler.ts:编译器命令入口
-                config.ts:配置命令入口
-                download.ts:拉取/下载类命令入口
-                index.ts:入口
+                command.ts:命令入口
+                config.ts:配置类
+                download.ts:拉取/下载类功能支持
+                entry.ts:入口
              desugar->语法糖转换
                   command.ts:命令语法糖转换
                   expr.ts:表达式语法糖转换
