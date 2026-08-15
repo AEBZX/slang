@@ -5,6 +5,7 @@ import {
     CALL,
     CMP,
     CZ,
+    DELETE,
     GC,
     IN,
     IR,
@@ -35,9 +36,10 @@ export const t:{[name:string]:(data:asm_command)=>IR}={
     'or':(data:asm_command)=>new BINARY('or',data[1],data[2],data[3]),
     'xor':(data:asm_command)=>new BINARY('xor',data[1],data[2],data[3]),
     'load':(data:asm_command)=>new LOAD(data[1],data[2]),
-    //call=函数调用(压函数帧),cz=块调用(if/while,压块帧);两者帧类型不同,return(RE TN)弹到函数帧
-    'call':(data:asm_command)=>new CALL(data[1]),
-    'cz':(data:asm_command)=>new CZ(data[1],data[2]),
+    //call=函数调用(压函数帧),cz=块调用(if/while,压块帧);两者帧类型不同,return(RETN)弹到函数帧
+    //is_func_call 标识:call 固定 1,cz 固定 0
+    'call':(data:asm_command)=>new CALL(data[1],data[2]),
+    'cz':(data:asm_command)=>new CZ(data[1],data[2],data[3]),
     'thread':(data:asm_command)=>new TZ(data[1],data[2]),
     'jmp':(data:asm_command)=>new JZ(data[1],data[2]),
     'in':(data:asm_command)=>new IN(data[1],data[2]),
@@ -54,7 +56,8 @@ export const t:{[name:string]:(data:asm_command)=>IR}={
     'offset_get':(data:asm_command)=>new OFFSET_GET(data[1],data[2],data[3]),
     'offset_addr':(data:asm_command)=>new OFFSET_ADDR(data[1],data[2],data[3]),
     'param_set':(data:asm_command)=>new PARAM_SET(data[1],data[2]),
-    'param_load':(data:asm_command)=>new PARAM_LOAD(data[1],data[2])
+    'param_load':(data:asm_command)=>new PARAM_LOAD(data[1],data[2]),
+    'delete':(data:asm_command)=>new DELETE(data[1])
 }
 export type opt_visitor =(data:IR, tool:IRTool, bid:number, index:number)=>void
 export type ud_table={
@@ -83,6 +86,8 @@ export class IRTool{
     ud:ud_table
     cfg:cfg
     guse:Set<number>
+    //已插 delete 的变量槽(kill.ts 去重,跨优化轮次保留)
+    deleted:Set<number>
     id:number
     private _replace:[number,number,IR][]
     $={
@@ -233,6 +238,7 @@ export class IRTool{
         this.mem_state=new Map()
         this.last_touch=new Map()
         this.guse=new Set()
+        this.deleted=new Set()
         this._kill=[]
     }
     _id(){

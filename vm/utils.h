@@ -1,20 +1,134 @@
 #ifndef SLANG_UTILS_H
 #define SLANG_UTILS_H
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
 #include <memory>
 #include <ostream>
 #include <thread>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 #ifdef _WIN32
-    #define PLATFORM "Windows"
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <windows.h>
+    #include <psapi.h>
+    #ifdef _MSC_VER
+        #pragma comment(lib, "ws2_32.lib")   // MSVC 自动链接,CMake 里再保险一次
+        #pragma comment(lib, "psapi.lib")
+    #endif
 #elif __APPLE__
-    #define PLATFORM "MacOS"
-#elif __linux__
-    #define PLATFORM "Linux"
+    #include <mach/mach.h>
+    #include <netdb.h>
+    #include <sys/socket.h>
+    #include <unistd.h>
+    using SOCKET = int;
+#define INVALID_SOCKET (-1)
+#define closesocket ::close
+#else
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using SOCKET = int;
+#define INVALID_SOCKET (-1)
+#define closesocket ::close
 #endif
-//通用
+class NetRuntime
+{
+private:
+    std::unordered_map<int, SOCKET> conns;
+    int nextHandle = 0;
+    //fuck windows,fuck microsoft,傻逼初始化
+    static void ensureInit()
+    {
+#ifdef _WIN32
+        static struct Guard {
+            Guard() { WSADATA wsa; WSAStartup(MAKEWORD(2, 2), &wsa); }
+            ~Guard() { WSACleanup(); }
+        } guard;
+#endif
+    }
+
+    static bool sendBytes(const SOCKET sock, const char* data, const size_t len)
+    {
+        ensureInit();
+        size_t sent = 0;
+        while (sent < len)
+        {
+            auto n = ::send(sock, data + sent,
+                            static_cast<int>(len - sent), 0);
+            if (n <= 0) return false;
+            sent += n;
+        }
+        return true;
+    }
+
+    static bool recvBytes(const SOCKET sock, char* out, const size_t n)
+    {
+        ensureInit();
+        size_t got = 0;
+        while (got < n)                       // 关键:凑满n字节才算成功
+        {
+            auto r = ::recv(sock, out + got,
+                            static_cast<int>(n - got), 0);
+            if (r <= 0) return false;         // 0=对端关闭 <0=出错
+            got += r;
+        }
+        return true;
+    }
+public:
+    ~NetRuntime()
+    {
+        //析构时关闭仍持有的连接,避免 socket 句柄泄漏
+        for (const auto& [handle, sock] : conns)
+            closesocket(sock);
+        conns.clear();
+    }
+    bool send(const int handle, const std::string& data)
+    {
+        const auto it = conns.find(handle);
+        return it != conns.end() && sendBytes(it->second, data.data(), data.size());
+    }
+    bool send(const int handle, const std::vector<char>& data)
+    {
+        const auto it = conns.find(handle);
+        return it != conns.end() && sendBytes(it->second, data.data(), data.size());
+    }
+    bool send(const int handle, const void* data, const size_t size)
+    {
+        const auto it = conns.find(handle);
+        return it != conns.end() &&
+               sendBytes(it->second, static_cast<const char*>(data), size);
+    }
+    bool recv(const int handle, const size_t n, std::string& out)
+    {
+        const auto it = conns.find(handle);
+        if (it == conns.end() || n == 0) return false;
+        out.resize(n);
+        return recvBytes(it->second, out.data(), n);
+    }
+    bool recv(const int handle, const size_t n, std::vector<char>& out)
+    {
+        const auto it = conns.find(handle);
+        if (it == conns.end() || n == 0) return false;
+        out.resize(n);
+        return recvBytes(it->second, out.data(), n);
+    }
+    void close(const int handle)
+    {
+        if (const auto it = conns.find(handle); it != conns.end())
+        {
+            closesocket(it->second);
+            conns.erase(it);
+        }
+    }
+};
 class Runnable {
 public:
     virtual ~Runnable() = default;
@@ -74,49 +188,147 @@ public:
         return std::this_thread::get_id();
     }
 };
-std::string readFile(std::string local)
+namespace fs = std::filesystem;
+inline std::string readFile(const std::string& local)
 {
-    return "";
+    std::ifstream in(local, std::ios::binary);
+    if (!in) return "";
+    std::string content((std::istreambuf_iterator<char>(in)),
+                         std::istreambuf_iterator<char>());
+    return content;
 }
-bool exists(std::string local)
+inline std::vector<char> readBinary(const std::string& local)
 {
-    return false;
+    std::ifstream in(local, std::ios::binary | std::ios::ate);
+    if (!in) return {};
+    const auto size = in.tellg();
+    if (size <= 0) return {};
+    in.seekg(0);
+    std::vector<char> buf(static_cast<size_t>(size));
+    in.read(buf.data(), size);
+    if (in.gcount() != size) return {};
+    return buf;
 }
-bool isFile(std::string local)
+inline bool exists(const std::string& local)
 {
-    return false;
+    std::error_code ec;
+    return fs::exists(local, ec);
 }
-bool isFolder(std::string local)
+inline bool isFile(const std::string& local)
 {
-    return false;
+    std::error_code ec;
+    return fs::is_regular_file(local, ec);
 }
-std::string* children(std::string local)
+inline bool isFolder(const std::string& local)
 {
-    return nullptr;
+    std::error_code ec;
+    return fs::is_directory(local, ec);
 }
-char* readFile(std::string local,...)
+inline std::vector<std::string> children(const std::string& local)
 {
+    std::vector<std::string> result;
+    for (std::error_code ec; const auto& entry : fs::directory_iterator(local, ec))
+        result.push_back(entry.path().filename().string());
+    return result;
 }
-void writeFile(std::string local,std::string data)
+inline bool writeFile(const std::string& local, const std::string& data)
 {
+    std::ofstream out(local, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out.write(data.data(), static_cast<std::streamsize>(data.size()));
+    return static_cast<bool>(out);
 }
-void writeFile(std::string local,char* data)
+inline bool writeFile(const std::string& local, const char* data, const size_t size)
 {
+    std::ofstream out(local, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+    out.write(data, static_cast<std::streamsize>(size));
+    return static_cast<bool>(out);
 }
-bool createDictionary(std::string local)
+inline bool createDictionary(const std::string& local)
 {
-    return false;
+    std::error_code ec;
+    return fs::create_directories(local, ec);
 }
-bool createFile(std::string local)
+inline bool createFile(const std::string& local)
 {
-    return false;
+    std::ofstream out(local, std::ios::binary);
+    return out.is_open();
 }
-void console(std::string data)
+inline void console(const std::string& data)
 {
     std::cout <<data<<std::flush;
 }
-void read(std::string* data)
+inline void read(std::string* data)
 {
     std::getline(std::cin,*data);
+}
+inline uint64_t CPUNumber()
+{
+    return std::thread::hardware_concurrency();
+}
+inline uint64_t MemoryNumber()
+{
+#ifdef _WIN32
+    MEMORYSTATUSEX ms{};
+    ms.dwLength = sizeof(ms);
+    if (GlobalMemoryStatusEx(&ms)) return ms.ullTotalPhys;
+    return 0;
+#else
+    const auto pages = sysconf(_SC_PHYS_PAGES);
+    const auto pageSize = sysconf(_SC_PAGESIZE);
+    if (pages < 0 || pageSize < 0) return 0;
+    return static_cast<uint64_t>(pages) * static_cast<uint64_t>(pageSize);
+#endif
+}
+inline uint64_t DiskNumber()
+{
+#ifdef _WIN32
+    uint64_t total = 0;
+    const DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; ++i)
+    {
+        if (!(mask & (1u << i))) continue;
+        wchar_t root[] = L"A:\\";
+        root[0] = static_cast<wchar_t>(L'A' + i);
+        ULARGE_INTEGER bytes{};
+        if (GetDiskFreeSpaceExW(root, nullptr, &bytes, nullptr))
+            total += bytes.QuadPart;
+    }
+    return total;
+#else
+    std::error_code ec;
+    const auto info = fs::space("/", ec);
+    return ec ? 0 : info.capacity;
+#endif
+}
+//vm占的内存
+inline uint64_t Memory()
+{
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+        return pmc.WorkingSetSize;
+    return 0;
+#elif __APPLE__
+    task_vm_info_data_t info{};
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO,
+                  reinterpret_cast<task_info_t>(&info), &count) == KERN_SUCCESS)
+        return info.phys_footprint;
+    return 0;
+#elif __linux__
+    std::ifstream in("/proc/self/statm");
+    uint64_t pages = 0;
+    if (in >> pages)
+        return pages * static_cast<uint64_t>(sysconf(_SC_PAGESIZE));
+    return 0;
+#else
+    return 0;
+#endif
+}
+inline void exec(const std::string& command)
+{
+    std::system(command.c_str());
 }
 #endif

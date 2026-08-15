@@ -41,7 +41,9 @@ export const BinMap=new Map([
     ['block_start',156],
     ['block_end',158],
     ['param_set',159],
-    ['param_load',163]
+    ['param_load',163],
+    //1参
+    ['delete',167]
 ])
 export const ParamOffset=new Map<string,number>([
     ['reg',0],
@@ -139,11 +141,12 @@ export class JZ extends IR{
     }
 }
 export class CZ extends IR{
-    constructor(public target:asm_args,public cond:asm_args) {
+    //is_func_call:0=块调用(if/while,压块帧),1=函数调用;retn 靠它弹到函数帧
+    constructor(public target:asm_args,public cond:asm_args,public is_func_call:asm_args) {
         super('cz')
     }
     generate(): bin {
-        return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],Null]
+        return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],this.is_func_call[1]]
     }
 }
 export class TZ extends IR{
@@ -163,11 +166,12 @@ export class JMP extends IR{
     }
 }
 export class CALL extends IR{
-    constructor(public target:asm_args) {
+    //is_func_call:1=函数调用(压函数帧),0=块调用;retn 靠它弹到函数帧
+    constructor(public target:asm_args,public is_func_call:asm_args) {
         super('call')
     }
     generate(): bin {
-        return [super.generate_one(this.target),this.target[1],Null,Null]
+        return [super.generate_one(this.target),this.target[1],this.is_func_call[1],Null]
     }
 }
 export class THREAD extends IR{
@@ -258,6 +262,15 @@ export class GC extends IR{
     }
     generate(): bin {
         return [super.generate_zero(),Null,Null,Null]
+    }
+}
+//delete:释放块内不再逃逸的变量槽(O2 kill.ts 生成,供 VM 回收)
+export class DELETE extends IR{
+    constructor(public data:asm_args) {
+        super('delete')
+    }
+    generate(): bin {
+        return [super.generate_one(this.data),this.data[1],Null,Null]
     }
 }
 export class BLOCK_START extends IR{

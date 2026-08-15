@@ -1,12 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(slang LANGUAGES CXX)
-# 构建产物统一放独立目录,禁止源码内构建(cmake . 会污染源码树)
-# 用法: cmake -B build [-G "生成器"] && cmake --build build
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "禁止在源码目录内构建!请使用: cmake -B build")
 endif()
-
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -24,23 +22,21 @@ if(NOT Catch2_FOUND)
 endif()
 
 enable_testing()
-
-# ===== VM 主程序 =====
-# 目标名 vm → 产物 vm.exe(与 compiler CLI 配置里的 vm:'vm.exe' 对齐)
-# 后续 VM 源码加进此目标,或收进 vm_core 库再链接
 add_executable(vm main.cpp
-        pool/pool.h
         utils.h
         model.h
 )
-
-# ===== VM 测试可执行文件 =====
-# 后续写 VM 代码时:在此加 add_library(vm_core ...) 并把源文件收进 core 库,
-# 测试文件里 include 对应头文件、link vm_core 即可
+if(WIN32)
+    target_link_libraries(vm PRIVATE ws2_32 psapi)
+endif()
 add_executable(vm_test
-    test/unit/smoke.test.cpp
+        test/unit/utils.test.cpp
 )
+target_include_directories(vm_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vm_test PRIVATE Catch2::Catch2WithMain)
+if(WIN32)
+    target_link_libraries(vm_test PRIVATE ws2_32 psapi)
+endif()
 
 # ctest 自动枚举每个 TEST_CASE(类似 vitest 的每个 it)
 include(Catch)

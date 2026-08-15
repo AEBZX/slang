@@ -47,6 +47,7 @@ slang->
                      peephole.ts:窥孔优化
                      dce.ts:DCE优化
                      cfg.ts:块优化
+                     kill.ts:死变量消除
                      index.ts:优化以及bin生成
              check->语法检查
                   censor.ts:检查
@@ -93,9 +94,6 @@ slang->
          test->同compiler
          model.h:模型
          utils.h:标准跨平台操作库
-         pool->内存以及gc管理
-             gc.cpp:gc管理
-             memory.cpp:内存管理
          runtime->虚拟机运行时
                 runtime.h:虚拟机运行时定义
                 command.cpp:命令分发
@@ -113,4 +111,3 @@ slang->
 - 不要写分号
 ## 其他
 - 暂时没有作者能实现o3优化的风险
-- 暂时没有实现CLI的云端包管理的风险

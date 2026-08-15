@@ -104,9 +104,10 @@ const I_IfStatement:asm_factory=(data:HIfStatement,tool)=>{
     tool.code.push(['cmp',['reg',cond],['reg',1],['reg',tool.CmpDict.get('==')]])
     tool.code.push(['mov',['reg',_cond],['value',cond],['value',0]])
     tool.code.push(['cmp',['reg',_cond],['reg',0],['reg',tool.CmpDict.get('==')]])
-    //cz=块调用(压块帧),区别于call(函数帧);return(RE TN)弹到函数帧,不被cz帧截断
-    tool.code.push(['cz',['reg',tb],['value',cond],['value',0]])
-    tool.code.push(['cz',['reg',fb],['value',_cond],['value',0]])
+    //cz=块调用(压块帧),区别于call(函数帧);return(RETN)弹到函数帧,不被cz帧截断
+    //flag 0=块调用
+    tool.code.push(['cz',['reg',tb],['value',cond],['reg',0]])
+    tool.code.push(['cz',['reg',fb],['value',_cond],['reg',0]])
     tool.push(tb)
     tool.gen(data.commands)
     tool.pop()
@@ -117,7 +118,7 @@ const I_IfStatement:asm_factory=(data:HIfStatement,tool)=>{
 const I_WhileStatement:asm_factory=(data:HWhileStatement,tool)=>{
     let id=tool.id()
     //cz=块调用(压块帧),条件恒真即无条件进入条件块;不用call以免retn误当函数帧
-    tool.code.push(['cz',['reg',id],['reg',1],['value',0]])
+    tool.code.push(['cz',['reg',id],['reg',1],['reg',0]])
     tool.push(id)
     tool.cache.push(id)
     //循环体末尾追加跳回条件块,实现多次循环(原循环体执行后直接退出,仅循环一次)

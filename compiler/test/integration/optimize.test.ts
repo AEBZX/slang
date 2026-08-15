@@ -124,6 +124,19 @@ describe('optimize o2 块优化', () => {
         expect(bs.size).toBe(1)
     })
 
+    it('o2 逃逸分析:块内局部变量在 retn 前插 delete', () => {
+        const bin = opt_bin('public static main:number(){var x:number=5;return x;}\n', 1)
+        const D = BinMap.get('delete')!
+        const dels = bin.filter((c: any) => c && c[0] == D)
+        expect(dels.length).toBeGreaterThan(0)
+        //delete 必须在 retn(121) 之前,不能出现在块外
+        const last = bin.filter((c: any) => c != null)
+        const retn = last.findIndex(c => c[0] == 121)
+        expect(retn).toBeGreaterThan(-1)
+        for (const d of dels)
+            expect(bin.indexOf(d)).toBeLessThan(retn)
+    })
+
     it('static main 入口块保留', () => {
         const bin = opt_bin('public static main:void(){var x:number=1+2;}\n', 1)
         const bs = blocks(bin)

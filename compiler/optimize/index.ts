@@ -1,5 +1,6 @@
 import {DCE,slots,build as d_build,global_use} from './dce'
-import {build,kill,merge} from './cfg'
+import {build,kill as cfg_kill} from './cfg'
+import {kill} from './kill'
 import CP from './cp'
 import CONSTANT from './constant'
 import PEEPHOLE from './peephole'
@@ -30,6 +31,7 @@ const o1=(tool:IRTool)=>{
 const o2=(tool:IRTool)=>{
     o1(tool)
     build(tool.command,tool)
+    cfg_kill(tool)
     kill(tool)
 }
 const optimize=[o1,o2]
@@ -38,10 +40,11 @@ export default function (data:{pool:Map<number|string,number>,code:Map<number,as
     for(let [k,v] of data.pool)pool.set(v,k)
     let code=to(data.code)
     let tool=new IRTool(data.id,code,pool)
-    //o1可多轮收敛;kill为从块0出发的可达剪枝(块0不可删),可达集一次稳定,重复执行无副作用
+    //o1多轮收敛;o2再循环:cfg可达剪枝(块0不可删)+变量delete(kill.ts经deleted去重,重复执行无副作用)
     for(let i=0;i<round;i++)o1(tool)
-    if(level>=1){
+    if(level>=1)for(let i=0;i<round;i++){
         build(tool.command,tool)
+        cfg_kill(tool)
         kill(tool)
     }
     code=tool.command
