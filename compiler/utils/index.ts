@@ -6,7 +6,7 @@ export * from './lib/desugar'
 export {Desugar}
 import HIR from './lib/hir'
 export * from './lib/hir'
-export * from './lib/optmize'
+export * from './lib/optimize'
 export {HIR}
 export * from './model/ir'
 export * from './model/hir'

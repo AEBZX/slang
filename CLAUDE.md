@@ -88,13 +88,12 @@ slang->
                  integration:集成测试,文件命名要求:功能所属功能集.test.ts,如parser-ast.test.ts,parser.test.ts
                  system:系统测试,文件命名要求:测试代码项目名称.test.ts,如book-store.test.ts
      vm->虚拟机
+         main.h:封装接口
          main.cpp:主函数入口
-         utils->虚拟机工具类
-              win_api.h:windows系统api封装
-              linux_api.h:linux系统api封装
-              utils.h:根据操作系统导入win_api.h或linux_api.h
+         test->同compiler
+         model.h:模型
+         utils.h:标准跨平台操作库
          pool->内存以及gc管理
-             pool.h:内存管理,内存池定义
              gc.cpp:gc管理
              memory.cpp:内存管理
          runtime->虚拟机运行时

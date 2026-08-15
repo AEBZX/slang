@@ -272,7 +272,9 @@ export class BLOCK_END extends IR{
     constructor() {
         super('block_end')
     }
-
+    generate(): bin {
+        return [super.generate_zero(),Null,Null,Null]
+    }
 }
 export class PARAM_SET extends IR{
     constructor(public param:asm_args,public value:asm_args) {

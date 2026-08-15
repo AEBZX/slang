@@ -1,42 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import compile from '../../index'
 
-//字节码数组=常量池段+命令段:
-//[pool_size, 池条目...(id,type,数据), 命令...(每条4个int)]
-const parse_pool = (bytes: number[]): [Map<number, number | string>, number] => {
-    let i = 0
-    const size = bytes[i++]
-    const pool = new Map<number, number | string>()
-    for (let k = 0; k < size; k++) {
-        const id = bytes[i++]
-        const type = bytes[i++]
-        if (type == 0) pool.set(id, bytes[i++])
-        else {
-            const len = bytes[i++]
-            let s = ''
-            for (let j = 0; j < len; j++) s += String.fromCharCode(bytes[i++])
-            pool.set(id, s)
-        }
-    }
-    return [pool, i]
-}
-
+//新导出格式:{BIN,POOL}
+//  POOL: Map<number, number|string> 常量池(id->值)
+//  BIN : 指令数组,每条为[opcode,a,b,c] 4元组,block_start/block_end 均真实输出
 describe('compiler 字节码导出', () => {
-    it('字节码数组含常量池段+命令段,可解析还原', () => {
-        const bytes = compile(['public static main:string(){return "hi";}\n'], 0)
-        //解析常量池段,剩余为命令段
-        const [pool, cmd_start] = parse_pool(bytes)
-        expect(pool.size).toBeGreaterThan(0)
-        expect([...pool.values()]).toContain('hi')
-        //命令段每条4个int,首指令block_start(opcode=156)
-        const rest = bytes.length - cmd_start
-        expect(rest).toBeGreaterThan(0)
-        expect(rest % 4).toBe(0)
-        expect(bytes[cmd_start]).toBe(156)
+    it('返回 {BIN,POOL},POOL 含字符串常量,首指令为 block_start(156)', () => {
+        const { BIN, POOL } = compile(['public static main:string(){return "hi";}\n'], 0)
+        //常量池:字符串 "hi" 已收录
+        expect(POOL).toBeInstanceOf(Map)
+        expect(POOL.size).toBeGreaterThan(0)
+        expect([...POOL.values()]).toContain('hi')
+        //命令段:入口块以 block_start(opcode=156) 开头
+        expect(BIN.length).toBeGreaterThan(0)
+        expect(BIN[0]).toEqual([156, 0, 0, 0])
     })
-    it('数字常量以type0编码', () => {
-        const bytes = compile(['public static main:number(){return 1+2;}\n'], 0)
-        const [pool] = parse_pool(bytes)
-        expect([...pool.values()].some(v => typeof v == 'number')).toBe(true)
+    it('数字常量以 number 值存入 POOL', () => {
+        const { POOL } = compile(['public static main:number(){return 1+2;}\n'], 0)
+        expect([...POOL.values()].some(v => typeof v == 'number')).toBe(true)
+    })
+    it('BIN 每条指令均为 4 元组,无 null 占位', () => {
+        const { BIN } = compile(['public static main:number(){return 1+2;}\n'], 0)
+        expect(BIN.length).toBeGreaterThan(0)
+        for (const c of BIN) {
+            expect(c).toHaveLength(4)
+            for (const n of c) expect(n).toBeTypeOf('number')
+        }
+    })
+    it('BIN 结尾为真实 block_end 指令(158)', () => {
+        const { BIN } = compile(['public static main:number(){return 1+2;}\n'], 0)
+        expect(BIN[BIN.length - 1]).toEqual([158, 0, 0, 0])
     })
 })

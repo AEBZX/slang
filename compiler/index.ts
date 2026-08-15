@@ -15,7 +15,7 @@ export default function (code:string[],optimize_level:number,output:boolean=fals
         let file_start=performance.now()
         let ret=parser(lexer(c)) as File
         file_start = performance.now()-file_start
-        if(output)console.log(`   parser:${file_name[index]} ${performance.now() - file_start}ms`)
+        if(output)console.log(`   parser:${file_name[index++]} ${performance.now() - file_start}ms`)
         return ret
     })
     parser_start=performance.now()-parser_start

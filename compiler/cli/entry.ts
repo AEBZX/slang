@@ -1,16 +1,20 @@
 import {compiler,start,run,init} from './command'
 import {Command} from 'commander'
-import {readFileSync, writeFileSync} from 'fs'
+import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs'
 import {DefaultGlobalConfig, GlobalConfig, ProjectConfig} from './config'
 import * as process from 'node:process'
+import * as os from 'node:os'
+import * as path from 'node:path'
 function readGlobal(){
-    let data=readFileSync('~/slang/config.json','utf-8')
-    if(!data){
+    //~ 不展开,用用户主目录;目录不存在时先创建
+    let file=path.join(os.homedir(),'.slang','config.json')
+    if(!existsSync(file)){
         let config=DefaultGlobalConfig
-        writeFileSync('~/slang/config.json',JSON.stringify(config,null,4))
+        mkdirSync(path.dirname(file),{recursive:true})
+        writeFileSync(file,JSON.stringify(config,null,4))
         return config
     }
-    return JSON.parse(data) as GlobalConfig
+    return JSON.parse(readFileSync(file,'utf-8')) as GlobalConfig
 }
 function readProject(){
     let data=readFileSync(process.cwd()+'/slang.json','utf-8')
@@ -42,5 +46,7 @@ program
 program
     .command('init')
     .description('init slang project')
-    .action(()=>{})
-program.parse()
+    .action(()=>{
+        init()
+    })
+await program.parseAsync()
