@@ -1,6 +1,4 @@
 #include "runtime.h"
-
-//二元运算宏:fa/fb/fc 为操作数形式位(0=reg, 1=value),生成 impl+包装
 #define BIN3(name, op, fa, fb, fc) \
 void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \

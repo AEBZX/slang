@@ -1,0 +1,121 @@
+# IN-OUT API
+slang的跨平台基于s-asm的in,out指令,以特定格式向VM进行发送信息,实现跨平台统一操作   
+slang通过如下命令内嵌:  
+```slang
+vm 'op %var %var %var'
+```
+同理,slang通过如下方式实现VM-Sbin联动:
+```slang
+//oper:string
+vm 'in %oper %map'
+```
+## 文件操作(oper='file')
+文件读
+```slang
+out:{
+    type:'read',
+    name:文件名,
+    mode:'text'|'bin',
+}
+in:number[](mode=='bin'),string(mode=='string')
+```
+文件写
+```slang
+out:{
+    type:'write',
+    name:文件名,
+    mode:'text'|'bin',
+    data:string|number[]
+}
+in:boolean
+```
+是否存在
+```slang
+out:{
+    type:'exist',
+    type:'all'|'file'|'folder',
+    name:路径,
+}
+in:boolean
+
+```
+创建
+```slang
+out:{
+    type:'create',
+    type:'file'|'folder',
+    name:路径,
+}
+in:boolean
+```
+寻找所有子目录/文件
+```slang
+out:{
+    type:'find',
+    name:路径,
+}
+in:string[]
+```
+删除
+```slang
+out:{
+    type:'delete',
+    type:'file'|'folder',
+    name:路径,
+}
+in:boolean
+```
+## 控制台操作(IO='shell')
+输出:
+```slang
+out:{
+    type:'print',
+    data:string
+}
+```
+输入(整行):
+```slang
+out:{
+    type:'input'
+}
+in:string
+```
+控制台命令:
+```slang
+out:{
+    type:'shell',
+    data:string
+}
+in:boolean
+```
+## 系统信息获取(oper='system')
+```slang
+out:'disk'|'memory_global'|'core_num'|'memory_self'
+in:number(存储/内存单位按Byte记)
+```
+## 网络(oper='net')
+建立连接
+```slang
+out:{
+    type:'connect',
+    host:'ip:port'
+}
+in:number(SocketID)
+```
+发送信息
+```slang
+out:{
+    type:'send',
+    id:SocketID,
+    data:string
+}
+in:string(接收,阻塞)
+```
+断联
+```slang
+out:{
+    type:'close',
+    id:SocketID
+}
+in:boolean
+```

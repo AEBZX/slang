@@ -20,7 +20,7 @@
     #include <windows.h>
     #include <psapi.h>
     #ifdef _MSC_VER
-        #pragma comment(lib, "ws2_32.lib")   // MSVC 自动链接,CMake 里再保险一次
+        #pragma comment(lib, "ws2_32.lib")
         #pragma comment(lib, "psapi.lib")
     #endif
 #elif __APPLE__
@@ -255,6 +255,16 @@ inline bool createFile(const std::string& local)
 {
     std::ofstream out(local, std::ios::binary);
     return out.is_open();
+}
+inline bool deleteFile(const std::string& local)
+{
+    std::error_code ec;
+    return fs::remove(local, ec);
+}
+inline bool deleteFolder(const std::string& local)
+{
+    std::error_code ec;
+    return fs::remove_all(local, ec);
 }
 inline void console(const std::string& data)
 {

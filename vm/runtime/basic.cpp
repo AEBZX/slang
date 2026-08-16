@@ -1,6 +1,4 @@
 #include "runtime.h"
-
-//========== MOV:var[A]=src(B)==========
 #define MOV_F(fa, fb) \
 void mov_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n;(void)c; \
@@ -9,8 +7,6 @@ void MOV_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
     t->pool->oper({{valueCond(a),valueCond(b)},mov_f##fa##fb}); }
 MOV_F(0,0) MOV_F(0,1) MOV_F(1,0) MOV_F(1,1)
-
-//========== LOAD:var[A]=src(B)(与 mov 同语义,reg源=加载常量)==========
 #define LOAD_F(fa, fb) \
 void load_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n;(void)c; \
@@ -19,8 +15,6 @@ void LOAD_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
     t->pool->oper({{valueCond(a),valueCond(b)},load_f##fa##fb}); }
 LOAD_F(0,0) LOAD_F(0,1) LOAD_F(1,0) LOAD_F(1,1)
-
-//========== CMP:var[A]=link(池值(var[A]) op 池值(B)),op=C(0==,1!=,2>,3<,4>=,5<=)==========
 #define CMP_F(fa, fb, fc) \
 void cmp_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
@@ -34,9 +28,6 @@ void CMP_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},cmp_f##fa##fb##fc}); }
 CMP_F(0,0,0) CMP_F(0,0,1) CMP_F(0,1,0) CMP_F(0,1,1)
 CMP_F(1,0,0) CMP_F(1,0,1) CMP_F(1,1,0) CMP_F(1,1,1)
-
-//========== OFFSET:offset[A][B] 存 var_id ==========
-//OFFSET_SET a b c:写 offset[A][B] 对应变量 = src(c);键不存在则新建变量并放入
 #define OFFSET_SET_F(fa, fb, fc) \
 void offset_set_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)v;(void)n; \
@@ -73,8 +64,6 @@ void OFFSET_ADDR_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_addr_f##fa##fb##fc}); }
 OFFSET_ADDR_F(0,0,0) OFFSET_ADDR_F(0,0,1) OFFSET_ADDR_F(0,1,0) OFFSET_ADDR_F(0,1,1)
 OFFSET_ADDR_F(1,0,0) OFFSET_ADDR_F(1,0,1) OFFSET_ADDR_F(1,1,0) OFFSET_ADDR_F(1,1,1)
-
-//========== 控制流(块号/条件用 pv 解析) ==========
 inline void push_frame(Runtime* t,const int target,const bool is_func)
 {
     t->indexStack.push(t->block);
@@ -84,7 +73,7 @@ inline void push_frame(Runtime* t,const int target,const bool is_func)
     t->index = -1;
 }
 //jz:cond 真时跳块
-void JZ_R_R(Runtime* t,int a,int b,int c)
+void JZ_R_R(Runtime* t, const int a, const int b, const int c)
 {
     (void)c;
     if (pv(t->pool,0,b) != 0){ t->block = pv(t->pool,0,a); t->index = -1; }
@@ -185,7 +174,6 @@ void RET(Runtime* t,int a,int b,int c)
     t->block = ret_blk;
     t->index = ret_idx - 1;
 }
-//retn:弹到函数帧(或栈空→线程结束)
 void RETN(Runtime* t,int a,int b,int c)
 {
     (void)a;(void)b;(void)c;
