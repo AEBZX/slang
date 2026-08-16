@@ -129,9 +129,9 @@ describe('optimize o2 块优化', () => {
         const D = BinMap.get('delete')!
         const dels = bin.filter((c: any) => c && c[0] == D)
         expect(dels.length).toBeGreaterThan(0)
-        //delete 必须在 retn(121) 之前,不能出现在块外
+        //delete 必须在 retn(169,已从121挪走避开pop_v冲突) 之前,不能出现在块外
         const last = bin.filter((c: any) => c != null)
-        const retn = last.findIndex(c => c[0] == 121)
+        const retn = last.findIndex(c => c[0] == 169)
         expect(retn).toBeGreaterThan(-1)
         for (const d of dels)
             expect(bin.indexOf(d)).toBeLessThan(retn)

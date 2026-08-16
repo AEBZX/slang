@@ -1,47 +1,307 @@
-/*
- *实现的指令:
- *MOV,LOAD,JMP,CALL,THREAD,JZ,CZ,TZ,PARAM_LOAD/SET,PUSH,POP,RET,RETN,GC,CMP
- *OFFSET_SET/GET/ADDR,DELETE
- */
 #include "runtime.h"
-void mov_r_r(VarPool* data,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c)
+
+//========== MOV:var[A]=src(B)==========
+#define MOV_F(fa, fb) \
+void mov_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n;(void)c; \
+    v(d,dst(d,fa,a),src(d,fb,b)); } \
+void MOV_F##fa##fb(Runtime* t,int a,int b,int c){ \
+    (void)c; \
+    t->pool->oper({{valueCond(a),valueCond(b)},mov_f##fa##fb}); }
+MOV_F(0,0) MOV_F(0,1) MOV_F(1,0) MOV_F(1,1)
+
+//========== LOAD:var[A]=src(B)(与 mov 同语义,reg源=加载常量)==========
+#define LOAD_F(fa, fb) \
+void load_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n;(void)c; \
+    v(d,dst(d,fa,a),src(d,fb,b)); } \
+void LOAD_F##fa##fb(Runtime* t,int a,int b,int c){ \
+    (void)c; \
+    t->pool->oper({{valueCond(a),valueCond(b)},load_f##fa##fb}); }
+LOAD_F(0,0) LOAD_F(0,1) LOAD_F(1,0) LOAD_F(1,1)
+
+//========== CMP:var[A]=link(池值(var[A]) op 池值(B)),op=C(0==,1!=,2>,3<,4>=,5<=)==========
+#define CMP_F(fa, fb, fc) \
+void cmp_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=dst(d,fa,a); \
+    int L=(int)d->data.get(VarPool::unsafeReadVar(d,A)).num; \
+    int R=pv(d,fb,b); \
+    int C=pv(d,fc,c); \
+    int r=(C==0)?(L==R):(C==1)?(L!=R):(C==2)?(L>R):(C==3)?(L<R):(C==4)?(L>=R):(L<=R); \
+    v(d,A,d->data.link((double)r)); } \
+void CMP_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},cmp_f##fa##fb##fc}); }
+CMP_F(0,0,0) CMP_F(0,0,1) CMP_F(0,1,0) CMP_F(0,1,1)
+CMP_F(1,0,0) CMP_F(1,0,1) CMP_F(1,1,0) CMP_F(1,1,1)
+
+//========== OFFSET:offset[A][B] 存 var_id ==========
+//OFFSET_SET a b c:写 offset[A][B] 对应变量 = src(c);键不存在则新建变量并放入
+#define OFFSET_SET_F(fa, fb, fc) \
+void offset_set_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)v;(void)n; \
+    int A=dst(d,fa,a), B=key(d,fb,b); \
+    int vid; \
+    if (d->hasOffset(A,B)) vid=VarPool::unsafeReadOffset(d,A,B); \
+    else { vid=d->alloc(); o(d,A,B,vid); } \
+    v(d,vid,src(d,fc,c)); } \
+void OFFSET_SET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_set_f##fa##fb##fc}); }
+OFFSET_SET_F(0,0,0) OFFSET_SET_F(0,0,1) OFFSET_SET_F(0,1,0) OFFSET_SET_F(0,1,1)
+OFFSET_SET_F(1,0,0) OFFSET_SET_F(1,0,1) OFFSET_SET_F(1,1,0) OFFSET_SET_F(1,1,1)
+
+//OFFSET_GET a b c:var[A]=var[offset[B][C]](读 var_id 对应变量值)
+#define OFFSET_GET_F(fa, fb, fc) \
+void offset_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=dst(d,fa,a); \
+    int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
+    v(d,A,VarPool::unsafeReadVar(d,vid)); } \
+void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_get_f##fa##fb##fc}); }
+OFFSET_GET_F(0,0,0) OFFSET_GET_F(0,0,1) OFFSET_GET_F(0,1,0) OFFSET_GET_F(0,1,1)
+OFFSET_GET_F(1,0,0) OFFSET_GET_F(1,0,1) OFFSET_GET_F(1,1,0) OFFSET_GET_F(1,1,1)
+
+//OFFSET_ADDR a b c:var[A]=link(offset[B][C])(var_id 作为数值返回)
+#define OFFSET_ADDR_F(fa, fb, fc) \
+void offset_addr_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=dst(d,fa,a); \
+    int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
+    v(d,A,d->data.link((double)vid)); } \
+void OFFSET_ADDR_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_addr_f##fa##fb##fc}); }
+OFFSET_ADDR_F(0,0,0) OFFSET_ADDR_F(0,0,1) OFFSET_ADDR_F(0,1,0) OFFSET_ADDR_F(0,1,1)
+OFFSET_ADDR_F(1,0,0) OFFSET_ADDR_F(1,0,1) OFFSET_ADDR_F(1,1,0) OFFSET_ADDR_F(1,1,1)
+
+//========== 控制流(块号/条件用 pv 解析) ==========
+inline void push_frame(Runtime* t,const int target,const bool is_func)
 {
-    v(data,a,b);
+    t->indexStack.push(t->block);
+    t->indexStack.push(t->index + 1);
+    t->blockStack.push(is_func);
+    t->block = target;
+    t->index = -1;
 }
-void mov_r_v(VarPool* data,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c)
+//jz:cond 真时跳块
+void JZ_R_R(Runtime* t,int a,int b,int c)
 {
-    v(data,a,static_cast<int>(data->data.get(b).num));
+    (void)c;
+    if (pv(t->pool,0,b) != 0){ t->block = pv(t->pool,0,a); t->index = -1; }
 }
-void mov_v_r(VarPool* data,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c)
+void JZ_R_V(Runtime* t,int a,int b,int c)
 {
-    v(data,static_cast<int>(data->data.get(a).num),b);
+    (void)c;
+    if (pv(t->pool,1,b) != 0){ t->block = pv(t->pool,0,a); t->index = -1; }
 }
-void mov_v_v(VarPool* data,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c)
+void JZ_V_R(Runtime* t,int a,int b,int c)
 {
-    v(data,static_cast<int>(data->data.get(a).num),static_cast<int>(data->data.get(b).num));
+    (void)c;
+    if (pv(t->pool,0,b) != 0){ t->block = pv(t->pool,1,a); t->index = -1; }
 }
-void MOV_R_R(Runtime* tool,int a,int b ,int c)
+void JZ_V_V(Runtime* t,int a,int b,int c)
 {
-    tool->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mov_r_r});
+    (void)c;
+    if (pv(t->pool,1,b) != 0){ t->block = pv(t->pool,1,a); t->index = -1; }
 }
-void MOV_R_V(Runtime* tool,int a,int b ,int c)
+//cz:cond 真时压帧跳块,帧类型=is_func(c)
+void CZ_R_R(Runtime* t,int a,int b,int c)
 {
-    tool->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mov_r_v});
+    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,0,a),c != 0);
 }
-void MOV_V_R(Runtime* tool,int a,int b ,int c)
+void CZ_R_V(Runtime* t,int a,int b,int c)
 {
-    tool->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mov_v_r});
+    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,0,a),c != 0);
 }
-void MOV_V_V(Runtime* tool,int a,int b ,int c)
+void CZ_V_R(Runtime* t,int a,int b,int c)
 {
-    tool->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mov_v_v});
+    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,1,a),c != 0);
 }
-void CALL_R_R(Runtime* tool,int a,int b,int c)
+void CZ_V_V(Runtime* t,int a,int b,int c)
 {
+    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,1,a),c != 0);
 }
+//call:无条件压函数帧跳块
+void CALL_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    push_frame(t,pv(t->pool,0,a),b != 0);
+}
+void CALL_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    push_frame(t,pv(t->pool,1,a),b != 0);
+}
+//jmp:无条件跳块
+void JMP_R(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->block = pv(t->pool,0,a); t->index = -1;
+}
+void JMP_V(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->block = pv(t->pool,1,a); t->index = -1;
+}
+//tz/thread:新建线程跑块a(经 Runtime._join 钩子,线程化由 Manage 实现)
+void TZ_R_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    if (pv(t->pool,0,b) != 0) t->_join(t->m,pv(t->pool,0,a));
+}
+void TZ_R_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    if (pv(t->pool,1,b) != 0) t->_join(t->m,pv(t->pool,0,a));
+}
+void TZ_V_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    if (pv(t->pool,0,b) != 0) t->_join(t->m,pv(t->pool,1,a));
+}
+void TZ_V_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    if (pv(t->pool,1,b) != 0) t->_join(t->m,pv(t->pool,1,a));
+}
+void THREAD_R(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->_join(t->m,pv(t->pool,0,a));
+}
+void THREAD_V(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->_join(t->m,pv(t->pool,1,a));
+}
+//ret:弹一层帧恢复(break 用)
+void RET(Runtime* t,int a,int b,int c)
+{
+    (void)a;(void)b;(void)c;
+    if (t->blockStack.size() == 0){ t->alive = false; return; }
+    const int ret_idx = t->indexStack.pop();
+    const int ret_blk = t->indexStack.pop();
+    t->blockStack.pop();
+    t->block = ret_blk;
+    t->index = ret_idx - 1;
+}
+//retn:弹到函数帧(或栈空→线程结束)
+void RETN(Runtime* t,int a,int b,int c)
+{
+    (void)a;(void)b;(void)c;
+    while (t->blockStack.size() > 0)
+    {
+        const bool is_func = t->blockStack.peek();
+        const int ret_idx = t->indexStack.pop();
+        const int ret_blk = t->indexStack.pop();
+        t->blockStack.pop();
+        if (is_func)
+        {
+            t->block = ret_blk;
+            t->index = ret_idx - 1;
+            return;
+        }
+    }
+    t->alive = false;
+}
+//gc:触发回收(清理死线程+常量池gc)
+void GC(Runtime* t,int a,int b,int c)
+{
+    (void)a;(void)b;(void)c;
+    t->m->gc();
+}
+
+//========== param / 栈(存 pool_id) ==========
+//param_set:param[A]=src(B)
+void PARAM_SET_R_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    t->param[a] = src(t->pool,0,b);
+}
+void PARAM_SET_R_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    t->param[a] = src(t->pool,1,b);
+}
+void PARAM_SET_V_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    t->param[dst(t->pool,1,a)] = src(t->pool,0,b);
+}
+void PARAM_SET_V_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    t->param[dst(t->pool,1,a)] = src(t->pool,1,b);
+}
+//param_load:var[A]=param[B]
+void PARAM_LOAD_R_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    VarPool::writeVar(t->pool,a,t->param[b]);
+}
+void PARAM_LOAD_R_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    VarPool::writeVar(t->pool,a,t->param[src(t->pool,0,b)]);
+}
+void PARAM_LOAD_V_R(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    VarPool::writeVar(t->pool,dst(t->pool,1,a),t->param[b]);
+}
+void PARAM_LOAD_V_V(Runtime* t,int a,int b,int c)
+{
+    (void)c;
+    VarPool::writeVar(t->pool,dst(t->pool,1,a),t->param[src(t->pool,0,b)]);
+}
+//push/pop:操作数栈(push 恒发基址118,编译器无 value 变体,故不注册 PUSH_V)
+void PUSH_R(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->stack.push(src(t->pool,0,a));
+}
+void POP_R(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    VarPool::writeVar(t->pool,a,t->stack.pop());
+}
+
+//========== DELETE:释放槽指向的常量(引用计数) ==========
+void DELETE_R(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->pool->data.delete_(VarPool::unsafeReadVar(t->pool,a));
+}
+void DELETE_V(Runtime* t,int a,int b,int c)
+{
+    (void)b;(void)c;
+    t->pool->data.delete_(src(t->pool,1,a));
+}
+
 std::unordered_map<int,CommandRun> basic()
 {
     return {
-        {0,MOV_R_R},
+        {0,MOV_F00},{1,MOV_F01},{2,MOV_F10},{3,MOV_F11},
+        {84,LOAD_F00},{85,LOAD_F01},{86,LOAD_F10},{87,LOAD_F11},
+        {88,CZ_R_R},{89,CZ_R_V},{90,CZ_V_R},{91,CZ_V_V},
+        {92,JZ_R_R},{93,JZ_R_V},{94,JZ_V_R},{95,JZ_V_V},
+        {96,TZ_R_R},{97,TZ_R_V},{98,TZ_V_R},{99,TZ_V_V},
+        {100,CALL_R},{101,CALL_V},
+        {102,JMP_R},{103,JMP_V},
+        {104,THREAD_R},{105,THREAD_V},
+        {110,CMP_F000},{111,CMP_F001},{112,CMP_F010},{113,CMP_F011},
+        {114,CMP_F100},{115,CMP_F101},{116,CMP_F110},{117,CMP_F111},
+        {118,PUSH_R},
+        {120,POP_R},
+        {169,RETN},{122,RET},{123,GC},
+        {124,OFFSET_SET_F000},{125,OFFSET_SET_F001},{126,OFFSET_SET_F010},{127,OFFSET_SET_F011},
+        {128,OFFSET_SET_F100},{129,OFFSET_SET_F101},{130,OFFSET_SET_F110},{131,OFFSET_SET_F111},
+        {132,OFFSET_GET_F000},{133,OFFSET_GET_F001},{134,OFFSET_GET_F010},{135,OFFSET_GET_F011},
+        {136,OFFSET_GET_F100},{137,OFFSET_GET_F101},{138,OFFSET_GET_F110},{139,OFFSET_GET_F111},
+        {140,OFFSET_ADDR_F000},{141,OFFSET_ADDR_F001},{142,OFFSET_ADDR_F010},{143,OFFSET_ADDR_F011},
+        {144,OFFSET_ADDR_F100},{145,OFFSET_ADDR_F101},{146,OFFSET_ADDR_F110},{147,OFFSET_ADDR_F111},
+        {159,PARAM_SET_R_R},{160,PARAM_SET_R_V},{161,PARAM_SET_V_R},{162,PARAM_SET_V_V},
+        {163,PARAM_LOAD_R_R},{164,PARAM_LOAD_R_V},{165,PARAM_LOAD_V_R},{166,PARAM_LOAD_V_V},
+        {167,DELETE_R},{168,DELETE_V},
     };
 }

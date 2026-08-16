@@ -11,13 +11,34 @@ using OffSet=void(*)(VarPool*,int,int,int);
 using NameSet=void(*)(VarPool*,int,const std::string&,int);
 using Join=void(*)(Manage*,int);
 using CommandRun=void(*)(Runtime*,int,int,int);
-using Runner=void(*)(Runtime*,std::vector<std::array<int,4>>);
+using Runner=void(*)(Runtime*,std::array<int,4>);
 using PoolValue=void(*)(VarPool*,int,int);
 using PoolOffset=void(*)(VarPool*,int,int,int);
 using PoolName=void(*)(VarPool*,int,const std::string&,int);
 std::unordered_map<int,CommandRun> basic();
 std::unordered_map<int,CommandRun> math();
 std::unordered_map<int,CommandRun> io();
+//操作数解析(form 0=reg, 1=value):
+//src:源解析——reg=常量池反查id(池中值为x的常量id,无则创建link(x));value=var[x](槽内pool_id)
+inline int src(VarPool* data, const int form, const int x)
+{
+    return form ? VarPool::unsafeReadVar(data, x) : data->data.link((double)x);
+}
+//pv:池值——reg=x本身(立即数);value=pool[var[x]].num
+inline int pv(VarPool* data, const int form, const int x)
+{
+    return form ? (int)data->data.get(VarPool::unsafeReadVar(data, x)).num : x;
+}
+//dst:目标槽——reg=x;value=反查id当槽号(编译器目标均为reg,value机械处理)
+inline int dst(VarPool* data, const int form, const int x)
+{
+    return form ? data->data.link((double)x) : x;
+}
+//key:offset 键——reg=x原样(var_id);value=var[x]
+inline int key(VarPool* data, const int form, const int x)
+{
+    return form ? VarPool::unsafeReadVar(data, x) : x;
+}
 //用于快速生成cond
 inline TaskCond valueCond(int v)
 {
@@ -29,7 +50,8 @@ inline TaskCond offsetCond(int v,int o)
 }
 inline TaskCond nameCond(int v,const std::string& n)
 {
-    return {.id = v,.prefix = true,.offset = 0,.name = n};
+    //offset==-1 才是 name 访问(model.h cond()/run() 判定),之前误设 0 会走 offset 分支
+    return {.id = v,.prefix = true,.offset = -1,.name = n};
 }
 class Runtime:public Thread
 {
@@ -51,8 +73,9 @@ public:
         while (true)
         {
             if (!alive)break;
-            if (index>=command[block].size())alive=false;
-            (*runner)(this,command[block][index]);
+            //command 是指针,须先解引用再按块/下标取指令(原 command[block][index] 是指针数组下标,语义错误)
+            if (index >= (int)(*command)[block].size())alive=false;
+            (*runner)(this,(*command)[block][index]);
             index++;
         }
     }
@@ -74,6 +97,8 @@ public:
         const Command& c,const Runner& r)
     {
         thread_num=1;
+        //先扩容再访问,原代码空 vector 直接 thread[0] 是越界UB
+        thread.resize(1);
         pool.init(num, str);
         command=c;
         value=VarPool::unsafeWriteVar;

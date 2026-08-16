@@ -96,18 +96,20 @@ TEST_CASE("var pool: read/write var/offset/name", "[model]")
     REQUIRE(VarPool::readName(&pool, 8, "k2") == 600);
 }
 
-//任务回调:记录收到的操作数(TaskRun 新签名:首个参数 ConstPool*)
+//任务回调:记录收到的原始操作数(TaskRun 新签名:VarPool* 首参 + 3 个 int)
 static int g_a0 = 0;
 static int g_a1 = 0;
+static int g_a2 = 0;
 static int g_calls = 0;
-static void task_run(ConstPool*,
+static void task_run(VarPool*,
                      void(*)(VarPool*, int, int),
                      void(*)(VarPool*, int, int, int),
                      void(*)(VarPool*, int, const std::string&, int),
-                     int a, int b)
+                     int a, int b, int c)
 {
     g_a0 = a;
     g_a1 = b;
+    g_a2 = c;
     g_calls++;
 }
 
@@ -121,8 +123,9 @@ TEST_CASE("var pool: task runs when unlocked", "[model]")
     g_calls = 0;
     pool.oper(task);   //var 5未锁→立即执行
     REQUIRE(g_calls == 1);
-    REQUIRE(g_a0 == 42);
-    REQUIRE(g_a1 == 0);   //修复E:不足2个cond时补0
+    REQUIRE(g_a0 == 5);   //传原始操作数id,不解析值
+    REQUIRE(g_a1 == 0);
+    REQUIRE(g_a2 == 0);   //不足3个cond时补0
 }
 
 TEST_CASE("var pool: task queued while locked then runs on unlock", "[model]")
@@ -137,7 +140,7 @@ TEST_CASE("var pool: task queued while locked then runs on unlock", "[model]")
     REQUIRE(g_calls == 0);
     VarPool::writeVar(&pool, 5, 100);   //writeVar内部unlock→弹出队首执行
     REQUIRE(g_calls == 1);
-    REQUIRE(g_a0 == 100);
+    REQUIRE(g_a0 == 5);
 }
 
 TEST_CASE("var pool: task with offset and name conds", "[model]")
@@ -151,8 +154,8 @@ TEST_CASE("var pool: task with offset and name conds", "[model]")
     g_calls = 0;
     pool.oper(task);
     REQUIRE(g_calls == 1);
-    REQUIRE(g_a0 == 111);
-    REQUIRE(g_a1 == 222);
+    REQUIRE(g_a0 == 3);   //原始id:offset(3,7) 与 name(9,"k")
+    REQUIRE(g_a1 == 9);
 }
 
 TEST_CASE("var pool: blocked front task not duplicated on unlock", "[model]")

@@ -27,6 +27,8 @@ add_executable(vm main.cpp
         model.h
         runtime/runtime.h
         runtime/basic.cpp
+        runtime/math.cpp
+        runtime/io.cpp
 )
 if(WIN32)
     target_link_libraries(vm PRIVATE ws2_32 psapi)
@@ -34,8 +36,12 @@ endif()
 add_executable(vm_test
         test/unit/utils.test.cpp
         test/unit/model.test.cpp
+        test/unit/basic.test.cpp
+        runtime/basic.cpp
+        runtime/math.cpp
+        runtime/io.cpp
 )
-target_include_directories(vm_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(vm_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/runtime)
 target_link_libraries(vm_test PRIVATE Catch2::Catch2WithMain)
 if(WIN32)
     target_link_libraries(vm_test PRIVATE ws2_32 psapi)

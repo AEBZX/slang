@@ -27,7 +27,8 @@ export const BinMap=new Map([
     ['push',118],
     ['pop',120],
     ['ret',122],
-    ['retn',121],
+    //retn 原在 121 与 pop 的 value 槽位重叠,已挪到 169(delete 之后,避开 pop 区间)
+    ['retn',169],
     ['gc',123],
     //3参
     ['offset_set',124],

@@ -166,8 +166,20 @@ private:
     std::unordered_map<int,std::unordered_map<int,bool>> offset_lock;
     std::unordered_map<int,std::unordered_map<std::string,bool>> name_lock;
     TaskQueue task_queue;
+    int nextId=0;
 public:
     ConstPool data;
+    //新建一个变量槽(offset_set 建成员变量用),返回其 var_id
+    int alloc()
+    {
+        return nextId++;
+    }
+    //offset 键是否存在(避免 operator[] 误插)
+    bool hasOffset(const int id,const int off) const
+    {
+        const auto it = offset.find(id);
+        return it != offset.end() && it->second.contains(off);
+    }
     void init(const std::unordered_map<int,double>& num, const std::unordered_map<int,std::string>& str)
     {
         data.init(num,str);
@@ -300,12 +312,13 @@ public:
     }
     void run(const Task& d)
     {
+        //传原始操作数(reg=槽id, value=池id),由handler按opcode形式自行解析;不足补0
         int a[3]={0,0,0};
         int index=0;
-        for (const auto& [id, prefix, off, n] : d.cond)
+        for (const auto& c : d.cond)
         {
             if (index>=3) break;
-            a[index]=prefix?(off==-1?readName(this,id,n):readOffset(this,id,off)):readVar(this,id);
+            a[index]=c.id;
             index++;
         }
         d.run(this,writeVar,writeOffset,writeName,a[0],a[1],a[2]);

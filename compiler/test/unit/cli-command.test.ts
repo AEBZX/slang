@@ -77,7 +77,7 @@ describe('cli compiler 命令', () => {
         expect(code.length).toBeGreaterThan(0)
         //入口块以 block_start(156) 开头,无 null 占位写入
         expect(code[0][0]).toBe(156)
-        expect(code.some(c => c[0] == 121)).toBe(true) //retn
+        expect(code.some(c => c[0] == 169)).toBe(true) //retn(已从121挪到169,避免与pop_v冲突)
         rmSync(dir, { recursive: true, force: true })
     })
     it('数字常量按 double 写入 POOL 段', () => {
