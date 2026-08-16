@@ -149,6 +149,8 @@ private:
     bool joined = false;
 public:
     explicit Thread(std::string threadName = "") : name(std::move(threadName)) {}
+    Thread(Thread&&) noexcept = default;
+    Thread& operator=(Thread&&) noexcept = default;
     virtual ~Thread() {
         if (started && !joined && nativeThread.joinable()) {
             nativeThread.detach();
@@ -178,7 +180,6 @@ public:
     // 工具方法
     [[nodiscard]] std::string getName() const { return name; }
     void setName(const std::string& newName) { name = newName; }
-
     // 静态工具方法
     static void sleep(const long long millis) {
         std::this_thread::sleep_for(std::chrono::milliseconds(millis));

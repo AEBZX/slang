@@ -1,6 +1,5 @@
 import {asm_args, asm_command, bin} from '../data'
 export const BinMap=new Map([
-    //按参数组合数连续分配:3参8单位,2参4单位,1参2单位,0参1单位,避免opcode重叠
     ['mov',0],
     ['add',4],
     ['sub',12],
@@ -28,7 +27,6 @@ export const BinMap=new Map([
     ['push',118],
     ['pop',120],
     ['ret',122],
-    //121 空闲:0参区未占用的槽,retn=函数返回(弹到函数帧)
     ['retn',121],
     ['gc',123],
     //3参
@@ -190,8 +188,6 @@ export class RET extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-//函数返回:弹出所有块帧,直到函数帧(或栈空),再返回调用者;
-//与RET(弹一帧,break用)区分,解决if/while分支内return只弹块帧的缺陷
 export class RETN extends IR{
     constructor() {
         super('retn')
@@ -264,7 +260,6 @@ export class GC extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-//delete:释放块内不再逃逸的变量槽(O2 kill.ts 生成,供 VM 回收)
 export class DELETE extends IR{
     constructor(public data:asm_args) {
         super('delete')

@@ -8,8 +8,6 @@
 #include <utility>
 #include <vector>
 class VarPool;
-using CommandType = void(*)(int, int, int, int);
-using CommandList=std::vector<CommandType>;
 template <typename T>
 class Stack
 {
@@ -131,6 +129,8 @@ public:
     }
     Const get(const int id)
     {
+        //未知id返回空Const,避免operator[]向type/string插入垃圾条目
+        if (!type.contains(id)) return {};
         Const ret;
         ret.type=type[id];
         ret.num=0;
@@ -149,7 +149,7 @@ struct TaskCond
     //可能的name
     std::string name;
 };
-using TaskRun=void(*)(ConstPool* data,void(*)(VarPool*,int,int),void(*)(VarPool*,int,int,int),void(*)(VarPool*,int,const std::string&,int),int,int);
+using TaskRun=void(*)(VarPool*,void(*)(VarPool*,int,int),void(*)(VarPool*,int,int,int),void(*)(VarPool*,int,const std::string&,int),int,int,int);
 struct Task
 {
     std::vector<TaskCond> cond;
@@ -300,15 +300,15 @@ public:
     }
     void run(const Task& d)
     {
-        int a[2]={0,0};
+        int a[3]={0,0,0};
         int index=0;
         for (const auto& [id, prefix, off, n] : d.cond)
         {
-            if (index>=2) break;
+            if (index>=3) break;
             a[index]=prefix?(off==-1?readName(this,id,n):readOffset(this,id,off)):readVar(this,id);
             index++;
         }
-        d.run(&data,writeVar,writeOffset,writeName,a[0],a[1]);
+        d.run(this,writeVar,writeOffset,writeName,a[0],a[1],a[2]);
     }
     bool cond(const TaskCond& cond)
     {

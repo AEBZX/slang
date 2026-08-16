@@ -96,10 +96,8 @@ slang->
          utils.h:标准跨平台操作库
          runtime->虚拟机运行时
                 runtime.h:虚拟机运行时定义
-                command.cpp:命令分发
                 io.cpp:IO命令处理
                 math.cpp:数学命令处理
-                thread.cpp:线程类命令处理
                 basic.cpp:基础命令处理
 ~~~
 ## 编码规范

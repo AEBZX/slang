@@ -25,6 +25,8 @@ enable_testing()
 add_executable(vm main.cpp
         utils.h
         model.h
+        runtime/runtime.h
+        runtime/basic.cpp
 )
 if(WIN32)
     target_link_libraries(vm PRIVATE ws2_32 psapi)
