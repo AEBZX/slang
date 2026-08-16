@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+class VarPool;
 using CommandType = void(*)(int, int, int, int);
 using CommandList=std::vector<CommandType>;
 template <typename T>
@@ -47,13 +48,13 @@ public:
         if (type[id])
         {
             refCount[id]--;
-            if (refCount[id]<=0)
+            if (refCount[id]==0)
                 gcList.push_back(id);
         }
         if (!type[id])
         {
             refCount[id]--;
-            if (refCount[id]<=0)
+            if (refCount[id]==0)
                 gcList.push_back(id);
         }
     }
@@ -120,16 +121,23 @@ public:
         gcList.clear();
     }
 };
-using VarTaskCond=struct
+using TaskCond=struct
 {
     //var
     int id;
+    bool prefix;
     //可能的offset
     int offset;
     //可能的name
     std::string name;
 };
-using Task=void(*)(void(*)(int,int),void(*)(int,int,int),void(*)(int,std::string,int),int,int);
+using TaskRun=void(*)(void(*)(VarPool*,int,int),void(*)(VarPool*,int,int,int),void(*)(VarPool*,int,const std::string&,int),int,int);
+struct Task
+{
+    std::vector<TaskCond> cond;
+    TaskRun run;
+};
+using TaskQueue=std::vector<Task>;
 class VarPool
 {
 private:
@@ -139,43 +147,134 @@ private:
     std::unordered_map<int,bool> var_lock;
     std::unordered_map<int,std::unordered_map<int,bool>> offset_lock;
     std::unordered_map<int,std::unordered_map<std::string,bool>> name_lock;
-    //var任务队列,任务队列需要ID,根据ID任务队列可以依赖若干任务ID,从而实现add c a b的同步,任务队列入c,a,b,等待a,b均无锁,读a,b,锁c,c=a+b,解锁c
+    TaskQueue task_queue;
 public:
-    void lock_var(const int id)
+    static void lock_var(VarPool* data,const int id)
     {
+        if (!data->var_lock[id])
+            data->var_lock[id]=true;
     }
-    void unlock_var(const int id)
+    static void unlock_var(VarPool* data,const int id)
     {
+        if (data->var_lock[id])
+            data->var_lock[id]=false;
+        //找出第一个task_queue检查
+        if (!data->task_queue.empty())
+            data->oper(data->task_queue.front());
     }
-    void setValue(const int id, const int value)
+    static void lock_offset(VarPool* data,const int id, const int off)
     {
-        var[id]=value;
+        if (!data->offset_lock[id][off])
+            data->offset_lock[id][off]=true;
     }
-    void setOffset(const int id, const int off, const int value)
+    static void unlock_offset(VarPool* data,const int id, const int off)
     {
-        offset[id][off]=value;
+        if (data->offset_lock[id][off])
+            data->offset_lock[id][off]=false;
+        if (!data->task_queue.empty())
+            data->oper(data->task_queue.front());
     }
-    void setName(const int id,const std::string& n,const int off)
+    static void lock_name(VarPool* data,const int id, const std::string& n)
     {
-        name[id][n]=off;
+        if (!data->name_lock[id][n])
+            data->name_lock[id][n]=true;
     }
-    int getValue(const int id)
+    static void unlock_name(VarPool* data,const int id, const std::string& n)
     {
-        if (var.contains(id))return var[id];
-        return -1;
+        if (data->name_lock[id][n])
+            data->name_lock[id][n]=false;
+        if (!data->task_queue.empty())
+            data->oper(data->task_queue.front());
     }
-    int getOffset(const int id,const int off)
+    static void writeVar(VarPool* data,const int id, const int value)
     {
-        if (offset.contains(id) && offset[id].contains(off))return offset[id][off];
-        return -1;
+        lock_var(data,id);
+        data->var[id]=value;
+        unlock_var(data,id);
     }
-    int getName(const int id,const std::string& n)
+    static void writeOffset(VarPool* data,const int id, const int off, const int value)
     {
-        if (name.contains(id) && name[id].contains(n))return name[id][n];
-        return -1;
+        lock_offset(data,id,off);
+        data->offset[id][off]=value;
+        unlock_offset(data,id,off);
     }
-};
-class PoolManage
-{
+    static void writeName(VarPool* data,const int id, const std::string& n, const int value)
+    {
+        lock_name(data,id,n);
+        data->name[id][n]=value;
+        unlock_name(data,id,n);
+    }
+    static int readVar(VarPool* data,const int id)
+    {
+        lock_var(data,id);
+        const int value=data->var[id];
+        unlock_var(data,id);
+        return value;
+    }
+    static int readOffset(VarPool* data,const int id, const int off)
+    {
+        lock_offset(data,id,off);
+        const int value=data->offset[id][off];
+        unlock_offset(data,id,off);
+        return value;
+    }
+    static int readName(VarPool* data,const int id, const std::string& n)
+    {
+        lock_name(data,id,n);
+        const int value=data->name[id][n];
+        unlock_name(data,id,n);
+        return value;
+    }
+    static void unsafeWriteVar(VarPool* data,const int id, const int value)
+    {
+        data->var[id]=value;
+    }
+    static void unsafeWriteOffset(VarPool* data,const int id, const int off, const int value)
+    {
+        data->offset[id][off]=value;
+    }
+    static void unsafeWriteName(VarPool* data,const int id, const std::string& n, const int value)
+    {
+        data->name[id][n]=value;
+    }
+    static int unsafeReadVar(VarPool* data,const int id)
+    {
+        return data->var[id];
+    }
+    static int unsafeReadOffset(VarPool* data,const int id, const int off)
+    {
+        return data->offset[id][off];
+    }
+    static int unsafeReadName(VarPool* data,const int id, const std::string& n)
+    {
+        return data->name[id][n];
+    }
+    void oper(const Task& task)
+    {
+        auto has=true;
+        for (const auto& c:task.cond)
+            if (cond(c)==false)
+            {
+                has=false;
+                break;
+            }
+        if (!has)task_queue.push_back(task);
+        if (has)run(task);
+    }
+    void run(const Task& data)
+    {
+        int a[2];
+        int index=0;
+        for (const auto& [id, prefix, off, n] : data.cond)
+        {
+            a[index]=prefix?(off==-1?readName(this,id,n):readOffset(this,id,off)):readVar(this,id);
+            index++;
+        }
+        data.run(writeVar,writeOffset,writeName,a[0],a[1]);
+    }
+    bool cond(const TaskCond& cond)
+    {
+        return !(cond.prefix?(cond.offset==-1?name_lock[cond.id][cond.name]:offset_lock[cond.id][cond.offset]):var_lock[cond.id]);
+    }
 };
 #endif
