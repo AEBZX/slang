@@ -31,6 +31,7 @@ if(WIN32)
 endif()
 add_executable(vm_test
         test/unit/utils.test.cpp
+        test/unit/model.test.cpp
 )
 target_include_directories(vm_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vm_test PRIVATE Catch2::Catch2WithMain)

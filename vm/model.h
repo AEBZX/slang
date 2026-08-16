@@ -3,6 +3,7 @@
 #include <bit>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -14,19 +15,31 @@ class Stack
 {
 private:
     std::vector<T> data;
-    int index=0;
 public:
     void push(T value)
     {
-        data[index++]=value;
+        data.push_back(value);
     }
     T pop()
     {
-        return data[index--];
+        T value=data.back();
+        data.pop_back();
+        return value;
     }
     T peek(){
-        return data[index];
+        return data.back();
     }
+    [[nodiscard]] size_t size() const
+    {
+        return data.size();
+    }
+};
+struct Const
+{
+    bool type{};
+    //当实际值消失,一定是被gc了,此时一定不会被访问
+    std::string_view str;
+    double num{};
 };
 class ConstPool
 {
@@ -45,18 +58,10 @@ private:
 public:
     void delete_(const int id)
     {
-        if (type[id])
-        {
-            refCount[id]--;
-            if (refCount[id]==0)
-                gcList.push_back(id);
-        }
-        if (!type[id])
-        {
-            refCount[id]--;
-            if (refCount[id]==0)
-                gcList.push_back(id);
-        }
+        if (!type.contains(id)) return;   //未知id忽略
+        refCount[id]--;
+        if (refCount[id]==0)
+            gcList.push_back(id);
     }
     int link(const std::string& v)
     {
@@ -68,7 +73,7 @@ public:
         type[id]=false;
         auto [node, ok] = string.emplace(id, v);
         strI.emplace(std::string_view(node->second), id);
-        refCount[id] = 1;
+        refCount[id]=1;
         return id;
     }
     int link(const double v)
@@ -83,6 +88,7 @@ public:
         type[id]=true;
         number.emplace(id, v);
         numI.emplace(k, id);
+        refCount[id]=1;
         return id;
     }
     void init(std::unordered_map<int,double> num,std::unordered_map<int,std::string> str)
@@ -94,11 +100,13 @@ public:
         {
             type[key]=true;
             numI.emplace(std::bit_cast<uint64_t>(value),key);
+            refCount[key] = 1;   //装载即一次引用
         }
         for (const auto& [key,value]:string)
         {
             type[key]=false;
             strI.emplace(value,key);
+            refCount[key] = 1;
         }
     }
     void gc()
@@ -117,11 +125,21 @@ public:
                 string.erase(id);
             }
             type.erase(id);
+            refCount.erase(id);   //清理引用计数残留
         }
         gcList.clear();
     }
+    Const get(const int id)
+    {
+        Const ret;
+        ret.type=type[id];
+        ret.num=0;
+        if (ret.type) ret.num=number[id];
+        else ret.str=string[id];
+        return ret;
+    }
 };
-using TaskCond=struct
+struct TaskCond
 {
     //var
     int id;
@@ -131,7 +149,7 @@ using TaskCond=struct
     //可能的name
     std::string name;
 };
-using TaskRun=void(*)(void(*)(VarPool*,int,int),void(*)(VarPool*,int,int,int),void(*)(VarPool*,int,const std::string&,int),int,int);
+using TaskRun=void(*)(ConstPool* data,void(*)(VarPool*,int,int),void(*)(VarPool*,int,int,int),void(*)(VarPool*,int,const std::string&,int),int,int);
 struct Task
 {
     std::vector<TaskCond> cond;
@@ -149,6 +167,11 @@ private:
     std::unordered_map<int,std::unordered_map<std::string,bool>> name_lock;
     TaskQueue task_queue;
 public:
+    ConstPool data;
+    void init(const std::unordered_map<int,double>& num, const std::unordered_map<int,std::string>& str)
+    {
+        data.init(num,str);
+    }
     static void lock_var(VarPool* data,const int id)
     {
         if (!data->var_lock[id])
@@ -158,9 +181,15 @@ public:
     {
         if (data->var_lock[id])
             data->var_lock[id]=false;
-        //找出第一个task_queue检查
-        if (!data->task_queue.empty())
-            data->oper(data->task_queue.front());
+        while (!data->task_queue.empty())
+        {
+            const auto task=data->task_queue.front();
+            for (const auto& c:task.cond)
+                if (!data->cond(c))
+                    return;
+            data->task_queue.erase(data->task_queue.begin());
+            data->oper(task);
+        }
     }
     static void lock_offset(VarPool* data,const int id, const int off)
     {
@@ -172,7 +201,11 @@ public:
         if (data->offset_lock[id][off])
             data->offset_lock[id][off]=false;
         if (!data->task_queue.empty())
-            data->oper(data->task_queue.front());
+        {
+            const auto task=data->task_queue.front();
+            data->task_queue.erase(data->task_queue.begin());
+            data->oper(task);
+        }
     }
     static void lock_name(VarPool* data,const int id, const std::string& n)
     {
@@ -184,7 +217,11 @@ public:
         if (data->name_lock[id][n])
             data->name_lock[id][n]=false;
         if (!data->task_queue.empty())
-            data->oper(data->task_queue.front());
+        {
+            auto task=data->task_queue.front();
+            data->task_queue.erase(data->task_queue.begin());
+            data->oper(task);
+        }
     }
     static void writeVar(VarPool* data,const int id, const int value)
     {
@@ -261,16 +298,17 @@ public:
         if (!has)task_queue.push_back(task);
         if (has)run(task);
     }
-    void run(const Task& data)
+    void run(const Task& d)
     {
-        int a[2];
+        int a[2]={0,0};
         int index=0;
-        for (const auto& [id, prefix, off, n] : data.cond)
+        for (const auto& [id, prefix, off, n] : d.cond)
         {
+            if (index>=2) break;
             a[index]=prefix?(off==-1?readName(this,id,n):readOffset(this,id,off)):readVar(this,id);
             index++;
         }
-        data.run(writeVar,writeOffset,writeName,a[0],a[1]);
+        d.run(&data,writeVar,writeOffset,writeName,a[0],a[1]);
     }
     bool cond(const TaskCond& cond)
     {
