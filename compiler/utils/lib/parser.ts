@@ -5,7 +5,9 @@ class ParserStream{
     public code:token[]
     constructor(code:token[]) {
         this.pos = 0
-        this.code = code
+        //注释 token 不参与解析(lexer 产出 Comment 供工具用,parser 必须跳过,
+        //否则任何注释都导致整文件解析失败——此前从未有带注释的程序被编译过)
+        this.code = code.filter(t => t.type !== TokenType.Comment)
     }
     public next():token{
         return this.code[this.pos++]
@@ -271,7 +273,14 @@ export default {
         let data=new Parser(code)
         for(let i of rule)
             data.register(i)
-        return data.parse(entry)
+        let ret=data.parse(entry)
+        //File 解析完必须到 EOF(仅完整程序入口):blocks 的 loop 会吞掉顶层块解析失败
+        //(如函数体语法错误),导致整个函数静默丢失且 check 0 errors,产出空程序;剩余 token 即语法错误
+        //片段入口(Expression/Commands 等测试用)允许剩余
+        let rest=data.stream.now()
+        if(entry=='File'&&rest)
+            throw new Error(`语法错误:未解析的 token '${rest.value}' at ${rest.line}`)
+        return ret
     },
     generate
 }

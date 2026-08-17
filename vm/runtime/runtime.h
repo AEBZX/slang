@@ -18,17 +18,20 @@ using PoolName=void(*)(VarPool*,int,const std::string&,int);
 std::unordered_map<int,CommandRun> basic();
 std::unordered_map<int,CommandRun> math();
 std::unordered_map<int,CommandRun> io();
+//源解析:reg=原样值(槽号/地址/字面量,编译器 mov reg 源即此语义);value=var[x](槽内pool_id)
+//注:常量加载由 load 特例(reg=池id原样)承担,故 reg 源不需要池反查
 inline int src(VarPool* data, const int form, const int x)
 {
-    return form ? VarPool::unsafeReadVar(data, x) : data->data.link((double)x);
+    return form ? VarPool::unsafeReadVar(data, x) : x;
 }
 inline int pv(VarPool* data, const int form, const int x)
 {
     return form ? static_cast<int>(data->data.get(VarPool::unsafeReadVar(data, x)).num) : x;
 }
+//目标槽:reg=x原样;value=var[x](解引用写,编译器 mov value X value Y 语义:var[var[X]]=...)
 inline int dst(VarPool* data, const int form, const int x)
 {
-    return form ? data->data.link((double)x) : x;
+    return form ? VarPool::unsafeReadVar(data, x) : x;
 }
 inline int key(VarPool* data, const int form, const int x)
 {
@@ -72,7 +75,21 @@ public:
         while (true)
         {
             if (!alive)break;
-            if (index >= static_cast<int>((*command)[block].size()))alive=false;
+            //越界即块执行完毕:有帧则弹帧继续(cz 跳空块/自然走完的块),无帧才结束
+            if (index >= static_cast<int>((*command)[block].size()))
+            {
+                if (blockStack.size() > 0)
+                {
+                    const int ret_idx = indexStack.pop();
+                    const int ret_blk = indexStack.pop();
+                    blockStack.pop();
+                    block = ret_blk;
+                    index = ret_idx;   //continue 跳过 index++,直接指向帧下一条
+                    continue;
+                }
+                alive=false;
+                break;
+            }
             (*runner)(this,(*command)[block][index]);
             index++;
         }
@@ -84,7 +101,9 @@ inline void r(Runtime* runtime,std::array<int,4> c)
 }
 class Manage
 {
-    std::vector<Runtime> thread;
+    //unique_ptr 容器:扩容/增删只移动指针,Runtime 实例地址稳定,运行中线程的 this 不悬垂
+    //此前 vector<Runtime> 扩容会移动实例,运行中线程经旧地址访问已释放内存
+    std::vector<std::unique_ptr<Runtime>> thread;
     int thread_num;
     VarPool pool;
     ValueSet value;
@@ -101,8 +120,6 @@ public:
         const Command& c,const Runner& r)
     {
         thread_num=1;
-        //先扩容再访问,原代码空 vector 直接 thread[0] 是越界UB
-        thread.resize(1);
         pool.init(num, str);
         command=c;
         value=VarPool::unsafeWriteVar;
@@ -114,13 +131,14 @@ public:
             _run[k]=v;
         for (auto [k,v]:math())
             _run[k]=v;
-        thread[0].pool=&pool;
-        thread[0].thread=&thread_num;
-        thread[0].command=&command;
-        thread[0]._join=&join;
-        thread[0].m=this;
-        thread[0].runner=&runner;
-        thread[0]._run=&_run;
+        thread.push_back(std::make_unique<Runtime>());
+        thread[0]->pool=&pool;
+        thread[0]->thread=&thread_num;
+        thread[0]->command=&command;
+        thread[0]->_join=&join;
+        thread[0]->m=this;
+        thread[0]->runner=&runner;
+        thread[0]->_run=&_run;
         runner=r;
         Old_M=Memory();
         M=Memory();
@@ -128,35 +146,46 @@ public:
     void gc()
     {
         pool.data.gc();
-        thread.erase(std::ranges::remove_if(thread, [](Runtime& t)
+        thread.erase(std::ranges::remove_if(thread, [](std::unique_ptr<Runtime>& t)
         {
-            if (t.alive) return false;
-            t.join();
+            if (t->alive) return false;
+            t->join();
             return true;
         }).begin(), thread.end());
     }
     void start()
     {
-        thread[0].block=0;
-        thread[0].start();
+        thread[0]->block=0;
+        thread[0]->start();
         while (true)
         {
             M=Memory();
             if (M>=15*Old_M/10)gc();
             Old_M=M;
+            //所有 Runtime 均结束(alive=false)即程序结束
+            bool running=false;
+            for (const auto& t:thread)
+                if (t->alive){ running=true; break; }
+            if (!running) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
+    //thread 指令:新建真线程跑块(此前同步 run 在 thread[size-1] 上,覆盖主线程且非并发)
     static void join(Manage* m,const int block)
     {
-        m->thread[m->thread.size()-1].pool=&m->pool;
-        m->thread[m->thread.size()-1].thread=&m->thread_num;
-        m->thread[m->thread.size()-1].command=&m->command;
-        m->thread[m->thread.size()-1].block=block;
-        m->thread[m->thread.size()-1].m=m;
-        m->thread[m->thread.size()-1].runner=&m->runner;
-        m->thread[m->thread.size()-1]._run=&m->_run;
-        m->thread[m->thread.size()-1].run();
+        auto t=std::make_unique<Runtime>();
+        t->pool=&m->pool;
+        t->thread=&m->thread_num;
+        t->command=&m->command;
+        t->block=block;
+        t->index=0;
+        t->alive=true;
+        t->m=m;
+        t->runner=&m->runner;
+        t->_run=&m->_run;
+        t->_join=&join;
+        m->thread.push_back(std::move(t));
+        m->thread.back()->start();
     }
 };
 #endif

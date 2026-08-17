@@ -18,7 +18,9 @@ const P_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
     const $=tool.$
     //仅当源和目标参数完全一致(mov x x)才冗余
     //state比较会把"mov执行后的记录值"误当"mov前已冗余",误删取地址(&a)与写入
-    if(data.left[0]==data.right[0]&&data.left[1]==data.right[1])tool._mark(bid,index)
+    //mov reg X reg X 是对象句柄初始化(对象槽自引用),不能当冗余删除,否则 offset 对象链断裂
+    //仅非 reg-reg 的同形(mov value X value X 等)才按冗余删
+    if(data.left[0]==data.right[0]&&data.left[1]==data.right[1]&&data.left[0]!='reg')tool._mark(bid,index)
     if(!tool.dead(bid,index)){
         $.tset(data.left,bid,index,true,data)
         $.tset(data.right,bid,index,false,data)
@@ -166,9 +168,10 @@ const P_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     const $=tool.$
     let _data:IR=data
     let t=$.value(data.data),o=$.value(data.offset)
-    let _t=$.t(data.data),_o=$.t(data.data)
-    let __data=_t[3]
-    if(_t==_o&&__data instanceof OFFSET_SET&&$.value(__data.target)==t&&$.value(__data.offset)==o)
+    //_t 可能为 undefined(跨块访问数组/对象,last_touch 记录在别的块的 state 键上),跳过优化
+    let _t=$.t(data.data)
+    let __data=_t?.[3]
+    if(_t&&_t==$.t(data.data)&&__data instanceof OFFSET_SET&&$.value(__data.target)==t&&$.value(__data.offset)==o)
         _data=new MOV(data.target,__data.value)
     if(data!=_data){
         tool.replace(bid,index,_data)

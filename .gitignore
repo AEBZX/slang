@@ -15,3 +15,7 @@ vm/*.vcxproj.filters
 vm/*.slnx
 vm/*.dir/
 vm/vm_test-*_include.cmake
+package/node_modules
+.tmp-*
+demo
+vm/.tmp*

@@ -132,12 +132,14 @@ static void out_net(Runtime* t, const int obj)
         io_set(t, t->pool->data.link(1.0));
     }
 }
-static void out_port(Runtime* t, const int oper_pid, const int obj)
+static void out_port(Runtime* t, const int oper_pid, const int obj, const int fb)
 {
+    (void)fb;
     const std::string port = std::string(t->pool->data.get(oper_pid).str);
-    if (port == "file") out_file(t, obj);
+    //obj 已按 key 解析:file/shell/net 为对象句柄;system 为字符串池id(value 形式)
+    if (port == "system") out_system(t, obj);
+    else if (port == "file") out_file(t, obj);
     else if (port == "shell") out_shell(t, obj);
-    else if (port == "system") out_system(t, obj);
     else if (port == "net") out_net(t, obj);
     else io_set(t, t->pool->data.link(0.0));   //未知端口返回失败
 }
@@ -174,9 +176,10 @@ static void in_port(Runtime* t, const int oper_pid, const int target)
     VarPool::writeVar(t->pool, target, t->io_result);
     t->io_result = -1;
 }
+//操作数:oper 源(端口名,src);out 的 data 用 key(value→var[x] 取对象句柄);in 的 target 取原始槽号(写目标变量)
 #define IO_F(fa, fb) \
-void in_f##fa##fb(Runtime* t,int a,int b,int c){ (void)c; in_port(t, src(t->pool,fa,a), key(t->pool,fb,b)); } \
-void out_f##fa##fb(Runtime* t,int a,int b,int c){ (void)c; out_port(t, src(t->pool,fa,a), key(t->pool,fb,b)); }
+void in_f##fa##fb(Runtime* t,int a,int b,int c){ (void)c;(void)fb; in_port(t, src(t->pool,fa,a), b); } \
+void out_f##fa##fb(Runtime* t,int a,int b,int c){ (void)c; out_port(t, src(t->pool,fa,a), key(t->pool,fb,b), fb); }
 IO_F(0,0) IO_F(0,1) IO_F(1,0) IO_F(1,1)
 std::unordered_map<int,CommandRun> io()
 {

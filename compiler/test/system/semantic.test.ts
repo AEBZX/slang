@@ -33,6 +33,8 @@ const CMPS: Record<number, (a: any, b: any) => number> = {
 }
 class Sim {
     slots = new Map<number, any>()
+    //对象模型与 VM 对齐:offset[对象槽][键]=值(独立映射,对象槽=操作数原样,不依赖槽内容)
+    offsets = new Map<number, Map<any, any>>()
     addr = new Map<number, { obj: any, key: any }>()
     param: any[] = []
     stack: any[] = []
@@ -115,17 +117,18 @@ class Sim {
             } else if (ins instanceof POP) {
                 this.slots.set(ins.target[1], this.stack.pop())
             } else if (ins instanceof OFFSET_SET) {
-                let obj = this.slots.get(ins.target[1])
-                if (obj == null) { obj = {}; this.slots.set(ins.target[1], obj) }
-                obj[this.resolve(ins.offset)] = this.resolve(ins.value)
+                //对象槽号=resolve(target)(reg原样/value经var读句柄),独立 offset 映射
+                let om = this.offsets.get(this.resolve(ins.target))
+                if (!om) { om = new Map(); this.offsets.set(this.resolve(ins.target), om) }
+                om.set(this.resolve(ins.offset), this.resolve(ins.value))
             } else if (ins instanceof OFFSET_GET) {
-                const obj = this.slots.get(ins.data[1])
-                this.slots.set(ins.target[1], obj ? obj[this.resolve(ins.offset)] : undefined)
+                const om = this.offsets.get(this.resolve(ins.data))
+                this.slots.set(this.resolve(ins.target), om ? om.get(this.resolve(ins.offset)) : undefined)
             } else if (ins instanceof OFFSET_ADDR) {
-                const obj = this.slots.get(ins.data[1])
+                const om = this.offsets.get(this.resolve(ins.data))
                 const h = this.addr_id--
-                this.addr.set(h, { obj: obj || {}, key: this.resolve(ins.offset) })
-                this.slots.set(ins.target[1], h)
+                this.addr.set(h, { obj: om || new Map(), key: this.resolve(ins.offset) })
+                this.slots.set(this.resolve(ins.target), h)
             } else if (ins instanceof PARAM_SET) {
                 this.param[ins.param[1]] = this.resolve(ins.value)
             } else if (ins instanceof PARAM_LOAD) {

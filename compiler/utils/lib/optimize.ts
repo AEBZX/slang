@@ -88,6 +88,8 @@ export class IRTool{
     guse:Set<number>
     //已插 delete 的变量槽(kill.ts 去重,跨优化轮次保留)
     deleted:Set<number>
+    //跨块写:槽→写入它的块集合(循环体跨块修改变量,块内折叠需保守)
+    cross:Map<number,Set<number>>
     id:number
     private _replace:[number,number,IR][]
     $={
@@ -239,6 +241,7 @@ export class IRTool{
         this.last_touch=new Map()
         this.guse=new Set()
         this.deleted=new Set()
+        this.cross=new Map<number,Set<number>>()
         this._kill=[]
     }
     _id(){

@@ -35,6 +35,16 @@ export const _CMP=new Map<number,(a:number,b:number)=>number>([
 const C_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.left,data.right)
+    //右值 value 形式读槽:若该槽被其他块写入(while 循环体改 i),值不确定,不传播
+    //否则 state 残留初始化值,后续 cmp/运算把 if(i==5) 折叠成恒假
+    if(data.right[0]=='value'&&typeof data.right[1]=='number'){
+        let blocks=tool.cross.get(data.right[1])
+        if(blocks&&blocks.size>0&&!(blocks.size==1&&blocks.has(bid))){
+            let ls=$.value(data.left)
+            if(typeof ls=='number')tool.state.set(ls,null)
+            return
+        }
+    }
     $.set(data.left, data.right)
 }
 const C_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>{
@@ -96,6 +106,13 @@ const C_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
     $.Z(data.left,data.right,data.oper)
     let o=$.value(data.oper),r=$.value(data.right),l=$.rvalue(data.left)
     if(o==null||r==null||l==null)return
+    //跨块写保守:left 槽被其他块写入(如 while 循环体改 i)则值不确定,不可折叠
+    //否则块内 state 残留初始化值(0),if(i==5) 被折叠成恒假,控制流断裂
+    let lslot=$.value(data.left)
+    if(typeof lslot=='number'){
+        let blocks=tool.cross.get(lslot)
+        if(blocks&&blocks.size>0&&!(blocks.size==1&&blocks.has(bid)))return
+    }
     let res=_CMP.get(o as number)(l as number,r as number)
     let id=tool._id()
     tool.pool.set(id,res)
@@ -134,6 +151,10 @@ const C_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>{
     $.Z(data.data,data.param)
     //param_load 从运行期参数表取值,值在编译期未知,不可折叠成常量
     //data.param 是参数索引(['reg',i]),并非常量池id,误折叠会把参数值错算成索引
+    //必须把目标槽置 null:否则 state 残留 param_load 前 load 的旧值,后续 cmp/运算误折叠
+    //(例:var f2=fib(4) 的槽此前 load 过 fib 块id=10,残留使 f2==3 被折叠成 10==3=假)
+    let t=$.value(data.data)
+    if(typeof t=='number')tool.state.set(t,null)
 }
 export default new Map<any,opt_visitor>([
     [MOV,C_MOV],

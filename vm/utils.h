@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <mutex>
 #include <ostream>
 #include <thread>
 #include <unordered_map>
@@ -296,6 +297,9 @@ inline bool deleteFolder(const std::string& local)
 }
 inline void console(const std::string& data)
 {
+    //多线程(thread 指令)并发输出需互斥,否则交错/丢失
+    static std::mutex out_mtx;
+    std::lock_guard<std::mutex> lock(out_mtx);
     std::cout <<data<<std::flush;
 }
 inline void read(std::string* data)

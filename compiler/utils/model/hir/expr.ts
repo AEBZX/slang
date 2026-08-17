@@ -75,6 +75,12 @@ export class HArgumentsExpr extends HFixExpr{
         super()
     }
 }
+//new 表达式:对象分配+this参数传递(此前 NewPrefix 被忽略,new 降级为普通调用,无对象)
+export class HNewExpr extends HExpr{
+    constructor(public target:HExpr,public args:HExpr[]) {
+        super()
+    }
+}
 export class HNotExpr extends HFixExpr{
     constructor(public target:HExpr) {
         super()

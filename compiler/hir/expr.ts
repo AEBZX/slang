@@ -9,7 +9,7 @@ import {
     HBooleanLiteral, HExpr, HIdentifierExpr, HIndexExpr,
     hir_visitor, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNotExpr, HNullLiteral,
     HNumberLiteral, HPostDecrementExpr, HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr, HReferenceExpr,
-    HStringLiteral, HTernaryExpr, ClassType, IdentifierExpr,
+    HStringLiteral, HTernaryExpr, ClassType, IdentifierExpr, HNewExpr,
     IncrementPostfix, IncrementPrefix, IndexPostfix,
     InequalityExpression, LambdaExpression,
     LessEqualExpression, LessExpression,
@@ -105,7 +105,13 @@ const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
             primary=new HReferenceExpr(primary)
         if(i instanceof AddressPrefix)
             primary=new HAddressExpr(primary)
-        //忽略NewPrefix
+        //new:包装调用为 HNewExpr(对象分配+this传递),此前被忽略导致无对象
+        if(i instanceof NewPrefix){
+            if(primary instanceof HArgumentsExpr)
+                primary=new HNewExpr(primary.target,primary.args)
+            else
+                primary=new HNewExpr(primary,[])
+        }
     }
     return primary
 }

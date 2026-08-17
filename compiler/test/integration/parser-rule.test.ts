@@ -18,6 +18,34 @@ function parse_entry(entry: string, rules: any[], code: string): ast_data | stri
     return $.parser.run(entry, clone_rules(rules), tokens)
 }
 
+// ==================== File 语法错误上报 ====================
+describe('File 语法错误上报', () => {
+    //完整规则集(File 引用 Commands/Expression 等)
+    const rules = [...BlockRules, ...CommandRules, ...ExprRules, ...IdentifierRules]
+
+    it('map 缺逗号: 报错而非静默丢函数体', () => {
+        //此前 blocks 的 loop 吞掉 Block 失败,File 返回空且 check 0 errors,产出空程序
+        expect(() => parse_entry('File', rules, 'public static main:void(){var m:string{}=[a:1 b:2];}\n'))
+            .toThrow(/未解析的 token/)
+    })
+
+    it('正常程序不误报', () => {
+        const ret = parse_entry('File', rules, 'public static main:void(){var m:string{}=[a:1, b:2];}\n')
+        expect(ret).toBeTruthy()
+    })
+
+    it('空文件不报错', () => {
+        const ret = parse_entry('File', rules, '')
+        expect(ret).toBeTruthy()
+    })
+
+    it('带注释的程序正常解析(注释被 parser 跳过)', () => {
+        //此前 Comment token 进解析流,任何注释(含中文)都导致整文件解析失败
+        const ret = parse_entry('File', rules, '// line comment\n/* block */\npublic static main:void(){return;}\n')
+        expect(ret).toBeTruthy()
+    })
+})
+
 // ==================== 类型解析 (identifier.ts) ====================
 describe('类型解析 (Type)', () => {
     const rules = [...IdentifierRules]

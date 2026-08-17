@@ -4,7 +4,8 @@ const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifi
 const Modifier=$.l('Modifiers',$.o('Modifier',
     'public','private','unstatic','static','async','sync'
 ))
-const _module=$.s('Module',$.d('module'),$.r('blocks'))
+//Module 缺 {} 包裹,内部 blocks 永远匹配零个(原实现 module 块是空壳)
+const _module=$.s('Module',$.d('module'),$.t('{',$.r('blocks'),'}'))
 const _class=$.s('Class',$.d('class'),$.c($.d('implements'),$.r('ModuleName')),
     $.t('{',$.r('blocks'),'}'))
 const _interface=$.s('Interface',$.d('interface'),$.c($.d('implements'),$.r('ModuleName')),

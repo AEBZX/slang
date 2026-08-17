@@ -169,4 +169,38 @@ describe('IR 字节码生成', () => {
         //while的块调用是cz(压块帧,区别于call函数帧);条件块+if分支各一次
         expect(cmds.filter((c: any) => c[0] == 'cz').length).toBeGreaterThanOrEqual(2)
     })
+
+    it('类槽与成员槽初始化在根块(load 块id常量)', () => {
+        //类槽=构造块id,成员槽=方法块id,均需在根块初始化,否则 new/成员访问读 0 死循环
+        const r = ir_of('public A:class{public f:number(){return 1;}}\npublic static main:void(){var a:A=new A();}\n')
+        const root = r.code.get(0)!
+        const loads = root.filter((c: any) => c[0] == 'load')
+        expect(loads.length).toBeGreaterThanOrEqual(2)   //类槽 + f 成员槽
+    })
+
+    it('new 生成对象自引用与 this 参数(param_set param1=对象)', () => {
+        const r = ir_of('public A:class{public constructor:void(x:number){}}\npublic static main:void(){var a:A=new A(1);}\n')
+        const root = r.code.get(0)!
+        const self = root.find((c: any) => c[0] == 'mov' && c[1][0] == 'reg' && c[2][0] == 'reg' && c[1][1] == c[2][1])
+        expect(self).toBeTruthy()                          //对象自引用句柄 var[id]=id
+        const pset = root.filter((c: any) => c[0] == 'param_set')
+        expect(pset.some((c: any) => c[1][1] == 1)).toBe(true)   //param[1]=this
+        expect(pset.some((c: any) => c[1][1] == 2)).toBe(true)   //param[2]=构造实参
+    })
+
+    it('构造块成员初始化 offset 键用 value(与成员访问一致)', () => {
+        const r = ir_of('public A:class{public f:var:number;}\npublic static main:void(){var a:A=new A();a.f=1;}\n')
+        const cls = [...r.code.values()].find((cmds: any[]) => cmds.some((c: any) => c[0] == 'offset_set'))
+        const oset = (cls as any[])?.find((c: any) => c[0] == 'offset_set')
+        //键/值均为 value 形式(var[成员槽]=块id/初值),与成员访问 offset_get 的键语义一致
+        expect(oset?.[2]?.[0]).toBe('value')
+        expect(oset?.[3]?.[0]).toBe('value')
+    })
+
+    it('成员方法调用生成 param_set param1=对象(this)', () => {
+        const r = ir_of('public A:class{public f:number(){return 1;}}\npublic static main:void(){var a:A=new A();var v:number=a.f();}\n')
+        const root = r.code.get(0)!
+        //成员调用处 param[1]=对象
+        expect(root.some((c: any) => c[0] == 'param_set' && c[1][1] == 1)).toBe(true)
+    })
 })

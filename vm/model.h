@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <mutex>
 class VarPool;
 template <typename T>
 class Stack
@@ -53,9 +54,12 @@ private:
     std::vector<int> gcList;
     std::unordered_map<int,bool> type;
     int nextId=0;
+    //线程安全:多线程(thread 指令)并发 link/delete_/get/gc 需互斥
+    mutable std::mutex mtx;
 public:
     void delete_(const int id)
     {
+        std::lock_guard<std::mutex> lock(mtx);
         if (!type.contains(id)) return;   //未知id忽略
         refCount[id]--;
         if (refCount[id]==0)
@@ -63,6 +67,7 @@ public:
     }
     int link(const std::string& v)
     {
+        std::lock_guard<std::mutex> lock(mtx);
         if (const auto it = strI.find(v); it != strI.end()) {
             refCount[it->second]++;
             return it->second;
@@ -76,6 +81,7 @@ public:
     }
     int link(const double v)
     {
+        std::lock_guard<std::mutex> lock(mtx);
         auto k = std::bit_cast<uint64_t>(v);
         if (const auto it = numI.find(k); it != numI.end())
         {
@@ -112,6 +118,8 @@ public:
     }
     void gc()
     {
+        //多线程(thread 指令)并发 gc 需互斥,否则与 link/delete_ 竞争导致崩溃
+        std::lock_guard<std::mutex> lock(mtx);
         //查询gc列表进行删除
         for (const auto id:gcList)
         {
@@ -133,6 +141,7 @@ public:
     Const get(const int id)
     {
         //未知id返回空Const,避免operator[]向type/string插入垃圾条目
+        std::lock_guard<std::mutex> lock(mtx);
         if (!type.contains(id)) return {};
         Const ret;
         ret.type=type[id];
@@ -171,6 +180,9 @@ private:
     TaskQueue task_queue;
     //alloc 起点:基于 this 地址的随机高位(>=1<<30),远离编译器槽号/池id区间;单调递增+contains兜底保证不撞
     int nextId = 0;
+    std::mutex alloc_mtx;
+    //var/offset/name 并发访问互斥(thread 指令多线程共享 VarPool)
+    mutable std::mutex vmtx;
     int alloc_base() const
     {
         return (int)(0x40000000 | (0x3FFFFFFF & (uintptr_t)this));
@@ -181,6 +193,8 @@ public:
     //新建一个变量槽(offset_set 建成员变量用),返回其 var_id
     int alloc()
     {
+        //多线程(thread 指令)并发 alloc 需互斥
+        std::lock_guard<std::mutex> lock(alloc_mtx);
         while (var.contains(nextId) || offset.contains(nextId) || name.contains(nextId))
             nextId++;
         return nextId++;
@@ -188,6 +202,7 @@ public:
     //offset 键是否存在(避免 operator[] 误插)
     bool hasOffset(const int id,const int off) const
     {
+        std::lock_guard<std::mutex> lock(vmtx);
         const auto it = offset.find(id);
         return it != offset.end() && it->second.contains(off);
     }
@@ -287,26 +302,32 @@ public:
     }
     static void unsafeWriteVar(VarPool* data,const int id, const int value)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         data->var[id]=value;
     }
     static void unsafeWriteOffset(VarPool* data,const int id, const int off, const int value)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         data->offset[id][off]=value;
     }
     static void unsafeWriteName(VarPool* data,const int id, const std::string& n, const int value)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         data->name[id][n]=value;
     }
     static int unsafeReadVar(VarPool* data,const int id)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         return data->var[id];
     }
     static int unsafeReadOffset(VarPool* data,const int id, const int off)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         return data->offset[id][off];
     }
     static int unsafeReadName(VarPool* data,const int id, const std::string& n)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         return data->name[id][n];
     }
     void oper(const Task& task)

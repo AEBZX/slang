@@ -110,7 +110,11 @@ export function global_use(tool:IRTool){
     }
     return g
 }
-const D_MOV:opt_visitor=(data:MOV, tool, bid, index)=>tool.$.dce(data.left,bid,index)
+const D_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
+    //自引用 mov(reg X ← reg X)是对象句柄初始化,优化器视为无操作会删,导致 offset 对象链断裂,永不删
+    if(data.left[0]=='reg'&&data.right[0]=='reg'&&data.left[1]==data.right[1])return
+    tool.$.dce(data.left,bid,index)
+}
 const D_LOAD:opt_visitor=(data:LOAD, tool, bid, index)=>tool.$.dce(data.reg,bid,index)
 const D_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>tool.$.dce(data.result,bid,index)
 const D_PARAM_LOAD:opt_visitor=(data:PARAM_LOAD, tool, bid, index)=>tool.$.dce(data.data,bid,index)

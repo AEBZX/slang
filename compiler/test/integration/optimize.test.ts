@@ -110,7 +110,8 @@ describe('optimize o1 优化', () => {
     })
 
     it('数组下标读取保留 offset_get', () => {
-        const bin = opt_bin('public m:number(){var a:number[]=[1,2];return a[0];}\n')
+        //元素用参数(非常量),避免常量折叠把 a[0] 折掉
+        const bin = opt_bin('public m:number(x:number){var a:number[]=[x,2];return a[0];}\n')
         expect(bin.some((c: any) => in_range(c, RANGE('offset_get')))).toBe(true)
         expect(count_op(bin, 'offset_addr')).toBe(0)
     })

@@ -7,10 +7,11 @@ void MOV_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
     t->pool->oper({{valueCond(a),valueCond(b)},mov_f##fa##fb}); }
 MOV_F(0,0) MOV_F(0,1) MOV_F(1,0) MOV_F(1,1)
+//LOAD:var[A]=池id(reg源=池id原样存槽,value源=var读)——编译器 load 发射的是池 id,必须特例,否则 reg 反查错位
 #define LOAD_F(fa, fb) \
 void load_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n;(void)c; \
-    v(d,dst(d,fa,a),src(d,fb,b)); } \
+    v(d,dst(d,fa,a),key(d,fb,b)); } \
 void LOAD_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
     t->pool->oper({{valueCond(a),valueCond(b)},load_f##fa##fb}); }
@@ -19,19 +20,37 @@ LOAD_F(0,0) LOAD_F(0,1) LOAD_F(1,0) LOAD_F(1,1)
 void cmp_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=dst(d,fa,a); \
-    int L=(int)d->data.get(VarPool::unsafeReadVar(d,A)).num; \
-    int R=pv(d,fb,b); \
+    int pidL=VarPool::unsafeReadVar(d,A); \
+    const Const& Lc=d->data.get(pidL); \
     int C=pv(d,fc,c); \
-    int r=(C==0)?(L==R):(C==1)?(L!=R):(C==2)?(L>R):(C==3)?(L<R):(C==4)?(L>=R):(L<=R); \
+    int r; \
+    if(!fb){ \
+        /*reg 右值=数值字面量,原语义直接比较*/ \
+        double ln=Lc.num, rn=b; \
+        r=(C==0)?(ln==rn):(C==1)?(ln!=rn):(C==2)?(ln>rn):(C==3)?(ln<rn):(C==4)?(ln>=rn):(ln<=rn); \
+    }else{ \
+        /*value 右值=池id,池值比较;双字符串按内容比较(此前恒按 num=0 比较,字符串恒相等)*/ \
+        int pidR=VarPool::unsafeReadVar(d,b); \
+        const Const& Rc=d->data.get(pidR); \
+        if(!Lc.type&&!Rc.type){ \
+            int s=Lc.str.compare(Rc.str); \
+            r=(C==0)?(s==0):(C==1)?(s!=0):(C==2)?(s>0):(C==3)?(s<0):(C==4)?(s>=0):(s<=0); \
+        }else{ \
+            double ln=Lc.num, rn=Rc.num; \
+            r=(C==0)?(ln==rn):(C==1)?(ln!=rn):(C==2)?(ln>rn):(C==3)?(ln<rn):(C==4)?(ln>=rn):(ln<=rn); \
+        } \
+    } \
     v(d,A,d->data.link((double)r)); } \
 void CMP_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},cmp_f##fa##fb##fc}); }
 CMP_F(0,0,0) CMP_F(0,0,1) CMP_F(0,1,0) CMP_F(0,1,1)
 CMP_F(1,0,0) CMP_F(1,0,1) CMP_F(1,1,0) CMP_F(1,1,1)
+//OFFSET 对象槽操作数用 key 语义:reg→x原样,value→var[x](自引用句柄,编译器map/数组发射对齐)
+//OFFSET_SET a b c:offset[A][B]=新建/复用var,var[vid]=src(C)
 #define OFFSET_SET_F(fa, fb, fc) \
 void offset_set_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)v;(void)n; \
-    int A=dst(d,fa,a), B=key(d,fb,b); \
+    int A=key(d,fa,a), B=key(d,fb,b); \
     int vid; \
     if (d->hasOffset(A,B)) vid=VarPool::unsafeReadOffset(d,A,B); \
     else { vid=d->alloc(); o(d,A,B,vid); } \
@@ -41,11 +60,11 @@ void OFFSET_SET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
 OFFSET_SET_F(0,0,0) OFFSET_SET_F(0,0,1) OFFSET_SET_F(0,1,0) OFFSET_SET_F(0,1,1)
 OFFSET_SET_F(1,0,0) OFFSET_SET_F(1,0,1) OFFSET_SET_F(1,1,0) OFFSET_SET_F(1,1,1)
 
-//OFFSET_GET a b c:var[A]=var[offset[B][C]](读 var_id 对应变量值)
+//OFFSET_GET a b c:var[A]=var[offset[B][C]]
 #define OFFSET_GET_F(fa, fb, fc) \
 void offset_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
-    int A=dst(d,fa,a); \
+    int A=key(d,fa,a); \
     int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
     v(d,A,VarPool::unsafeReadVar(d,vid)); } \
 void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
@@ -53,13 +72,14 @@ void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
 OFFSET_GET_F(0,0,0) OFFSET_GET_F(0,0,1) OFFSET_GET_F(0,1,0) OFFSET_GET_F(0,1,1)
 OFFSET_GET_F(1,0,0) OFFSET_GET_F(1,0,1) OFFSET_GET_F(1,1,0) OFFSET_GET_F(1,1,1)
 
-//OFFSET_ADDR a b c:var[A]=link(offset[B][C])(var_id 作为数值返回)
+//OFFSET_ADDR a b c:var[A]=offset[B][C] 的 var_id(地址=槽号,不 link 成池id)
+//编译器取地址后 mov value 解引用写 var[var[A]];link(vid) 会把槽号当池id,写入错槽
 #define OFFSET_ADDR_F(fa, fb, fc) \
 void offset_addr_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
-    int A=dst(d,fa,a); \
+    int A=key(d,fa,a); \
     int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
-    v(d,A,d->data.link((double)vid)); } \
+    v(d,A,vid); } \
 void OFFSET_ADDR_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_addr_f##fa##fb##fc}); }
 OFFSET_ADDR_F(0,0,0) OFFSET_ADDR_F(0,0,1) OFFSET_ADDR_F(0,1,0) OFFSET_ADDR_F(0,1,1)
@@ -243,10 +263,11 @@ void PARAM_LOAD_V_V(Runtime* t,int a,int b,int c)
     VarPool::writeVar(t->pool,dst(t->pool,1,a),t->param[src(t->pool,0,b)]);
 }
 //push/pop:操作数栈(push 恒发基址118,编译器无 value 变体,故不注册 PUSH_V)
+//push 压槽内容(reg 语义=原样值,但这里需 var[a] 槽值,否则保存恢复全错位)
 void PUSH_R(Runtime* t,int a,int b,int c)
 {
     (void)b;(void)c;
-    t->stack.push(src(t->pool,0,a));
+    t->stack.push(VarPool::unsafeReadVar(t->pool,a));
 }
 void POP_R(Runtime* t,int a,int b,int c)
 {

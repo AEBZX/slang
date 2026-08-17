@@ -18,14 +18,6 @@ Manage entry(const std::string& path)
     {
         if (pos+n>size) throw std::runtime_error("sbin文件截断");
     };
-    auto u32=[&]
-    {
-        need(4);
-        uint32_t v;
-        std::memcpy(&v,data.data()+pos,4);   //小端直读
-        pos+=4;
-        return static_cast<int>(v);
-    };
     magic("POOL_START",10);
     //常量池
     std::unordered_map<int,double> num;

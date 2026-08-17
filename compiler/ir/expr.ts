@@ -2,7 +2,7 @@ import {
     asm_factory, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HAssign, HBinaryExpr, HBitNotExpr,
     HBooleanLiteral,
-    HIdentifierExpr, HIfStatement, HIndexExpr, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNotExpr,
+    HIdentifierExpr, HIfStatement, HIndexExpr, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNewExpr, HNotExpr,
     HNullLiteral,
     HNumberLiteral, HPostDecrementExpr, HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr, HReferenceExpr,
     HStringLiteral, HTernaryExpr
@@ -56,18 +56,27 @@ const I_IdentifierExpr:asm_factory=(data:HIdentifierExpr,tool)=>{
     tool.code.push(['mov',['reg',tool.cache.pop()],['value',data.name],['value',0]])
 }
 //offset [array/map] [index] [value]=>array/map[index]=value
+//对象槽自引用(var[id]=id):对象句柄经赋值链存进变量槽,VM 的 value 形式对象访问靠它解析
 const I_ArrayExpr:asm_factory=(data:HArrayExpr,tool)=>{
     let id=tool.cache.pop()
+    tool.code.push(['mov',['reg',id],['reg',id],['value',0]])
     let index=0
     let ls=tool.id()
+    let key_id=tool.id()
     for(let i of data.elements){
+        //键也用数值的池id(value 形式),与 offset_get 的变量索引(value→var[x] 池id)一致
+        //此前 offset_set 用 reg 数字键(0,1,2),offset_get 用池id,键错位导致 a[i] 读不到
+        tool.cache.push(key_id)
+        tool.gen(new HNumberLiteral(index))
         tool.cache.push(ls)
         tool.gen(i)
-        tool.code.push(['offset_set',['reg',id],['reg',index++],['value',ls]])
+        tool.code.push(['offset_set',['value',id],['value',key_id],['value',ls]])
+        index++
     }
 }
 const I_MapExpr:asm_factory=(data:HMapExpr,tool)=>{
     let id=tool.cache.pop()
+    tool.code.push(['mov',['reg',id],['reg',id],['value',0]])
     let key_id=tool.id()
     let value_id=tool.id()
     for(let [k,v] of data.elements){
@@ -141,12 +150,22 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //要call的区域的指针
     let id=tool.cache.pop()
     tool.cache.push(id)
+    //成员方法调用 c.inc():param[1]=对象(this),实参从param[2]起
+    //此前 this 参数不传,成员方法 param_load this 读到未设置值
+    let obj_id:number|null=null
+    if(data.target instanceof HMemberExpr){
+        obj_id=tool.id()
+        tool.cache.push(obj_id)
+        tool.gen(data.target.target)
+    }
     tool.gen(data.target)
     //栈帧:保存当前函数局部槽(跳过槽0返回值),返回后恢复——递归不再覆盖caller的槽
     let frame=tool.frame_push()
     //用于参数设置
     let ls_id=tool.id()
     let index=1
+    if(obj_id!=null)
+        tool.code.push(['param_set',['reg',index++],['value',obj_id],['value',0]])
     for(let i of data.args){
         tool.cache.push(ls_id)
         tool.gen(i)
@@ -163,6 +182,26 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //恢复栈帧
     tool.frame_pop(frame)
     tool.code.push(['param_load',['reg',id],['reg',0],['value',0]])
+}
+//new:对象分配(自引用句柄)+this 经 param[1] 传入构造块,构造实参从 param[2] 起
+//此前 NewPrefix 被忽略,new 降级为普通调用,无对象分配/this 传递,class 完全不可用
+const I_NewExpr:asm_factory=(data:HNewExpr,tool)=>{
+    let id=tool.cache.pop()          //结果槽=对象
+    tool.cache.push(id)
+    tool.code.push(['mov',['reg',id],['reg',id],['value',0]])   //对象自引用句柄 var[id]=id
+    let target_id=tool.id()
+    tool.cache.push(target_id)
+    tool.gen(data.target)            //类槽→构造块id
+    tool.code.push(['param_set',['reg',1],['value',id],['value',0]])   //this=对象
+    let ls_id=tool.id()
+    let index=2
+    for(let i of data.args){
+        tool.cache.push(ls_id)
+        tool.gen(i)
+        tool.code.push(['param_set',['reg',index++],['value',ls_id],['value',0]])
+    }
+    tool.code.push(['call',['value',target_id],['reg',1],['value',0]])
+    //结果=对象(id 槽已自引用,构造块返回 this=对象)
 }
 const I_NotExpr:asm_factory=(data:HNotExpr,tool)=>{
     let id=tool.cache.pop()
@@ -278,6 +317,7 @@ export default new Map<any,asm_factory>([
     [HPreDecrementExpr,I_PrefixDecrementExpr],
     [HPreIncrementExpr,I_PrefixIncrementExpr],
     [HArgumentsExpr,I_ArgumentsExpr],
+    [HNewExpr,I_NewExpr],
     [HNotExpr,I_NotExpr],
     [HBitNotExpr,I_BitNotExpr],
     [HMinusExpr,I_MinusExpr],
