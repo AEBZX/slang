@@ -94,6 +94,7 @@ slang->
          test->同compiler
          model.h:模型
          utils.h:标准跨平台操作库
+         init.cpp:读取sbin文件初始化
          runtime->虚拟机运行时
                 runtime.h:虚拟机运行时定义
                 io.cpp:IO命令处理

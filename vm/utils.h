@@ -83,6 +83,34 @@ private:
         return true;
     }
 public:
+    //建立 TCP 客户端连接:host 格式 "ip:port",成功返回句柄,失败返回 -1
+    int connect(const std::string& host)
+    {
+        ensureInit();
+        const auto pos = host.rfind(':');
+        if (pos == std::string::npos) return -1;
+        const std::string ip = host.substr(0, pos);
+        const std::string port = host.substr(pos + 1);
+        addrinfo hints{};
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        addrinfo* res = nullptr;
+        if (getaddrinfo(ip.c_str(), port.c_str(), &hints, &res) != 0) return -1;
+        auto sock = INVALID_SOCKET;
+        for (addrinfo* p = res; p != nullptr; p = p->ai_next)
+        {
+            sock = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (sock == INVALID_SOCKET) continue;
+            if (::connect(sock, p->ai_addr, static_cast<int>(p->ai_addrlen)) == 0) break;
+            closesocket(sock);
+            sock = INVALID_SOCKET;
+        }
+        freeaddrinfo(res);
+        if (sock == INVALID_SOCKET) return -1;
+        const int handle = nextHandle++;
+        conns[handle] = sock;
+        return handle;
+    }
     ~NetRuntime()
     {
         //析构时关闭仍持有的连接,避免 socket 句柄泄漏
@@ -273,6 +301,27 @@ inline void console(const std::string& data)
 inline void read(std::string* data)
 {
     std::getline(std::cin,*data);
+}
+inline std::string cwd()
+{
+    return fs::current_path().string();
+}
+inline std::string home()
+{
+#ifdef _WIN32
+    const char* home = std::getenv("USERPROFILE");
+    if (home) return std::string(home);
+    const char* drive = std::getenv("HOMEDRIVE");
+    const char* path = std::getenv("HOMEPATH");
+    if (drive && path) return std::string(drive) + path;
+    return "";
+#else
+    const char* home = std::getenv("HOME");
+    if (home) return std::string(home);
+    struct passwd* pw = getpwuid(getuid());
+    if (pw && pw->pw_dir) return std::string(pw->pw_dir);
+    return "";
+#endif
 }
 inline uint64_t CPUNumber()
 {

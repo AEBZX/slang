@@ -94,17 +94,20 @@ public:
         number=std::move(num);
         string=std::move(str);
         //构造反表
+        nextId = 0;
         for (const auto& [key,value]:number)
         {
             type[key]=true;
             numI.emplace(std::bit_cast<uint64_t>(value),key);
             refCount[key] = 1;   //装载即一次引用
+            if (key >= nextId) nextId = key + 1;   //link 从装载最大id之后分配,避免撞车
         }
         for (const auto& [key,value]:string)
         {
             type[key]=false;
             strI.emplace(value,key);
             refCount[key] = 1;
+            if (key >= nextId) nextId = key + 1;
         }
     }
     void gc()
@@ -166,12 +169,20 @@ private:
     std::unordered_map<int,std::unordered_map<int,bool>> offset_lock;
     std::unordered_map<int,std::unordered_map<std::string,bool>> name_lock;
     TaskQueue task_queue;
-    int nextId=0;
+    //alloc 起点:基于 this 地址的随机高位(>=1<<30),远离编译器槽号/池id区间;单调递增+contains兜底保证不撞
+    int nextId = 0;
+    int alloc_base() const
+    {
+        return (int)(0x40000000 | (0x3FFFFFFF & (uintptr_t)this));
+    }
 public:
     ConstPool data;
+    VarPool() : nextId(alloc_base()) {}
     //新建一个变量槽(offset_set 建成员变量用),返回其 var_id
     int alloc()
     {
+        while (var.contains(nextId) || offset.contains(nextId) || name.contains(nextId))
+            nextId++;
         return nextId++;
     }
     //offset 键是否存在(避免 operator[] 误插)

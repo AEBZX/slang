@@ -29,6 +29,8 @@ add_executable(vm main.cpp
         runtime/basic.cpp
         runtime/math.cpp
         runtime/io.cpp
+        parser.cpp
+        main.h
 )
 if(WIN32)
     target_link_libraries(vm PRIVATE ws2_32 psapi)
@@ -37,6 +39,7 @@ add_executable(vm_test
         test/unit/utils.test.cpp
         test/unit/model.test.cpp
         test/unit/basic.test.cpp
+        test/unit/io.test.cpp
         runtime/basic.cpp
         runtime/math.cpp
         runtime/io.cpp

@@ -61,19 +61,27 @@ public:
     std::unordered_map<int,int> param;
     Join _join;
     Manage* m;
+    int io_result = -1;
+    bool io_wait_recv = false;
+    int io_net_id = -1;
+    std::unordered_map<int,CommandRun>* _run;
+    std::vector<int> io_array;
     int block;
     int index=0;
     void run()override{
         while (true)
         {
             if (!alive)break;
-            //command 是指针,须先解引用再按块/下标取指令(原 command[block][index] 是指针数组下标,语义错误)
             if (index >= static_cast<int>((*command)[block].size()))alive=false;
             (*runner)(this,(*command)[block][index]);
             index++;
         }
     }
 };
+inline void r(Runtime* runtime,std::array<int,4> c)
+{
+    (*runtime->_run)[c[0]](runtime, c[1], c[2], c[3]);
+}
 class Manage
 {
     std::vector<Runtime> thread;
@@ -86,7 +94,9 @@ class Manage
     uint64_t M;
     uint64_t Old_M;
     Runner runner;
+    std::unordered_map<int,CommandRun> _run;
 public:
+    NetRuntime net;
     Manage(const std::unordered_map<int,double>& num, const std::unordered_map<int,std::string>& str,
         const Command& c,const Runner& r)
     {
@@ -98,12 +108,19 @@ public:
         value=VarPool::unsafeWriteVar;
         offset=VarPool::unsafeWriteOffset;
         name=VarPool::unsafeWriteName;
+        for (auto [k,v]:basic())
+            _run[k]=v;
+        for (auto [k,v]:io())
+            _run[k]=v;
+        for (auto [k,v]:math())
+            _run[k]=v;
         thread[0].pool=&pool;
         thread[0].thread=&thread_num;
         thread[0].command=&command;
         thread[0]._join=&join;
         thread[0].m=this;
         thread[0].runner=&runner;
+        thread[0]._run=&_run;
         runner=r;
         Old_M=Memory();
         M=Memory();
@@ -111,12 +128,12 @@ public:
     void gc()
     {
         pool.data.gc();
-        thread.erase(std::remove_if(thread.begin(), thread.end(), [](Runtime& t)
-       {
-           if (t.alive) return false;
-           t.join();
-           return true;
-       }), thread.end());
+        thread.erase(std::ranges::remove_if(thread, [](Runtime& t)
+        {
+            if (t.alive) return false;
+            t.join();
+            return true;
+        }).begin(), thread.end());
     }
     void start()
     {
@@ -138,6 +155,7 @@ public:
         m->thread[m->thread.size()-1].block=block;
         m->thread[m->thread.size()-1].m=m;
         m->thread[m->thread.size()-1].runner=&m->runner;
+        m->thread[m->thread.size()-1]._run=&m->_run;
         m->thread[m->thread.size()-1].run();
     }
 };

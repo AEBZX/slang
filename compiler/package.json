@@ -6,12 +6,20 @@
   "scripts": {
     "test": "vitest"
   },
+  "bin": {
+    "slang": "build-cli.mjs"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "commander": "^15.0.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
   }
 }

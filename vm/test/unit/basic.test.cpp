@@ -84,19 +84,20 @@ TEST_CASE("basic: cmp", "[runtime]")
 TEST_CASE("basic: offset set/get/addr", "[runtime]")
 {
     Mini m;
-    //offset[1][2] 不存在 → 新建变量(alloc=0),offset[1][2]=0,var[0]=link(30)
+    //offset[1][2] 不存在 → 新建变量(alloc 随机高位id),offset[1][2]=vid,var[vid]=link(30)
     cmd(124)(&m.rt, 1, 2, 30);
-    REQUIRE(VarPool::unsafeReadOffset(&m.pool, 1, 2) == 0);
-    REQUIRE(m.pnum(0) == 30);
+    REQUIRE(m.pool.hasOffset(1, 2));
+    const int vid = VarPool::unsafeReadOffset(&m.pool, 1, 2);
+    REQUIRE((int)m.pool.data.get(VarPool::unsafeReadVar(&m.pool, vid)).num == 30);
     //再写:复用已有变量
     cmd(124)(&m.rt, 1, 2, 40);
-    REQUIRE(m.pnum(0) == 40);
-    //get:var[4] = var[offset[1][2]] = var[0] → 池值40
+    REQUIRE((int)m.pool.data.get(VarPool::unsafeReadVar(&m.pool, vid)).num == 40);
+    //get:var[4] = var[offset[1][2]] = var[vid] → 池值40
     cmd(132)(&m.rt, 4, 1, 2);
     REQUIRE(m.pnum(4) == 40);
-    //addr:var[5] = link(offset[1][2]) = link(0) → 池值0(var_id)
+    //addr:var[5] = link(offset[1][2]) = link(vid) → 池值 vid(var_id)
     cmd(140)(&m.rt, 5, 1, 2);
-    REQUIRE(m.pnum(5) == 0);
+    REQUIRE(m.pnum(5) == vid);
 }
 
 TEST_CASE("basic: param set/load", "[runtime]")

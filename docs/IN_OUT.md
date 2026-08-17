@@ -33,7 +33,7 @@ in:boolean
 ```slang
 out:{
     type:'exist',
-    type:'all'|'file'|'folder',
+    mode:'all'|'file'|'folder',
     name:路径,
 }
 in:boolean
@@ -43,7 +43,7 @@ in:boolean
 ```slang
 out:{
     type:'create',
-    type:'file'|'folder',
+    name:'file'|'folder',
     name:路径,
 }
 in:boolean
@@ -60,10 +60,19 @@ in:string[]
 ```slang
 out:{
     type:'delete',
-    type:'file'|'folder',
+    name:'file'|'folder',
     name:路径,
 }
 in:boolean
+```
+获取特殊目录
+```slang
+out:{
+    type:'dir',
+    name:'cwd'|'home'
+}
+in:string
+```
 ```
 ## 控制台操作(IO='shell')
 输出:

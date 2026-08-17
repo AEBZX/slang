@@ -6,7 +6,6 @@ import * as process from 'node:process'
 import * as os from 'node:os'
 import * as path from 'node:path'
 function readGlobal(){
-    //~ 不展开,用用户主目录;目录不存在时先创建
     let file=path.join(os.homedir(),'.slang','config.json')
     if(!existsSync(file)){
         let config=DefaultGlobalConfig
