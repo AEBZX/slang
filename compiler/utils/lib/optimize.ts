@@ -90,6 +90,8 @@ export class IRTool{
     deleted:Set<number>
     //跨块写:槽→写入它的块集合(循环体跨块修改变量,块内折叠需保守)
     cross:Map<number,Set<number>>
+    //成员方法块集合(cfg.ts 经 offset_set 引用收集):运行期调用目标无法静态解析,可达剪枝需保留
+    methods:Set<number>
     id:number
     private _replace:[number,number,IR][]
     $={
@@ -242,6 +244,7 @@ export class IRTool{
         this.guse=new Set()
         this.deleted=new Set()
         this.cross=new Map<number,Set<number>>()
+        this.methods=new Set<number>()
         this._kill=[]
     }
     _id(){
@@ -251,6 +254,11 @@ export class IRTool{
     replace(bid:number,index:number,ir:IR){
         this.changed=true
         this._replace.push([bid,index,ir])
+    }
+    //指令是否已被本 pass 折叠(在 _replace 中待 sweep 应用)
+    //CONSTANT 折叠会更新 state,后续 PEEPHOLE 读到折叠结果误判(如 sub 的 l==r)生成错误指令
+    replaced(bid:number,index:number){
+        return this._replace.some(([b,i])=>b==bid&&i==index)
     }
     dead(bid:number,index:number){
         return this.mark.includes([bid,index])

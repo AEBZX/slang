@@ -68,6 +68,8 @@ const I_Thread:asm_factory=(data:HThread,tool)=>{
     tool.frame_pop(frame)
 }
 const I_Break:asm_factory=(data:HBreak,tool)=>{
+    //break 语义由 VM 的 ret 承担:弹帧到最近循环帧(含),退出循环返回循环后代码
+    //此前固定弹一帧,if 内的 break 只弹出 if 帧,循环体末尾 jmp 回条件块导致死循环
     tool.code.push(['ret',['value',0],['value',0],['value',0]])
 }
 const I_Continue:asm_factory=(data:HContinue,tool)=>{
@@ -117,8 +119,9 @@ const I_IfStatement:asm_factory=(data:HIfStatement,tool)=>{
 }
 const I_WhileStatement:asm_factory=(data:HWhileStatement,tool)=>{
     let id=tool.id()
-    //cz=块调用(压块帧),条件恒真即无条件进入条件块;不用call以免retn误当函数帧
-    tool.code.push(['cz',['reg',id],['reg',1],['reg',0]])
+    //cz=块调用(压循环帧,帧类型2),条件恒真即无条件进入条件块;不用call以免retn误当函数帧
+    //ret(break)弹到最近循环帧退出循环;retn弹到函数帧不被cz帧截断
+    tool.code.push(['cz',['reg',id],['reg',1],['reg',2]])
     tool.push(id)
     tool.cache.push(id)
     //循环体末尾追加跳回条件块,实现多次循环(原循环体执行后直接退出,仅循环一次)

@@ -28,6 +28,9 @@ const D_Assign:desugar_visitor=(node:Assign,call)=>{
     if(node instanceof BitXorAssign)return new AAssign(node.data,new BitwiseXorExpression(node.data,node.value))
     if(node instanceof BitShlAssign)return new AAssign(node.data,new ShiftLeftExpression(node.data,node.value))
     if(node instanceof BitShrAssign)return new AAssign(node.data,new ShiftRightExpression(node.data,node.value))
+    //纯 Assign(=)必须返回节点:此前无 return 返回 undefined,foreach 的 v=arr[foreach]、for 的 step 赋值
+    //全部变 undefined 被丢弃(循环体只剩 sum+=v,索引不递增死循环)
+    return node
 }
 const D_VarDeclaration:desugar_visitor=(node:VarDeclaration,call)=>{
     node.value=node.value==null?new NullLiteral(''):call(node.value)
@@ -65,16 +68,20 @@ const D_Throw:desugar_visitor=(node:Throw,call)=>{
     ])
 }
 const D_Increment:desugar_visitor=(node:Increment,call)=>{
-    node.data=new AdditiveExpression(call(node.data),new NumberLiteral('1'))
-    return node
+    //Increment 命令无 HIR 节点,转成赋值否则整条语句丢失
+    //(此前只改 node.data 仍返回 Increment,foreach++/i++ 语句被忽略,索引不递增死循环)
+    return call(new Assign(node.data, new AdditiveExpression(call(node.data), new NumberLiteral('1'))))
 }
 const D_Decrement:desugar_visitor=(node:Decrement,call)=>{
-    node.data=new SubtractiveExpression(call(node.data),new NumberLiteral('1'))
-    return node
+    return call(new Assign(node.data, new SubtractiveExpression(call(node.data), new NumberLiteral('1'))))
 }
 const D_IfStatement:desugar_visitor=(node:IfStatement,call)=>{
     call(node.condition)
-    if(!(node.condition.type instanceof BooleanType))
+    //比较表达式(==/!=)结果即 boolean,不包装!=null;desugar 新建的节点(如 switch case 比较)
+    //无 type 标注,此前被误判为非 boolean 包成 (case==x)!=null,优化器折叠后控制流错乱
+    if(!(node.condition.type instanceof BooleanType) &&
+       !(node.condition instanceof EqualityExpression) &&
+       !(node.condition instanceof InequalityExpression))
         node.condition=new InequalityExpression(node.condition,new NullLiteral(''))
     node.commands=call(node.commands)
     node.else_=node.else_==null?new ListCommand([]):call(node.else_)
@@ -82,7 +89,12 @@ const D_IfStatement:desugar_visitor=(node:IfStatement,call)=>{
 }
 const D_WhileStatement:desugar_visitor=(node:WhileStatement,call)=>{
     node.condition=call(node.condition)
-    if(!(node.condition.type instanceof BooleanType))
+    //必须 call commands:此前漏掉,循环体内的语句(如 for 的 step Increment)未 desugar,
+    //Increment 保持原样被 HIR 忽略,foreach++ 丢失索引不递增死循环
+    node.commands=call(node.commands)
+    if(!(node.condition.type instanceof BooleanType) &&
+       !(node.condition instanceof EqualityExpression) &&
+       !(node.condition instanceof InequalityExpression))
         node.condition=new InequalityExpression(node.condition,new NullLiteral(''))
     return node
 }
@@ -105,7 +117,9 @@ const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
     let type=node.data.type as FixType
     type.fix.pop()
     type=new FixType(type.t,type.fix)
-    return new ListCommand([
+    //必须 call:desugar 的 visitor 对返回值不再遍历,此前返回裸 ListCommand 内 ForStatement 未 desugar,
+    //HIR 无 H_For 直接忽略,foreach 循环整体丢失(IR 只有块0)
+    return call(new ListCommand([
         new VarDeclaration(node.iden,type,node.data),
         new ForStatement(
             [new VarDeclaration('foreach',new NumberType(),new NumberLiteral('0'))],
@@ -117,7 +131,7 @@ const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
                     new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))])),
                 node.commands
             ]))
-    ])
+    ]))
 }
 const D_SwitchStatement:desugar_visitor=(node:SwitchStatement,call)=>{
     let g=(index:number)=>{

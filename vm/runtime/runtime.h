@@ -57,7 +57,9 @@ public:
     bool alive=true;
     Command* command=nullptr;
     int* thread=nullptr;
-    Stack<bool> blockStack;
+    //帧类型:0=块帧(if/while 的 cz),1=函数帧(call),2=循环帧(while 的 cz)
+    //ret(break)弹到最近循环帧,retn 弹到最近函数帧
+    Stack<int> blockStack;
     Stack<int> indexStack;
     Stack<int> stack;
     Runner* runner=nullptr;
@@ -89,6 +91,22 @@ public:
                 }
                 alive=false;
                 break;
+            }
+            if (std::getenv("DSH_VM_TRACE"))
+            {
+                const auto& c = (*command)[block][index];
+                std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
+                if (c[0]==89 || c[0]==88 || c[0]==92) std::fprintf(stderr, " cond=%d", pv(pool, 1, c[2]));
+                if (c[0]==155) std::fprintf(stderr, " OUT");
+                std::fprintf(stderr, "\n");
+            }
+            if (std::getenv("DSH_VM_TRACE"))
+            {
+                const auto& c = (*command)[block][index];
+                std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
+                if (c[0]==135 && c[1]==57) std::fprintf(stderr, " ai=%d", VarPool::unsafeReadVar(pool, 57));
+                if (c[0]==7 && c[1]==69) std::fprintf(stderr, " fe=%d", VarPool::unsafeReadVar(pool, 69));
+                std::fprintf(stderr, "\n");
             }
             (*runner)(this,(*command)[block][index]);
             index++;

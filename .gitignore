@@ -19,3 +19,4 @@ package/node_modules
 .tmp-*
 demo
 vm/.tmp*
+package/data

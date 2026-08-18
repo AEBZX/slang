@@ -130,19 +130,30 @@ const I_MemberExpr:asm_factory=(data:HMemberExpr,tool)=>{
     tool.gen(data.member)
     tool.code.push(['offset_get',['reg',id],['value',id],['value',index_id]])
 }
+//递增/递减:语句级(如 for 的 step fi++)调用者不压槽,gen 必须用独立临时槽并保持 cache 平衡
+//此前直接 gen(data.target)(内部 cache.pop() 无配对 push),吞掉 while 压的条件块id,
+//导致 continue 的 cache.pop() 拿到 0,jmp 到根块死循环
 const I_PostfixIncrementExpr:asm_factory=(data:HPostIncrementExpr,tool)=>{
+    let id=tool.id()
+    tool.cache.push(id)
     tool.gen(data.target)
     tool.gen(new HAssign(data.target,new HBinaryExpr(data.target,'+',new HNumberLiteral(1))))
 }
 const I_PrefixIncrementExpr:asm_factory=(data:HPreIncrementExpr,tool)=>{
+    let id=tool.id()
+    tool.cache.push(id)
     tool.gen(new HAssign(data.target,new HBinaryExpr(data.target,'+',new HNumberLiteral(1))))
     tool.gen(data.target)
 }
 const I_PostfixDecrementExpr:asm_factory=(data:HPostDecrementExpr,tool)=>{
+    let id=tool.id()
+    tool.cache.push(id)
     tool.gen(data.target)
     tool.gen(new HAssign(data.target,new HBinaryExpr(data.target,'-',new HNumberLiteral(1))))
 }
 const I_PrefixDecrementExpr:asm_factory=(data:HPreDecrementExpr,tool)=>{
+    let id=tool.id()
+    tool.cache.push(id)
     tool.gen(new HAssign(data.target,new HBinaryExpr(data.target,'-',new HNumberLiteral(1))))
     tool.gen(data.target)
 }

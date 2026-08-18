@@ -133,19 +133,50 @@ TEST_CASE("basic: cz/call push frame and ret/retn restore", "[runtime]")
     Mini m;
     m.rt.block = 0;
     m.rt.index = 5;
-    cmd(88)(&m.rt, 10, 1, 0);          //CZ: 压块帧(假),跳块10
+    cmd(88)(&m.rt, 10, 1, 0);          //CZ: 压块帧(类型0),跳块10
     REQUIRE(m.rt.block == 10);
     REQUIRE(m.rt.index == -1);
-    REQUIRE(m.rt.blockStack.peek() == false);
+    REQUIRE(m.rt.blockStack.peek() == 0);
     REQUIRE(m.rt.indexStack.peek() == 6);
-    cmd(100)(&m.rt, 20, 1, 0);         //CALL: 压函数帧(真)
+    cmd(100)(&m.rt, 20, 1, 0);         //CALL: 压函数帧(类型1)
     REQUIRE(m.rt.block == 20);
-    REQUIRE(m.rt.blockStack.peek() == true);
-    cmd(122)(&m.rt, 0, 0, 0);          //RET: 弹call帧→回块10
+    REQUIRE(m.rt.blockStack.peek() == 1);
+    cmd(122)(&m.rt, 0, 0, 0);          //RET: 弹到函数帧→回块10
     REQUIRE(m.rt.block == 10);
     REQUIRE(m.rt.index == -1);
     cmd(169)(&m.rt, 0, 0, 0);          //RETN: 只剩cz块帧→弹光→alive=false
     REQUIRE(m.rt.alive == false);
+}
+
+TEST_CASE("basic: ret breaks to nearest loop frame", "[runtime]")
+{
+    Mini m;
+    m.rt.block = 0;
+    m.rt.index = 3;
+    cmd(88)(&m.rt, 5, 1, 2);           //CZ: 压循环帧(类型2),跳块5
+    REQUIRE(m.rt.block == 5);
+    m.rt.index = 2;
+    cmd(88)(&m.rt, 6, 1, 0);           //CZ: 压块帧(if,类型0)
+    REQUIRE(m.rt.block == 6);
+    m.rt.index = 7;
+    cmd(88)(&m.rt, 7, 1, 0);           //CZ: 嵌套块帧
+    REQUIRE(m.rt.block == 7);
+    cmd(122)(&m.rt, 0, 0, 0);          //RET: break 弹掉嵌套块帧+循环帧,回块0 cz 下一条
+    REQUIRE(m.rt.block == 0);
+    REQUIRE(m.rt.index == 3);
+    REQUIRE(m.rt.blockStack.size() == 0);
+}
+
+TEST_CASE("basic: ret without loop frame pops one frame", "[runtime]")
+{
+    Mini m;
+    m.rt.block = 0;
+    m.rt.index = 1;
+    cmd(88)(&m.rt, 4, 1, 0);           //CZ: 块帧(switch case)
+    REQUIRE(m.rt.block == 4);
+    cmd(122)(&m.rt, 0, 0, 0);          //RET: 无循环帧,弹一帧回块0
+    REQUIRE(m.rt.block == 0);
+    REQUIRE(m.rt.index == 1);
 }
 
 TEST_CASE("basic: retn pops to function frame", "[runtime]")

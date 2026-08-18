@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { rolldown } from 'rolldown'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'

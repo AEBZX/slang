@@ -43,7 +43,6 @@ const build_cross=(tool:IRTool)=>{
                 st.set(i.data[1],null)
             else if(i instanceof OFFSET_GET||i instanceof OFFSET_ADDR)
                 st.set(i.target[1],null)
-            //call/cz/jz/out/offset_set 等不改槽值或目标未知,不处理
         }
     }
     tool.cross=cross
@@ -60,7 +59,12 @@ const o1=(tool:IRTool)=>{
     for(let [bid,data] of tool.command) {
         //常量折叠+窥孔
         each(CONSTANT,bid,data)
-        each(PEEPHOLE,bid,data)
+        //PEEPHOLE 跳过已被 CONSTANT 折叠(待 sweep)的指令:CONSTANT 更新 state 后,
+        //PEEPHOLE 读 state 会把折叠结果误当操作数(如 sub 的 l==r)生成错误指令
+        for(let i=0;i<data.length;i++){
+            let rule=PEEPHOLE.get(data[i].constructor)
+            if(rule&&!tool.replaced(bid,i))rule(data[i],tool,bid,i)
+        }
         tool.sweep()
         d_build(data,slots,tool)
         each(CP,bid,data)
@@ -83,9 +87,10 @@ export default function (data:{pool:Map<number|string,number>,code:Map<number,as
     for(let [k,v] of data.pool)pool.set(v,k)
     let code=to(data.code)
     let tool=new IRTool(data.id,code,pool)
-    //o1多轮收敛;o2再循环:cfg可达剪枝(块0不可删)+变量delete(kill.ts经deleted去重,重复执行无副作用)
-    for(let i=0;i<round;i++)o1(tool)
-    if(level>=1)for(let i=0;i<round;i++){
+    //o0=不优化;o1=常量折叠/传播/窥孔/DCE(多轮收敛);o2=再循环 cfg 可达剪枝+变量 kill
+    //此前 o1 无条件执行,level 0(CLI"关闭优化")也被优化,与优化器语义测试复刻逻辑不符
+    if(level>=1)for(let i=0;i<round;i++)o1(tool)
+    if(level>=2)for(let i=0;i<round;i++){
         build(tool.command,tool)
         cfg_kill(tool)
         kill(tool)

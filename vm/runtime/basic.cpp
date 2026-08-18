@@ -61,12 +61,17 @@ OFFSET_SET_F(0,0,0) OFFSET_SET_F(0,0,1) OFFSET_SET_F(0,1,0) OFFSET_SET_F(0,1,1)
 OFFSET_SET_F(1,0,0) OFFSET_SET_F(1,0,1) OFFSET_SET_F(1,1,0) OFFSET_SET_F(1,1,1)
 
 //OFFSET_GET a b c:var[A]=var[offset[B][C]]
+//vid==0 表示 offset 越界(不存在,编译器槽号从1起),返回 null 值("\0" 池id)
+//foreach 终止依赖 arr[i]!=null,越界若返回槽0残留(返回值槽)会死循环
 #define OFFSET_GET_F(fa, fb, fc) \
 void offset_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=key(d,fa,a); \
     int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
-    v(d,A,VarPool::unsafeReadVar(d,vid)); } \
+    if(vid==0) \
+        v(d,A,d->data.link(std::string("\0",1))); \
+    else \
+        v(d,A,VarPool::unsafeReadVar(d,vid)); } \
 void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_get_f##fa##fb##fc}); }
 OFFSET_GET_F(0,0,0) OFFSET_GET_F(0,0,1) OFFSET_GET_F(0,1,0) OFFSET_GET_F(0,1,1)
@@ -84,11 +89,11 @@ void OFFSET_ADDR_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_addr_f##fa##fb##fc}); }
 OFFSET_ADDR_F(0,0,0) OFFSET_ADDR_F(0,0,1) OFFSET_ADDR_F(0,1,0) OFFSET_ADDR_F(0,1,1)
 OFFSET_ADDR_F(1,0,0) OFFSET_ADDR_F(1,0,1) OFFSET_ADDR_F(1,1,0) OFFSET_ADDR_F(1,1,1)
-inline void push_frame(Runtime* t,const int target,const bool is_func)
+inline void push_frame(Runtime* t,const int target,const int frame_type)
 {
     t->indexStack.push(t->block);
     t->indexStack.push(t->index + 1);
-    t->blockStack.push(is_func);
+    t->blockStack.push(frame_type);
     t->block = target;
     t->index = -1;
 }
@@ -113,22 +118,22 @@ void JZ_V_V(Runtime* t,int a,int b,int c)
     (void)c;
     if (pv(t->pool,1,b) != 0){ t->block = pv(t->pool,1,a); t->index = -1; }
 }
-//cz:cond 真时压帧跳块,帧类型=is_func(c)
+//cz:cond 真时压帧跳块,帧类型=c(0=块帧,1=函数帧,2=循环帧)
 void CZ_R_R(Runtime* t,int a,int b,int c)
 {
-    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,0,a),c != 0);
+    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,0,a),c);
 }
 void CZ_R_V(Runtime* t,int a,int b,int c)
 {
-    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,0,a),c != 0);
+    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,0,a),c);
 }
 void CZ_V_R(Runtime* t,int a,int b,int c)
 {
-    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,1,a),c != 0);
+    if (pv(t->pool,0,b) != 0) push_frame(t,pv(t->pool,1,a),c);
 }
 void CZ_V_V(Runtime* t,int a,int b,int c)
 {
-    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,1,a),c != 0);
+    if (pv(t->pool,1,b) != 0) push_frame(t,pv(t->pool,1,a),c);
 }
 //call:无条件压函数帧跳块
 void CALL_R(Runtime* t,int a,int b,int c)
@@ -183,16 +188,24 @@ void THREAD_V(Runtime* t,int a,int b,int c)
     (void)b;(void)c;
     t->_join(t->m,pv(t->pool,1,a));
 }
-//ret:弹一层帧恢复(break 用)
+//ret:break 语义——弹帧直到最近循环帧(含),退出循环返回循环后代码
+//嵌套 if 内的 break 弹回 body 块会执行 continue 的 jmp 死循环,故必须一次弹到循环帧
+//无循环帧(switch 内 break/普通块)弹一帧(原语义);遇函数帧不越过
 void RET(Runtime* t,int a,int b,int c)
 {
     (void)a;(void)b;(void)c;
-    if (t->blockStack.size() == 0){ t->alive = false; return; }
-    const int ret_idx = t->indexStack.pop();
-    const int ret_blk = t->indexStack.pop();
-    t->blockStack.pop();
-    t->block = ret_blk;
-    t->index = ret_idx - 1;
+    while (t->blockStack.size() > 0)
+    {
+        const int type = t->blockStack.peek();
+        const int ret_idx = t->indexStack.pop();
+        const int ret_blk = t->indexStack.pop();
+        t->blockStack.pop();
+        t->block = ret_blk;
+        t->index = ret_idx - 1;
+        if (type == 2 || type == 1) return;   //循环帧/函数帧:弹掉即返回
+        //块帧:继续弹(级联),直到循环帧
+    }
+    t->alive = false;
 }
 void RETN(Runtime* t,int a,int b,int c)
 {

@@ -100,6 +100,18 @@ slang->
                 io.cpp:IO命令处理
                 math.cpp:数学命令处理
                 basic.cpp:基础命令处理
+     package->包管理器服务器
+              server.ts:入口
+              page/:默认开放在0.0.0.0:${port}的页面
+              model.ts:模型类
+              api.ts:接口API
+              impl->实现
+                    data.ts:存储信息处理
+                    verify.ts:安全校验
+                    net.ts:上传下载等处理
+                    user.ts:用户处理
+                    index.ts:入口
+              config.json:配置文件
 ~~~
 ## 编码规范
 - 变量命名约定:变量采用下划线命名法,如identifier_type_parser

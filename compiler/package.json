@@ -1,21 +1,26 @@
 {
-  "name": "compiler",
-  "version": "1.0.0",
+  "name": "@aebzx/slang-cli",
+  "version": "0.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "build": "rolldown -i cli/entry.ts -o dist/cli.js"
   },
   "bin": {
-    "slang": "build-cli.mjs"
+    "slang": "dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
     "commander": "^15.0.0",
+    "rolldown": "^1.2.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },

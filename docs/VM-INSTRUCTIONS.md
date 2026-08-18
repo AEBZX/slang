@@ -61,7 +61,7 @@ opcode = **指令基址 + 参数组合偏移**。基址按"3 参 8 单位、2 �
 |------|------|--------|------|
 | `cmp` | 110 | left, right, oper | 比较，oper 为比较符（常量池编号） |
 | `jz` | 92 | target, cond | cond 为零时跳转到 target |
-| `cz` | 88 | target, cond, is_func_call | 条件块调用（if/while），压块帧；is_func_call=0 |
+| `cz` | 88 | target, cond, frame_type | 条件块调用（if/while），压帧；frame_type: 0=块帧, 2=循环帧(while) |
 | `tz` | 96 | target, cond | 条件跳转变体 |
 | `jmp` | 102 | target | 无条件跳转 |
 
@@ -72,13 +72,13 @@ opcode = **指令基址 + 参数组合偏移**。基址按"3 参 8 单位、2 �
 | `call` | 100 | target, is_func_call | 调用函数；is_func_call=1（固定），压函数帧，`retn` 靠它弹到函数帧 |
 | `push` | 118 | target | 压栈 |
 | `pop` | 120 | target | 出栈 |
-| `ret` | 122 | — | 弹出一帧后返回（break 语义使用） |
+| `ret` | 122 | — | break 语义：弹帧直到最近循环帧（含），退出循环返回循环后代码；无循环帧（switch 内）弹一帧 |
 | `retn` | 169 | — | 函数返回：弹出所有块帧直到函数帧（或栈空）再返回调用者；解决 if/while 分支内 return 只弹块帧的问题。注：原在 121（与 `pop` 的 value 槽位重叠），已挪至 169 |
 | `param_set` | 159 | param, value | 设置函数参数 |
 | `param_load` | 163 | data, param | 读取函数参数 |
 | `delete` | 167 | data | 释放变量槽（O2 逃逸分析生成，供 VM 回收；data 为槽号） |
 
-> `call`/`cz` 的第三个操作数为 `is_func_call` 标识：`call` 恒为 1（函数调用，压函数帧），`cz` 恒为 0（if/while 块调用，压块帧）；VM 实现 `retn` 时依据该标识弹出函数帧。
+> `call`/`cz` 的第三个操作数为帧类型：`call` 恒为 1（函数帧），`cz` 的 0=块帧（if）、2=循环帧（while）。`retn` 弹到函数帧；`ret`（break）弹到最近循环帧退出循环——嵌套 if 内的 break 不再被循环体末尾的 continue 跳转绕回。编译器 while 的 `cz` 发帧类型 2。
 
 ### 3.5 偏移访问（对象/数组字段）
 

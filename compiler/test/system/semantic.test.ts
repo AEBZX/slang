@@ -38,8 +38,9 @@ class Sim {
     addr = new Map<number, { obj: any, key: any }>()
     param: any[] = []
     stack: any[] = []
-    //func=true:函数/线程调用帧;func=false:if/while块调用帧。retn弹到函数帧,ret弹一帧
-    calls: { b: number, i: number, func: boolean }[] = []
+    //func=true:函数/线程调用帧;loop=true:while 循环帧;块帧(if)两者皆非
+    //retn弹到函数帧,ret(break)弹到最近循环帧
+    calls: { b: number, i: number, func: boolean, loop?: boolean }[] = []
     private addr_id = -1
     private steps = 0
     constructor(private blocks: Map<number, IR[]>, private consts: Map<number, any>, entryParam: any[] = []) {
@@ -83,9 +84,10 @@ class Sim {
             } else if (ins instanceof JMP) {
                 b = this.target(ins.target); i = 0
             } else if (ins instanceof CZ) {
-                //块调用:压块帧(return(RE TN)会穿过它,break的ret弹一帧即到此)
+                //块调用:压块帧(return(RE TN)会穿过它,break的ret弹到循环帧即到此)
+                //帧类型:0=块(if),2=循环(while,编译器 while 的 cz 发 c=2);ret(break)弹到最近循环帧
                 if (this.resolve(ins.cond)) {
-                    this.calls.push({ b, i, func: false })
+                    this.calls.push({ b, i, func: ins.is_func_call[1] == 1, loop: ins.is_func_call[1] == 2 })
                     b = this.target(ins.target); i = 0
                 }
             } else if (ins instanceof TZ) {
@@ -99,10 +101,14 @@ class Sim {
                 this.calls.push({ b, i, func: true })
                 b = this.target(ins.target); i = 0
             } else if (ins instanceof RET) {
-                //弹一帧(break用):退出最近块调用
-                if (this.calls.length == 0) return this.param[0]
-                const f = this.calls.pop()!
-                b = f.b; i = f.i
+                //break:弹帧到最近循环帧(含)退出循环;无循环帧(switch 内 break)弹一帧
+                let f: { b: number, i: number } | null = null
+                while (this.calls.length) {
+                    const x = this.calls.pop()!
+                    if (x.loop || x.func) { f = x; break }
+                }
+                if (f) { b = f.b; i = f.i }
+                else return this.param[0]
             } else if (ins instanceof RETN) {
                 //函数返回:弹出所有块帧直到函数帧;无函数帧(栈空,如main)则整体返回
                 let f: { b: number, i: number } | null = null
@@ -159,7 +165,11 @@ function opt_tool(data: { pool: Map<number | string, number>, code: Map<number, 
     if (level >= 1) {
         for (const [bid, data] of tool.command) {
             each(CONSTANT, bid, data)
-            each(PEEPHOLE, bid, data)
+            //跳过已被 CONSTANT 折叠的指令:state 被折叠结果污染,PEEPHOLE 会误判(如 sub l==r)
+            for (let i = 0; i < data.length; i++) {
+                const rule = PEEPHOLE.get(data[i].constructor)
+                if (rule && !tool.replaced(bid, i)) rule(data[i], tool, bid, i)
+            }
             tool.sweep()
             d_build(data, d_slots, tool)
             each(CP, bid, data)

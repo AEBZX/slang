@@ -281,6 +281,8 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     }else
         scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
     scope.set(ast.iden,element)
+    //与 C_VarDeclaration 一致:类型节点也注册进 symbol,否则 body 里 v 解析 get_sym(element) 失败报未定义
+    scope.sym(element,element)
     call(ast.commands,scope)
     scope=scope.leave()
 }

@@ -105,7 +105,13 @@ const C_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.left,data.right,data.oper)
     let o=$.value(data.oper),r=$.value(data.right),l=$.rvalue(data.left)
-    if(o==null||r==null||l==null)return
+    if(o==null||r==null||l==null){
+        //cmp 结果是运行期值:left 槽 state 必须清空,否则残留左操作数(如 7),
+        //下一轮 cmp 7==1 误折叠成 0(switch/if 的 cond==1 布尔化错乱,case 分支丢失)
+        let ls=$.value(data.left)
+        if(typeof ls=='number')tool.state.set(ls,null)
+        return
+    }
     //跨块写保守:left 槽被其他块写入(如 while 循环体改 i)则值不确定,不可折叠
     //否则块内 state 残留初始化值(0),if(i==5) 被折叠成恒假,控制流断裂
     let lslot=$.value(data.left)
@@ -127,16 +133,27 @@ const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data,data.offset,data.target)
     let v=$.mvalue(data.data, data.offset)
-    if(v==null)return
+    if(v==null){
+        //运行时读(跨块写/mem_state 失效):target 槽编译期值未知
+        //必须清空 state,否则残留此前指令写入的值(如对象句柄),后续 cmp/运算误折叠
+        //(例:arr[1]=arr[1]+5 后 if(arr[1]==25),target 槽残留句柄 12,折叠成 12==25=假)
+        let t=$.value(data.target)
+        if(typeof t=='number')tool.state.set(t,null)
+        return
+    }
     let id=tool._id()
     tool.pool.set(id,v)
     tool.state.set($.value(data.target) as number,v)
     tool.replace(bid,index,new LOAD(data.target,['reg',id]))
 }
 //取地址不是常量(依赖运行期容器位置),只记录依赖不折叠
+//且 offset_addr 后经 mov 解引用写,写目标无法静态回溯到对象槽,mem_state 会过期
+//(例:arr[1]=arr[1]+5 写回后,后续 offset_get arr[1] 仍按 mem_state 旧值 20 折叠 → 结果错)
+//保守清空内存状态,避免跨写误折叠
 const C_OFFSET_ADDR:opt_visitor=(data:OFFSET_ADDR, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data,data.offset,data.target)
+    tool.mem_state.clear()
 }
 const C_IN:opt_visitor=(data:IN, tool, bid, index)=>{
     const $=tool.$

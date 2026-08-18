@@ -74,14 +74,18 @@ describe('desugar 语法糖转换', () => {
         expect(cmds[0].commands[1]).toBeInstanceOf(WhileStatement)
     })
 
-    it('foreach → ForStatement', () => {
+    it('foreach → ForStatement(进一步转成 while 循环)', () => {
         const out = desugar_code(
             'public m:void(){var a:number[]=[1];foreach(i:a){break;}}\n'
         )
         const cmds = fn_body(out)
+        //foreach 先转 ListCommand(初始化+ForStatement),desugar 对返回值继续处理,
+        //ForStatement 再转成 ListCommand(init + WhileStatement),循环必须完整降级
         const inner = cmds[1]
         expect(inner).toBeInstanceOf(ListCommand)
-        expect(inner.commands[1]).toBeInstanceOf(ForStatement)
+        const loop = inner.commands[1]
+        expect(loop).toBeInstanceOf(ListCommand)
+        expect(loop.commands[1]).toBeInstanceOf(WhileStatement)
     })
 
     it('switch → if 链', () => {

@@ -8,9 +8,14 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "nodemailer": "^9.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/nodemailer": "^8.0.1"
   }
 }
