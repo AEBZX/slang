@@ -56,7 +56,7 @@ export function compiler(global:GlobalConfig,project:ProjectConfig,dir:string=pr
 }
 export function start(vm:string,file:string){
     file=path.resolve(file)
-    spawn('cmd.exe', ['/c','start','""',vm,'run',file], {
+    spawn(vm, ['run',file], {
         stdio: 'ignore',
     }).unref()
 }

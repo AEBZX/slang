@@ -11,10 +11,14 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
     "nodemailer": "^9.0.5"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
     "@types/nodemailer": "^8.0.1"
   }

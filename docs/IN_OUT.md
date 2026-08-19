@@ -73,8 +73,7 @@ out:{
 }
 in:string
 ```
-```
-## 控制台操作(IO='shell')
+## 控制台操作(oper='shell')
 输出:
 ```slang
 out:{

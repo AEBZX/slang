@@ -5,7 +5,7 @@ export type ModuleVersion={
         name:string,
         version:string
     }[],
-    source:number,
+    source:string,
     hex:string
 }
 export type Module={
@@ -33,11 +33,10 @@ export type Config={
     host:string,
     port:number,
     username:string,
+    password:string,
     email:string,
     token:string,
-    smtp:string,
-    password:string,
-    local:string
+    smtp:string
 }
 export type ModuleConfig=Module[]
 export type VMConfig=VM[]

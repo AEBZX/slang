@@ -1,6 +1,7 @@
 import API from '../api'
 import {Config, ModuleConfig, Result, User, UserConfig, VMConfig} from '../model'
 import {readFileSync,writeFileSync} from 'fs'
+import {} from '@inquirer/prompts'
 export default class ConfigImpl extends API{
     getConfig() {
         return {

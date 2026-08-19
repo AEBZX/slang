@@ -102,7 +102,7 @@ slang->
                 basic.cpp:基础命令处理
      package->包管理器服务器
               server.ts:入口
-              page/:默认开放在0.0.0.0:${port}的页面
+              page/:默认开放在0.0.0.0:3000的页面
               model.ts:模型类
               api.ts:接口API
               impl->实现
