@@ -43,7 +43,7 @@ in:boolean
 ```slang
 out:{
     type:'create',
-    name:'file'|'folder',
+    mode:'file'|'folder',
     name:路径,
 }
 in:boolean
@@ -60,7 +60,7 @@ in:string[]
 ```slang
 out:{
     type:'delete',
-    name:'file'|'folder',
+    mode:'file'|'folder',
     name:路径,
 }
 in:boolean
@@ -127,3 +127,13 @@ out:{
 }
 in:boolean
 ```
+## GUI(oper='GUI')
+Slang通过Webview将你传入的HTML文本渲染为窗口
+```slang
+out:{
+    type:'GUI',
+    title:string,
+    data:string
+}
+```
+TIPS:如何进行交互?Slang本身只会渲染HTML,但事实上可以开放net来与页面交互

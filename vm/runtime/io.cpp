@@ -1,4 +1,13 @@
 #include "runtime.h"
+#include "runtime.h"
+#include "../gui.h"
+//字段读取:mode/kind 均作为类型键的候选(IN_OUT.md 的 exist/create/delete 用 mode,旧脚本可能用 kind/name)
+static std::string kind_of(Runtime* t, const int obj)
+{
+    std::string k = field_str(t, obj, "mode");
+    if (k.empty()) k = field_str(t, obj, "kind");
+    return k;
+}
 static int field(Runtime* t, const int obj, const char* key)
 {
     const int k = t->pool->data.link(std::string(key));
@@ -40,12 +49,26 @@ static void out_file(Runtime* t, const int obj)
     }
     else if (type == "write")
     {
-        const std::string data = field_str(t, obj, "data");
-        io_set(t, t->pool->data.link((double)(writeFile(name, data) ? 1 : 0)));
+        const std::string mode = field_str(t, obj, "mode");
+        if (mode == "bin")
+        {
+            //mode:'bin' 时 data 为 number[](字节数组):offset[data][i] → 变量 → 数值
+            const int arr = field(t, obj, "data");
+            std::vector<char> bytes;
+            for (int i = 0; t->pool->hasOffset(arr, i); i++)
+            {
+                const int v = VarPool::unsafeReadOffset(t->pool, arr, i);
+                bytes.push_back(static_cast<char>(t->pool->data.get(VarPool::unsafeReadVar(t->pool, v)).num));
+            }
+            io_set(t, t->pool->data.link((double)(writeFile(name, bytes.data(), bytes.size()) ? 1 : 0)));
+        }
+        else
+            io_set(t, t->pool->data.link((double)(writeFile(name, field_str(t, obj, "data")) ? 1 : 0)));
     }
     else if (type == "exist")
     {
-        const std::string kind = field_str(t, obj, "name");
+        //mode:'file'|'folder'|'all'(缺省 all)
+        const std::string kind = kind_of(t, obj);
         bool ok = false;
         if (kind == "file") ok = isFile(name);
         else if (kind == "folder") ok = isFolder(name);
@@ -54,7 +77,7 @@ static void out_file(Runtime* t, const int obj)
     }
     else if (type == "create")
     {
-        const std::string kind = field_str(t, obj, "name");
+        const std::string kind = kind_of(t, obj);
         const bool ok = kind == "folder" ? createDictionary(name) : createFile(name);
         io_set(t, t->pool->data.link((double)(ok ? 1 : 0)));
     }
@@ -69,7 +92,7 @@ static void out_file(Runtime* t, const int obj)
     }
     else if (type == "delete")
     {
-        const std::string kind = field_str(t, obj, "name");
+        const std::string kind = kind_of(t, obj);
         std::error_code ec;
         const bool ok = kind == "folder" ? fs::remove_all(name, ec) != 0 : fs::remove(name, ec);
         io_set(t, t->pool->data.link((double)(ok ? 1 : 0)));
@@ -93,9 +116,20 @@ static void out_shell(Runtime* t, const int obj)
     }
     else if (type == "shell")
     {
-        exec(field_str(t, obj, "data"));
-        io_set(t, t->pool->data.link(0.0));
+        const bool ok = exec(field_str(t, obj, "data")) == 0;
+        io_set(t, t->pool->data.link((double)(ok ? 1 : 0)));
     }
+}
+static void out_gui(Runtime* t, const int obj)
+{
+    const std::string type = field_str(t, obj, "type");
+    if (type == "GUI")
+    {
+        const std::string title = field_str(t, obj, "title");
+        const std::string html = field_str(t, obj, "data");
+        io_set(t, t->pool->data.link((double)(gui::show(title, html) ? 1 : 0)));
+    }
+    else io_set(t, t->pool->data.link(0.0));
 }
 static void out_system(Runtime* t, const int obj)
 {
@@ -136,11 +170,12 @@ static void out_port(Runtime* t, const int oper_pid, const int obj, const int fb
 {
     (void)fb;
     const std::string port = std::string(t->pool->data.get(oper_pid).str);
-    //obj 已按 key 解析:file/shell/net 为对象句柄;system 为字符串池id(value 形式)
+    //obj 已按 key 解析:file/shell/net/GUI 为对象句柄;system 为字符串池id(value 形式)
     if (port == "system") out_system(t, obj);
     else if (port == "file") out_file(t, obj);
     else if (port == "shell") out_shell(t, obj);
     else if (port == "net") out_net(t, obj);
+    else if (port == "GUI") out_gui(t, obj);
     else io_set(t, t->pool->data.link(0.0));   //未知端口返回失败
 }
 static void in_port(Runtime* t, const int oper_pid, const int target)

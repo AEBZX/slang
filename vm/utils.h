@@ -27,6 +27,7 @@
 #elif __APPLE__
     #include <mach/mach.h>
     #include <netdb.h>
+    #include <pwd.h>
     #include <sys/socket.h>
     #include <unistd.h>
     using SOCKET = int;
@@ -34,7 +35,9 @@
 #define closesocket ::close
 #else
 #include <netdb.h>
+#include <pwd.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 using SOCKET = int;
 #define INVALID_SOCKET (-1)
@@ -391,8 +394,16 @@ inline uint64_t Memory()
     return 0;
 #endif
 }
-inline void exec(const std::string& command)
+//执行控制台命令,返回退出状态:0=成功(供 shell 端口 boolean 判定)
+inline int exec(const std::string& command)
 {
-    std::system(command.c_str());
+#ifdef _WIN32
+    return std::system(command.c_str());
+#else
+    const int st = std::system(command.c_str());
+    if (st == -1) return -1;
+    if (WIFEXITED(st)) return WEXITSTATUS(st);
+    return 1;
+#endif
 }
 #endif
