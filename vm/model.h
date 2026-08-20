@@ -304,6 +304,7 @@ public:
     {
         {
             std::lock_guard<std::mutex> lock(data->vmtx);
+            data->data.delete_(data->var_lock[id]);
             if (!data->var_lock[id])
                 data->var_lock[id]=true;
             data->var[id]=value;
@@ -314,6 +315,8 @@ public:
     {
         {
             std::lock_guard<std::mutex> lock(data->vmtx);
+            //释放旧值
+            data->data.delete_(data->offset_lock[id][off]);
             if (!data->offset_lock[id][off])
                 data->offset_lock[id][off]=true;
             data->offset[id][off]=value;

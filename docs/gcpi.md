@@ -1,14 +1,4 @@
-# IN-OUT API
-slang的跨平台基于s-asm的in,out指令,以特定格式向VM进行发送信息,实现跨平台统一操作   
-slang通过如下命令内嵌:  
-```slang
-vm 'op %var %var %var'
-```
-同理,slang通过如下方式实现VM-Sbin联动:
-```slang
-//oper:string
-vm 'in %oper %map'
-```
+# GCPI(通用跨平台接口) API
 ## 文件操作(oper='file')
 文件读
 ```slang

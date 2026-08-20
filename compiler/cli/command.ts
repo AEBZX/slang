@@ -111,7 +111,20 @@ export async function init(){
         default:2
     })
     //此处先放鸽子
-    const vm:string='vm.exe'
+    //从SPMServer获取VMList
+    let vm_list:{version:string,isa:string}[]=[]
+    if(global.server){
+        let res=await ajax.get(global.server+'/api/list/vm')
+        vm_list=res.data.data.map(i=>{return {version:i.version,isa:i.isa}})
+    }
+    const vm=await select({
+        message: '选择虚拟机:',
+        choices: vm_list.map(i=>{return {name:i.version+'('+i.isa+'指令集)',value:i.version}}),
+        default:vm_list[0].version+'('+vm_list[0].isa+'指令集)'
+    })
+    //下载vm虚拟机
+    let data=await ajax.post(global.server+'/api/download/vm',{params:{version:vm.split(' ')[0]}})
+    writeFileSync(process.cwd()+'/vm.exe',Buffer.from(data.data,'base64'))
     const output=await input({message:'输出路径:(.sbin)',default:`${folder_name}`})
     const local=await input({message:'库目录:',default:'lib'})
     writeFileSync('slang.json',JSON.stringify({
@@ -123,7 +136,7 @@ export async function init(){
         ignore:[],
         optimize:level,
         output:output,
-        vm:vm,
+        vm:os.type()=='Windows_NT'?'vm.exe':'vm',
         lib:{local:local,data:[]},
         lock:[]
     },null,4))
