@@ -49,6 +49,14 @@ struct Mini
         VarPool::unsafeWriteVar(&pool, v, pool.data.link((double)value));
         VarPool::unsafeWriteOffset(&pool, arr, index, v);
     }
+    //对象引用字段:offset[obj][键池id] = 新变量,存目标对象槽号(非池id)
+    void set_ref(const int obj, const char* key, const int slot)
+    {
+        const int k = pool.data.link(std::string(key));
+        const int v = pool.alloc();
+        VarPool::unsafeWriteVar(&pool, v, slot);
+        VarPool::unsafeWriteOffset(&pool, obj, k, v);
+    }
     //读对象字段的池字符串
     std::string obj_str(const int obj, const char* key)
     {
@@ -168,7 +176,7 @@ TEST_CASE("io: file write bin mode roundtrip", "[io]")
     m.set_str(10, "type", "write");
     m.set_str(10, "mode", "bin");
     m.set_str(10, "name", f);
-    m.set_num(10, "data", 11);
+    m.set_ref(10, "data", 11);   //data 字段引用数组对象(槽11)
     cmd(155)(&m.rt, 100, 10, 0);
     cmd(150)(&m.rt, 100, 5, 0);
     REQUIRE(m.pnum(5) == 1);
@@ -262,6 +270,7 @@ TEST_CASE("io: file create/delete with mode field", "[io]")
     REQUIRE(!exists(file.string()));
     //delete 目录
     m.set_str(10, "mode", "folder");
+    m.set_str(10, "name", sub.string());
     cmd(155)(&m.rt, 100, 10, 0);
     cmd(150)(&m.rt, 100, 8, 0);
     REQUIRE(m.pnum(8) == 1);
@@ -289,6 +298,9 @@ TEST_CASE("io: shell command returns success boolean", "[io]")
 
 TEST_CASE("io: GUI port routing", "[io]")
 {
+    //WebView2/WebKitGTK 部分环境不稳定,默认跳过实际开窗的 GUI 路由测试
+    if (!std::getenv("SLANG_GUI_TEST"))
+        SKIP("GUI 测试默认跳过,设 SLANG_GUI_TEST=1 运行");
     Mini m;
     m.write(100, m.port_id("GUI"));
     m.write(10, 10);

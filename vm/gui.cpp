@@ -94,6 +94,18 @@ void gui_thread_main()
             }
         }
         backend_pump();
+        bool idle;
+        {
+            std::lock_guard<std::mutex> lock(g_mtx);
+            idle = g_windows.empty() && g_cmds.empty();
+        }
+        if (idle)
+        {
+            //无窗口无任务:退出线程,释放 GTK/WebKit 等资源,避免进程退出时后端断言崩溃
+            std::lock_guard<std::mutex> lock(g_mtx);
+            g_started = false;
+            return;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
@@ -115,6 +127,10 @@ void track_remove(void* w)
 //===== Windows:Win32 + WebView2 =====
 #if defined(SLANG_GUI_WIN)
 namespace {
+//接口 IID(WebView2.h 仅声明 extern,无定义文件;此处按 MIDL 声明的 GUID 手写)
+static const IID IID_EnvHandler = {0x4e8a3389,0xc9d8,0x4bd2,{0xb6,0xb5,0x12,0x4f,0xee,0x6c,0xc1,0x4d}};
+static const IID IID_CtrlHandler = {0x6c4819f3,0xc9b7,0x4260,{0x81,0x27,0xc9,0xf5,0xbd,0xe7,0xf6,0x8c}};
+static const IID IID_Unknown = {0x00000000,0x0000,0x0000,{0xc0,0x00,0x00,0x00,0x00,0x00,0x00,0x46}};
 using CreateEnvFn = HRESULT(__stdcall*)(PCWSTR, PCWSTR, void*,
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*);
 CreateEnvFn load_create_env()
@@ -134,20 +150,25 @@ public:
     std::wstring html;
     std::atomic<ULONG> refs{1};
     EnvHandler(HWND h, std::wstring s) : hwnd(h), html(std::move(s)) {}
-    STDMETHODIMP QueryInterface(REFIID, void** ppv) override { *ppv = nullptr; return E_NOINTERFACE; }
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (riid == IID_Unknown || riid == IID_EnvHandler)
+        {
+            *ppv = static_cast<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
     STDMETHODIMP_(ULONG) AddRef() override { return ++refs; }
     STDMETHODIMP_(ULONG) Release() override
     {
         if (--refs == 0) { delete this; return 0; }
         return refs;
     }
-    STDMETHODIMP Invoke(HRESULT result, ICoreWebView2Environment* env) override
-    {
-        if (SUCCEEDED(result) && env)
-            env->CreateCoreWebView2Controller(hwnd, new ControllerHandler(hwnd, html));
-        if (env) env->Release();
-        return S_OK;
-    }
+    //Invoke 延迟到 ControllerHandler 完整定义之后(见文件下方 create_controller_async)
+    STDMETHODIMP Invoke(HRESULT result, ICoreWebView2Environment* env) override;
 };
 class ControllerHandler : public ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
 {
@@ -156,7 +177,17 @@ public:
     std::wstring html;
     std::atomic<ULONG> refs{1};
     ControllerHandler(HWND h, std::wstring s) : hwnd(h), html(std::move(s)) {}
-    STDMETHODIMP QueryInterface(REFIID, void** ppv) override { *ppv = nullptr; return E_NOINTERFACE; }
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override
+    {
+        if (riid == IID_Unknown || riid == IID_CtrlHandler)
+        {
+            *ppv = static_cast<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
     STDMETHODIMP_(ULONG) AddRef() override { return ++refs; }
     STDMETHODIMP_(ULONG) Release() override
     {
@@ -179,6 +210,13 @@ public:
         return S_OK;
     }
 };
+inline STDMETHODIMP EnvHandler::Invoke(HRESULT result, ICoreWebView2Environment* env)
+{
+    if (SUCCEEDED(result) && env)
+        env->CreateCoreWebView2Controller(hwnd, new ControllerHandler(hwnd, html));
+    if (env) env->Release();
+    return S_OK;
+}
 void init_webview(HWND hwnd, const std::wstring& html)
 {
     CreateEnvFn fn = load_create_env();

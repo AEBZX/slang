@@ -1,13 +1,5 @@
 #include "runtime.h"
-#include "runtime.h"
 #include "../gui.h"
-//字段读取:mode/kind 均作为类型键的候选(IN_OUT.md 的 exist/create/delete 用 mode,旧脚本可能用 kind/name)
-static std::string kind_of(Runtime* t, const int obj)
-{
-    std::string k = field_str(t, obj, "mode");
-    if (k.empty()) k = field_str(t, obj, "kind");
-    return k;
-}
 static int field(Runtime* t, const int obj, const char* key)
 {
     const int k = t->pool->data.link(std::string(key));
@@ -21,6 +13,13 @@ static std::string field_str(Runtime* t, const int obj, const char* key)
 static int field_num(Runtime* t, const int obj, const char* key)
 {
     return (int)t->pool->data.get(field(t, obj, key)).num;
+}
+//字段读取:mode/kind 均作为类型键的候选(IN_OUT.md 的 exist/create/delete 用 mode,旧脚本可能用 kind)
+static std::string kind_of(Runtime* t, const int obj)
+{
+    std::string k = field_str(t, obj, "mode");
+    if (k.empty()) k = field_str(t, obj, "kind");
+    return k;
 }
 static void io_set(Runtime* t, const int pid)
 {
