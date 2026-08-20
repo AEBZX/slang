@@ -1,4 +1,4 @@
-import {Config, ModuleConfig, ModuleVersion, Result, UserConfig, VMConfig,VM} from './model'
+import type {Config, ModuleConfig, ModuleVersion, Result, UserConfig, VMConfig,VM} from './model'
 
 export default abstract class API{
     getConfig():Result<Config>{return null}

@@ -157,7 +157,7 @@ static void in_port(Runtime* t, const int oper_pid, const int target)
             if (ch == '\n') break;
             line += ch;
         }
-        VarPool::writeVar(t->pool, target, t->pool->data.link(line));
+        VarPool::unsafeWriteVar(t->pool, target, t->pool->data.link(line));
         t->io_wait_recv = false;
         return;
     }
@@ -173,7 +173,7 @@ static void in_port(Runtime* t, const int oper_pid, const int target)
         t->io_array.clear();
         return;
     }
-    VarPool::writeVar(t->pool, target, t->io_result);
+    VarPool::unsafeWriteVar(t->pool, target, t->io_result);
     t->io_result = -1;
 }
 //操作数:oper 源(端口名,src);out 的 data 用 key(value→var[x] 取对象句柄);in 的 target 取原始槽号(写目标变量)

@@ -1,16 +1,12 @@
 export type GlobalConfig={
-    local:string
-    default_optimize:number
-    server:string
-    vm:string
-    vm_list:{version:string,local:string,name:string}[]
+    server:string,
+    username:string,
+    password:string
 }
 export const DefaultGlobalConfig={
-    local:'~/.slang',
-    default_optimize:2,
     server:'',
-    vm:'~/slang/vm.exe',
-    vm_list:[]
+    username:'',
+    password:''
 } as GlobalConfig
 export type ProjectConfig={
     name:string
@@ -22,4 +18,5 @@ export type ProjectConfig={
     output:string
     vm:string
     lib:{local:string,data:{name:string,version:string}[]}
+    lock:{name:string,dependencies:{name:string,version:string}[]}[]
 }

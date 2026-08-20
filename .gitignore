@@ -20,3 +20,8 @@ package/node_modules
 demo
 vm/.tmp*
 package/data
+/package/config.json
+/package/module.json
+/package/user.json
+/package/vm.json
+/package/dist/

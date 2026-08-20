@@ -74,11 +74,14 @@ public:
     int block;
     int index=0;
     void run()override{
+        //const 引用取块:at() 只读访问。多线程并发执行同一函数块时,非 const operator[]
+        //是数据竞争(实测两个线程同调一函数 stl_vector 越界崩溃)
+        const Command& cmds=*command;
         while (true)
         {
             if (!alive)break;
             //越界即块执行完毕:有帧则弹帧继续(cz 跳空块/自然走完的块),无帧才结束
-            if (index >= static_cast<int>((*command)[block].size()))
+            if (index >= static_cast<int>(cmds.at(block).size()))
             {
                 if (blockStack.size() > 0)
                 {
@@ -94,7 +97,7 @@ public:
             }
             if (std::getenv("DSH_VM_TRACE"))
             {
-                const auto& c = (*command)[block][index];
+                const auto& c = cmds.at(block)[index];
                 std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
                 if (c[0]==89 || c[0]==88 || c[0]==92) std::fprintf(stderr, " cond=%d", pv(pool, 1, c[2]));
                 if (c[0]==155) std::fprintf(stderr, " OUT");
@@ -102,20 +105,22 @@ public:
             }
             if (std::getenv("DSH_VM_TRACE"))
             {
-                const auto& c = (*command)[block][index];
+                const auto& c = cmds.at(block)[index];
                 std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
                 if (c[0]==135 && c[1]==57) std::fprintf(stderr, " ai=%d", VarPool::unsafeReadVar(pool, 57));
                 if (c[0]==7 && c[1]==69) std::fprintf(stderr, " fe=%d", VarPool::unsafeReadVar(pool, 69));
                 std::fprintf(stderr, "\n");
             }
-            (*runner)(this,(*command)[block][index]);
+            (*runner)(this,cmds.at(block)[index]);
             index++;
         }
     }
 };
 inline void r(Runtime* runtime,std::array<int,4> c)
 {
-    (*runtime->_run)[c[0]](runtime, c[1], c[2], c[3]);
+    //at() 只读:多线程并发取指令时非 const operator[] 是数据竞争
+    const auto& run_map=*runtime->_run;
+    run_map.at(c[0])(runtime, c[1], c[2], c[3]);
 }
 class Manage
 {
@@ -132,6 +137,8 @@ class Manage
     uint64_t Old_M;
     Runner runner;
     std::unordered_map<int,CommandRun> _run;
+    //thread 数组互斥:join(子线程 push_back)与 start 遍历/gc erase 并发,vector 竞争会崩溃
+    std::mutex tmtx;
 public:
     NetRuntime net;
     Manage(const std::unordered_map<int,double>& num, const std::unordered_map<int,std::string>& str,
@@ -164,12 +171,18 @@ public:
     void gc()
     {
         pool.data.gc();
-        thread.erase(std::ranges::remove_if(thread, [](std::unique_ptr<Runtime>& t)
+        //锁内取出死线程并从容器移除;join 在锁外等待(避免持锁阻塞并发 join)
+        std::vector<std::unique_ptr<Runtime>> dead;
         {
-            if (t->alive) return false;
+            std::lock_guard<std::mutex> lock(tmtx);
+            for (auto& t:thread)
+                if (!t->alive)
+                    dead.push_back(std::move(t));
+            thread.erase(std::remove_if(thread.begin(),thread.end(),
+                [](std::unique_ptr<Runtime>& t){return !t->alive;}),thread.end());
+        }
+        for (auto& t:dead)
             t->join();
-            return true;
-        }).begin(), thread.end());
     }
     void start()
     {
@@ -180,15 +193,25 @@ public:
             M=Memory();
             if (M>=15*Old_M/10)gc();
             Old_M=M;
-            //所有 Runtime 均结束(alive=false)即程序结束
+            //所有 Runtime 均结束(alive=false)即程序结束;遍历与 join 的 push_back 并发,需加锁
             bool running=false;
-            for (const auto& t:thread)
-                if (t->alive){ running=true; break; }
+            {
+                std::lock_guard<std::mutex> lock(tmtx);
+                for (const auto& t:thread)
+                    if (t->alive){ running=true; break; }
+            }
             if (!running) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
+    //析构时等待所有线程结束:detach 的子线程在 Manage 析构后访问已释放的 pool/command 会崩溃
+    //(实测:并发 join 后析构,detach 线程抛 std::out_of_range: unordered_map::at)
+    ~Manage(){
+        for (auto& t:thread)
+            t->join();
+    }
     //thread 指令:新建真线程跑块(此前同步 run 在 thread[size-1] 上,覆盖主线程且非并发)
+    //多线程同时 THREAD 同一函数块时,thread 数组并发 push_back 竞争会崩溃,加锁保护
     static void join(Manage* m,const int block)
     {
         auto t=std::make_unique<Runtime>();
@@ -202,8 +225,13 @@ public:
         t->runner=&m->runner;
         t->_run=&m->_run;
         t->_join=&join;
-        m->thread.push_back(std::move(t));
-        m->thread.back()->start();
+        Runtime* rt;
+        {
+            std::lock_guard<std::mutex> lock(m->tmtx);
+            m->thread.push_back(std::move(t));
+            rt=m->thread.back().get();
+        }
+        rt->start();
     }
 };
 #endif

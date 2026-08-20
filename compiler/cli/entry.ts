@@ -34,7 +34,7 @@ program
     .description('start slang bin')
     .argument('[file]', 'sbin 文件')
     .action((file: string, options, command) => {
-        start(readGlobal().vm,file)
+        start(readProject().vm,file)
     })
 program
     .command('run')

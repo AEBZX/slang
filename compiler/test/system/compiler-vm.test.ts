@@ -77,7 +77,8 @@ function run_vm(code: string, optimize: number): { stdout: string, stderr: strin
             closeSync(errFd)
         }
         return {
-            stdout: existsSync(outFile) ? readFileSync(outFile, 'utf-8') : '',
+            //Windows 文本模式下 std::cout 把 \n 转成 \r\n,读取时归一化,跨平台断言一致
+            stdout: existsSync(outFile) ? readFileSync(outFile, 'utf-8').replace(/\r\n/g, '\n') : '',
             stderr: existsSync(errFile) ? readFileSync(errFile, 'utf-8') : '',
             status: r.status
         }
@@ -115,6 +116,15 @@ describe('compiler-vm 端到端', { timeout: 120000 }, () => {
     ${print_('hello')}
 }\n`
         expect_levels(code, 'hello')
+    })
+
+    it('字符串 \\n 转义输出真实换行', () => {
+        const code = `public static main:void(){
+    var port:string = "shell";
+    var o0:string{} = [type:"print", data:"a\\nb\\tc"];
+    vm 'out %port %o0';
+}\n`
+        expect_levels(code, 'a\nb\tc')
     })
 
     it('连续 print 保持顺序输出', () => {

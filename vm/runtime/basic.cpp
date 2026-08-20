@@ -255,25 +255,27 @@ void PARAM_SET_V_V(Runtime* t,int a,int b,int c)
     t->param[dst(t->pool,1,a)] = src(t->pool,1,b);
 }
 //param_load:var[A]=param[B]
+//用 unsafeWriteVar(vmtx 互斥)而非 writeVar(lock_var 表无锁):多线程并发写同一槽时,
+//lock_var 的 var_lock[id] 表竞争导致 unordered_map 损坏崩溃(两线程同调一函数实测复现)
 void PARAM_LOAD_R_R(Runtime* t,int a,int b,int c)
 {
     (void)c;
-    VarPool::writeVar(t->pool,a,t->param[b]);
+    VarPool::unsafeWriteVar(t->pool,a,t->param[b]);
 }
 void PARAM_LOAD_R_V(Runtime* t,int a,int b,int c)
 {
     (void)c;
-    VarPool::writeVar(t->pool,a,t->param[src(t->pool,0,b)]);
+    VarPool::unsafeWriteVar(t->pool,a,t->param[src(t->pool,0,b)]);
 }
 void PARAM_LOAD_V_R(Runtime* t,int a,int b,int c)
 {
     (void)c;
-    VarPool::writeVar(t->pool,dst(t->pool,1,a),t->param[b]);
+    VarPool::unsafeWriteVar(t->pool,dst(t->pool,1,a),t->param[b]);
 }
 void PARAM_LOAD_V_V(Runtime* t,int a,int b,int c)
 {
     (void)c;
-    VarPool::writeVar(t->pool,dst(t->pool,1,a),t->param[src(t->pool,0,b)]);
+    VarPool::unsafeWriteVar(t->pool,dst(t->pool,1,a),t->param[src(t->pool,0,b)]);
 }
 //push/pop:操作数栈(push 恒发基址118,编译器无 value 变体,故不注册 PUSH_V)
 //push 压槽内容(reg 语义=原样值,但这里需 var[a] 槽值,否则保存恢复全错位)
@@ -285,7 +287,7 @@ void PUSH_R(Runtime* t,int a,int b,int c)
 void POP_R(Runtime* t,int a,int b,int c)
 {
     (void)b;(void)c;
-    VarPool::writeVar(t->pool,a,t->stack.pop());
+    VarPool::unsafeWriteVar(t->pool,a,t->stack.pop());
 }
 
 //========== DELETE:释放槽指向的常量(引用计数) ==========

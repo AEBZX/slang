@@ -26,7 +26,7 @@ export type VM={
     isa:string,
     author:string,
     license:string,
-    source:number,
+    source:string,
     hex:string
 }
 export type Config={

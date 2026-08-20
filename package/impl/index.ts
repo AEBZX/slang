@@ -1,7 +1,7 @@
-import Config from './config'
-import User from './user'
-import Net from './net'
-import API from '../api'
+import Config from './config.ts'
+import User from './user.ts'
+import Net from './net.ts'
+import API from '../api.ts'
 //混入成一个类
 function applyMixins(derived: any, bases: any[]) {
     for (const base of bases) {

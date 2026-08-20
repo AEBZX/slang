@@ -2,8 +2,9 @@
   "name": "package",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.ts",
   "scripts": {
+    "start": "node server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -15,7 +16,9 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
-    "nodemailer": "^9.0.5"
+    "nodemailer": "^9.0.5",
+    "rolldown": "^1.2.5",
+    "vitest": "^4.1.11"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

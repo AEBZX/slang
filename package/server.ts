@@ -1,34 +1,37 @@
 import express from 'express'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
-import APIImpl from './impl'
-import API from './api'
-import {Result} from './model'
+import APIImpl from './impl/index.ts'
+import API from './api.ts'
 import {input} from '@inquirer/prompts'
 import fs from 'fs'
+import * as path from 'path'
+import {fileURLToPath, pathToFileURL} from 'url'
+const __dirname=path.dirname(fileURLToPath(import.meta.url))
 const _cors=cors()
 const limiter = rateLimit({
     windowMs: 60 * 1000,
     max: 300,
     message:{
-        code:200,
+        code:429,
         message:'请求过于频繁，请稍后再试',
         data:null
     },
     standardHeaders: true,
     legacyHeaders: false
 })
-let app=express()
+export let app=express()
 let api:API=new APIImpl()
-app.use(express.json())
+app.use(express.json({limit:'1024mb'}))
 app.use(_cors)
 app.use(limiter)
+app.use(express.static(path.join(__dirname,'page')))
 app.use(express.raw({
     type: '*/*',
     limit: '1024mb'
 }))
-//检查是否存在配置文件
-if(!fs.existsSync('./config.json')){
+const cfg_dir=()=>process.env.SPM_CONFIG_DIR||'.'
+if(!fs.existsSync(cfg_dir()+'/config.json')){
     const username = await input({message: '请输入用户名:',default:'Admin'})
     const password = await input({message: '请输入密码:',default:'password'})
     const host=await input({message: '请输入启动地址:',default:'0.0.0.0'})
@@ -36,7 +39,7 @@ if(!fs.existsSync('./config.json')){
     const email=await input({message: '请输入邮箱:',default:'email'})
     const smtp=await input({message: '请输入SMTP地址:',default:'smtp'})
     const token=await input({message: '请输入Token:',default:'token'})
-    fs.writeFileSync('./config.json',JSON.stringify({
+    fs.writeFileSync(cfg_dir()+'/config.json',JSON.stringify({
         host:host,
         port:port,
         username:username,
@@ -45,14 +48,18 @@ if(!fs.existsSync('./config.json')){
         token:token,
         smtp:smtp
     },null,4))
-    fs.writeFileSync('./user.json',JSON.stringify([],null,4))
-    fs.writeFileSync('./module.json',JSON.stringify([],null,4))
-    fs.writeFileSync('./vm.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/user.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/module.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/vm.json',JSON.stringify([],null,4))
 }
 let conf=api.getConfig().data
 app.post('/api/download/vm',(req,res)=>{
     let {version}=req.body
     let data=api.getVM(version)
+    if(data.code!==200){
+        res.send(data)
+        return
+    }
     res.send({
         message:data.message,
         data:data.data.toString('base64'),
@@ -62,6 +69,10 @@ app.post('/api/download/vm',(req,res)=>{
 app.post('/api/download/module',(req,res)=>{
     let {name,version}=req.body
     let data=api.getModule(name,version)
+    if(data.code!==200){
+        res.send(data)
+        return
+    }
     res.send({
         message:data.message,
         data:data.data.toString('base64'),
@@ -84,8 +95,21 @@ app.post('/api/publish/module',(req,res)=>{
     let d=Buffer.from(data,'base64')
     res.send(api.publishModule(author,token,name,module,d))
 })
-app.get('/api/register',(req,res)=>{
+app.post('/api/register',(req,res)=>{
     let {username,email}=req.body
     res.send(api.register(username,email))
 })
-app.listen(conf.port,conf.host,()=>{})
+app.post('/api/login',(req,res)=>{
+    let {username,password}=req.body
+    res.send(api.login(username,password))
+})
+app.post('/api/verify',(req,res)=>{
+    let {username,token}=req.body
+    res.send(api.verify(username,token))
+})
+app.use((err:any, req:any, res:any, next:any)=>{
+    const code=err.status||err.statusCode||500
+    res.status(code).send({code,message:err.message||'Internal error',data:null})
+})
+if(import.meta.url===pathToFileURL(process.argv[1]).href)
+    app.listen(conf.port,conf.host,()=>{})

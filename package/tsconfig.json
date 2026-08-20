@@ -5,6 +5,7 @@
     "lib": ["ES6","ES2022"],
     "moduleResolution": "node",
     "outDir": "./dist",
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

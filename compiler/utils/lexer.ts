@@ -84,6 +84,10 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     }
     return [ret != '',ret,TokenType.Number]
 }
+//字符串转义:定界符本身与常见转义(\n \t \r \0 \\)转换为实际字符,未知转义保留反斜杠原样
+const string_escape:Record<string,string>={
+    'n':'\n','t':'\t','r':'\r','0':'\0','\\':'\\','"':'"',"'":"'",'`':'`'
+}
 let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     let start=stream.now()
     if(!string_start_end.includes(start))
@@ -94,12 +98,16 @@ let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
         if(stream.now()==undefined)
             return [true,ret,TokenType.String]
         if(stream.now()==start){
-            if(ret[ret.length-1]=='\\'){
-                ret=ret.slice(0,-1)+stream.next()
-                continue
-            }
             stream.next()
             break
+        }
+        if(stream.now()=='\\'){
+            stream.next()
+            let esc=stream.now()
+            if(esc==undefined)return [true,ret,TokenType.String]
+            ret+=string_escape[esc]??('\\'+esc)
+            stream.next()
+            continue
         }
         ret+=stream.next()
     }

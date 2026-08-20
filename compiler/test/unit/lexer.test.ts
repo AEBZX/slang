@@ -170,6 +170,19 @@ describe('lexer - 字符串解析', () => {
         expect(tokens[0].value).toBe('hello"world')
     })
 
+    it('应该把 \\n \\t \\r 转义转换为实际字符', () => {
+        const result = lexer('"a\\nb\\tc\\r"')
+        const tokens = result.filter(t => t.type === TokenType.String)
+        expect(tokens.length).toBe(1)
+        expect(tokens[0].value).toBe('a\nb\tc\r')
+    })
+
+    it('双反斜杠转义为单个反斜杠', () => {
+        const result = lexer('"a\\\\b"')
+        const tokens = result.filter(t => t.type === TokenType.String)
+        expect(tokens[0].value).toBe('a\\b')
+    })
+
     it('应该正确解析空字符串', () => {
         const result = lexer('""')
         const tokens = result.filter(t => t.type === TokenType.String)

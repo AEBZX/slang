@@ -210,95 +210,140 @@ public:
     {
         data.init(num,str);
     }
+    //===== 锁表访问全部在 vmtx 内,多线程并发安全 =====
+    //此前 var_lock/offset_lock/name_lock/task_queue 均无锁:两个线程同时写同一槽
+    //(如并发调用同一函数),lock_var 的 var_lock[id] 表并发插入导致 unordered_map 损坏崩溃
     static void lock_var(VarPool* data,const int id)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         if (!data->var_lock[id])
             data->var_lock[id]=true;
     }
     static void unlock_var(VarPool* data,const int id)
     {
-        if (data->var_lock[id])
-            data->var_lock[id]=false;
-        while (!data->task_queue.empty())
+        while (true)
         {
-            const auto task=data->task_queue.front();
-            for (const auto& c:task.cond)
-                if (!data->cond(c))
-                    return;
-            data->task_queue.erase(data->task_queue.begin());
-            data->oper(task);
+            Task task;
+            bool run_it=false;
+            {
+                std::lock_guard<std::mutex> lock(data->vmtx);
+                if (data->var_lock[id])
+                    data->var_lock[id]=false;
+                if (data->task_queue.empty())break;
+                const auto& t=data->task_queue.front();
+                bool ok=true;
+                for (const auto& c:t.cond)
+                    if (!data->cond(c)){ok=false;break;}
+                if(!ok)break;
+                task=t;
+                data->task_queue.erase(data->task_queue.begin());
+                run_it=true;
+            }
+            if(run_it)data->oper(task);   //run 在锁外(handler 内 unsafe 访问会再取 vmtx)
         }
     }
     static void lock_offset(VarPool* data,const int id, const int off)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         if (!data->offset_lock[id][off])
             data->offset_lock[id][off]=true;
     }
     static void unlock_offset(VarPool* data,const int id, const int off)
     {
-        if (data->offset_lock[id][off])
-            data->offset_lock[id][off]=false;
-        if (!data->task_queue.empty())
+        while (true)
         {
-            const auto task=data->task_queue.front();
-            data->task_queue.erase(data->task_queue.begin());
-            data->oper(task);
+            Task task;
+            bool run_it=false;
+            {
+                std::lock_guard<std::mutex> lock(data->vmtx);
+                if (data->offset_lock[id][off])
+                    data->offset_lock[id][off]=false;
+                if (data->task_queue.empty())break;
+                const auto& t=data->task_queue.front();
+                bool ok=true;
+                for (const auto& c:t.cond)
+                    if (!data->cond(c)){ok=false;break;}
+                if(!ok)break;
+                task=t;
+                data->task_queue.erase(data->task_queue.begin());
+                run_it=true;
+            }
+            if(run_it)data->oper(task);
         }
     }
     static void lock_name(VarPool* data,const int id, const std::string& n)
     {
+        std::lock_guard<std::mutex> lock(data->vmtx);
         if (!data->name_lock[id][n])
             data->name_lock[id][n]=true;
     }
     static void unlock_name(VarPool* data,const int id, const std::string& n)
     {
-        if (data->name_lock[id][n])
-            data->name_lock[id][n]=false;
-        if (!data->task_queue.empty())
+        while (true)
         {
-            auto task=data->task_queue.front();
-            data->task_queue.erase(data->task_queue.begin());
-            data->oper(task);
+            Task task;
+            bool run_it=false;
+            {
+                std::lock_guard<std::mutex> lock(data->vmtx);
+                if (data->name_lock[id][n])
+                    data->name_lock[id][n]=false;
+                if (data->task_queue.empty())break;
+                const auto& t=data->task_queue.front();
+                bool ok=true;
+                for (const auto& c:t.cond)
+                    if (!data->cond(c)){ok=false;break;}
+                if(!ok)break;
+                task=t;
+                data->task_queue.erase(data->task_queue.begin());
+                run_it=true;
+            }
+            if(run_it)data->oper(task);
         }
     }
     static void writeVar(VarPool* data,const int id, const int value)
     {
-        lock_var(data,id);
-        data->var[id]=value;
+        {
+            std::lock_guard<std::mutex> lock(data->vmtx);
+            if (!data->var_lock[id])
+                data->var_lock[id]=true;
+            data->var[id]=value;
+        }
         unlock_var(data,id);
     }
     static void writeOffset(VarPool* data,const int id, const int off, const int value)
     {
-        lock_offset(data,id,off);
-        data->offset[id][off]=value;
+        {
+            std::lock_guard<std::mutex> lock(data->vmtx);
+            if (!data->offset_lock[id][off])
+                data->offset_lock[id][off]=true;
+            data->offset[id][off]=value;
+        }
         unlock_offset(data,id,off);
     }
     static void writeName(VarPool* data,const int id, const std::string& n, const int value)
     {
-        lock_name(data,id,n);
-        data->name[id][n]=value;
+        {
+            std::lock_guard<std::mutex> lock(data->vmtx);
+            if (!data->name_lock[id][n])
+                data->name_lock[id][n]=true;
+            data->name[id][n]=value;
+        }
         unlock_name(data,id,n);
     }
     static int readVar(VarPool* data,const int id)
     {
-        lock_var(data,id);
-        const int value=data->var[id];
-        unlock_var(data,id);
-        return value;
+        std::lock_guard<std::mutex> lock(data->vmtx);
+        return data->var[id];
     }
     static int readOffset(VarPool* data,const int id, const int off)
     {
-        lock_offset(data,id,off);
-        const int value=data->offset[id][off];
-        unlock_offset(data,id,off);
-        return value;
+        std::lock_guard<std::mutex> lock(data->vmtx);
+        return data->offset[id][off];
     }
     static int readName(VarPool* data,const int id, const std::string& n)
     {
-        lock_name(data,id,n);
-        const int value=data->name[id][n];
-        unlock_name(data,id,n);
-        return value;
+        std::lock_guard<std::mutex> lock(data->vmtx);
+        return data->name[id][n];
     }
     static void unsafeWriteVar(VarPool* data,const int id, const int value)
     {
@@ -332,14 +377,18 @@ public:
     }
     void oper(const Task& task)
     {
-        auto has=true;
-        for (const auto& c:task.cond)
-            if (cond(c)==false)
-            {
-                has=false;
-                break;
-            }
-        if (!has)task_queue.push_back(task);
+        //cond 检查与入队均在 vmtx 内;run 在锁外(handler 内部 unsafe 访问会再取 vmtx,避免递归锁)
+        bool has=true;
+        {
+            std::lock_guard<std::mutex> lock(vmtx);
+            for (const auto& c:task.cond)
+                if (cond(c)==false)
+                {
+                    has=false;
+                    break;
+                }
+            if (!has)task_queue.push_back(task);
+        }
         if (has)run(task);
     }
     void run(const Task& d)

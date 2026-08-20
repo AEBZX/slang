@@ -41,6 +41,7 @@ add_executable(vm_test
         test/unit/basic.test.cpp
         test/unit/io.test.cpp
         test/integration/parser.test.cpp
+        test/integration/thread.test.cpp
         runtime/basic.cpp
         runtime/math.cpp
         runtime/io.cpp
