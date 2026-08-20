@@ -1,4 +1,4 @@
-import {compiler,start,run,init} from './command'
+import {compiler,start,run,init,install,uninstall,pvm,publish} from './command'
 import {Command} from 'commander'
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs'
 import {DefaultGlobalConfig, GlobalConfig, ProjectConfig} from './config'
@@ -48,4 +48,36 @@ program
     .action(()=>{
         init()
     })
+program
+    .command('install')
+    .description('install slang package')
+    .argument('<name>', 'package name')
+    .argument('<version>', 'package version')
+    .action((name: string, version: string) => {
+        install(readGlobal(),readProject(),name,version)
+    })
+program
+    .command('uninstall')
+    .description('uninstall slang package')
+    .argument('<name>', 'package name')
+    .action((name: string) => {
+        uninstall(readGlobal(),readProject(),name)
+    })
+program
+    .command('pvm')
+    .description('compile slang vm')
+    .argument('<path>', 'path')
+    .argument('<isa>', 'isa')
+    .argument('<version>', 'version')
+    .argument('<license>', 'license')
+    .action((path: string, isa: string, version: string, license: string) => {
+        pvm(readGlobal(),path,isa,version,license)
+    })
+program
+    .command('publish')
+    .description('publish slang package')
+    .action(()=>{
+        publish(readGlobal(),readProject())
+    })
+
 await program.parseAsync()
