@@ -17,7 +17,7 @@ function reads(i:IR):number[]{
     else if(i instanceof JZ||i instanceof TZ||i instanceof CZ){v(i.target);v(i.cond)}
     else if(i instanceof JMP||i instanceof CALL||i instanceof TZ)v(i.target)
     else if(i instanceof PUSH)v(i.target)
-    else if(i instanceof OFFSET_SET){v(i.data);v(i.value)}
+    else if(i instanceof OFFSET_SET){v(i.offset);v(i.value)}
     else if(i instanceof OFFSET_GET||i instanceof OFFSET_ADDR){v(i.data);v(i.offset)}
     else if(i instanceof IN)v(i.data)
     else if(i instanceof OUT)v(i.target)
@@ -42,7 +42,7 @@ export function kill(tool:IRTool){
             if(i instanceof MOV)def(i.left)
             else if(i instanceof LOAD)def(i.reg)
             else if(i instanceof BINARY)def(i.result)
-            else if(i instanceof CMP)def(i.result)
+            else if(i instanceof CMP)def(i.oper)
             else if(i instanceof NOT||i instanceof BIT_NOT)def(i.data)
             else if(i instanceof IN||i instanceof OUT)def(i.oper)
             else if(i instanceof POP)def(i.target)

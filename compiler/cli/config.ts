@@ -13,10 +13,11 @@ export type ProjectConfig={
     version:string
     author:string
     license:string
+    slang?:string
     ignore:string[]
     optimize:number
     output:string
     vm:string
     lib:{local:string,data:{name:string,version:string}[]}
-    lock:{name:string,dependencies:{name:string,version:string}[]}[]
+    lock?:{name:string,dependencies:{name:string,version:string}[]}[]
 }

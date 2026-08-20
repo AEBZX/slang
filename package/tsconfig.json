@@ -3,7 +3,7 @@
     "target": "es2020",
     "module": "es2022",
     "lib": ["ES6","ES2022"],
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "outDir": "./dist",
     "allowImportingTsExtensions": true,
     "types": ["node"],

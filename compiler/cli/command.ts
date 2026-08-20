@@ -1,31 +1,42 @@
 import {GlobalConfig, ProjectConfig} from './config'
-import {readdirSync, writeFileSync, readdir, readFileSync, existsSync, rmdirSync, rmSync} from 'fs'
+import {readdirSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync} from 'fs'
 import c from '../index'
 import * as path from 'path'
 import * as process from 'process'
 import { spawn } from 'child_process'
-import {input,select,confirm} from '@inquirer/prompts'
+import {input,select} from '@inquirer/prompts'
 import os from 'os'
 import ajax from 'axios'
 import {c as _compress,x as _decompress} from 'tar'
 import lzma from 'lzma-native'
 import {createHash} from 'crypto'
-function compress(ignore:string){
-    writeFileSync(process.cwd()+'/'+'ls.tar',Buffer.from(''),{flag:'w'})
-    const stream=_compress({gzip:false,cwd:process.cwd(),file:'ls.tar',filter:(path)=>{
-        return !path.includes(ignore)
-        },sync:true},['.'])
-    let ret=''
-    lzma.compress(readFileSync(process.cwd()+'/ls.tar'),{preset:9,synchronous:true},(res)=>{
-        ret=res.toString('base64')
-        rmSync(process.cwd()+'/'+'ls.tar')
+//lzma 压缩/解压(base64 交换格式为 .tar.xz;tar 库本身不支持 xz,需先解压为纯 tar)
+function lzma_compress(buf:Buffer):Promise<string>{
+    return new Promise((resolve)=>{
+        lzma.compress(buf,{preset:9,synchronous:true},(res)=>{resolve(res.toString('base64'))})
     })
+}
+function lzma_decompress(str:string):Promise<Buffer>{
+    return new Promise((resolve)=>{
+        lzma.decompress(Buffer.from(str,'base64'),{synchronous:true},(res)=>{resolve(res)})
+    })
+}
+async function compress(ignore:string,dir:string=process.cwd()):Promise<string>{
+    const tar_file=path.join(dir,'ls.tar')
+    _compress({gzip:false,cwd:dir,file:tar_file,filter:(p:string)=>{
+        return !p.includes(ignore)&&!p.includes('ls.tar')
+        },sync:true},['.'])
+    let ret=await lzma_compress(readFileSync(tar_file))
+    rmSync(tar_file)
     return ret
 }
-function decompress(name:string,str:string,output:string){
-    writeFileSync(output+'/ls.tar.xz',Buffer.from(str,'base64'))
-    _decompress({file:output+'/ls.tar.xz',cwd:output+'/'+name,sync:true})
-    rmSync(output+'/ls.tar.xz')
+async function decompress(name:string,str:string,output:string){
+    mkdirSync(output,{recursive:true})
+    mkdirSync(path.join(output,name),{recursive:true})
+    const plain=await lzma_decompress(str)
+    writeFileSync(path.join(output,'ls.tar'),plain)
+    _decompress({file:path.join(output,'ls.tar'),cwd:path.join(output,name),sync:true})
+    rmSync(path.join(output,'ls.tar'))
 }
 export function compiler(global:GlobalConfig,project:ProjectConfig,dir:string=process.cwd()){
     let output=dir+'/'+project.output+'.sbin'
@@ -108,94 +119,106 @@ export async function init(){
         version:version,
         author:'',
         license:'',
+        slang:'1.0.0',
         ignore:[],
         optimize:level,
         output:output,
         vm:vm,
-        lib:{local:local,data:[]}
+        lib:{local:local,data:[]},
+        lock:[]
     },null,4))
+    mkdirSync(local,{recursive:true})
 }
 export function config(config:string,value:string){
-    if(!['server','username','token'].includes(config)) throw new Error('Invalid config')
-    if(!existsSync(path.join(os.homedir(),'.slang','config.json')))
-        writeFileSync(path.join(os.homedir(),'.slang','config.json'),JSON.stringify({server:'',username:'',token:''},null,4))
-    let data=JSON.parse(readFileSync(path.join(os.homedir(),'.slang','config.json'),'utf-8'))
+    if(!['server','username','password','token'].includes(config)) throw new Error('Invalid config')
+    let file=path.join(os.homedir(),'.slang','config.json')
+    if(!existsSync(file)) {
+        mkdirSync(path.dirname(file),{recursive:true})
+        writeFileSync(file,JSON.stringify({server:'',username:'',password:''},null,4))
+    }
+    let data=JSON.parse(readFileSync(file,'utf-8'))
+    //token 是 password 的别名
+    if(config=='token')config='password'
     data[config]=value
-    writeFileSync(path.join(os.homedir(),'.slang','config.json'),JSON.stringify(data,null,4))
+    writeFileSync(file,JSON.stringify(data,null,4))
 }
-export function install(global:GlobalConfig,project:ProjectConfig,name:string,version:string){
+export async function install(global:GlobalConfig,project:ProjectConfig,name:string,version:string,dir:string=process.cwd()){
     console.log(`install ${name}@${version}`)
-    //检查是否存在
-    let self:ProjectConfig=JSON.parse(readFileSync(process.cwd()+'/slang.json','utf-8'))
-    if(self.lib.data.some(e=>e.name==name&&e.version!=version))
+    if(!global.server)throw new Error('server not configured,run: slang config server <url>')
+    if(!project.lib)project.lib={local:'lib',data:[]}
+    if(project.lib.data.some(e=>e.name==name&&e.version!=version))
         throw new Error('Module already exists with different version')
-    if(self.lib.data.some(e=>e.name==name))
+    if(project.lib.data.some(e=>e.name==name))
         return
-    ajax.post(global.server+'/api/download/module',{name,version}).then((res)=>{
-        if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
-        decompress(name,res.data.data,process.cwd()+'/'+project.lib.local)
-        //继续下载他的依赖项
-        ajax.get(global.server+'/api/list/module').then((res)=>{
-            let deps=res.data.data.filter(i=>i.name==name)[0].version.filter(i=>i.version==version)[0]
-                .dependencies
-            deps.forEach(i=>install(global,project,i.name,i.version))
-        })
-    })
+    let res=await ajax.post(global.server+'/api/download/module',{name,version})
+    if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
+    await decompress(name,res.data.data,path.join(dir,project.lib.local))
+    project.lib.data.push({name,version})
+    writeFileSync(path.join(dir,'slang.json'),JSON.stringify(project,null,4))
+    //继续下载他的依赖项
+    let list=await ajax.get(global.server+'/api/list/module')
+    let pkg=(list.data.data||[]).filter(i=>i.name==name)[0]
+    let deps=pkg?pkg.version.filter(i=>i.version==version)[0]?.dependencies||[]:[]
+    for(let dep of deps)
+        await install(global,project,dep.name,dep.version,dir)
     console.log('done')
 }
-export function uninstall(global:GlobalConfig,project:ProjectConfig,name:string){
+export function uninstall(global:GlobalConfig,project:ProjectConfig,name:string,dir:string=process.cwd()){
     console.log(`uninstall ${name} `)
+    if(!project.lock)project.lock=[]
+    if(!project.lib)project.lib={local:'lib',data:[]}
     project.lib.data=project.lib.data.filter(e=>e.name!=name)
     project.lock=project.lock.filter(e=>e.name!=name)
-    rmdirSync(process.cwd()+'/'+project.lib.local+'/'+name)
+    let module_dir=path.join(dir,project.lib.local,name)
+    if(existsSync(module_dir))rmSync(module_dir,{recursive:true,force:true})
     //列举所有依赖项
-    let dependencies=project.lock.map(i=>i.dependencies)
+    let dependencies=(project.lock||[]).map(i=>i.dependencies)
         .map(i=>i.map(j=>j.name)).flat()
-    let _dependencies=readdirSync(project.lib.local,{withFileTypes:true}).filter(i=>i.isDirectory())
-        .map(i=>i.name)
+    let lib_dir=path.join(dir,project.lib.local)
+    let _dependencies=existsSync(lib_dir)?readdirSync(lib_dir,{withFileTypes:true}).filter(i=>i.isDirectory())
+        .map(i=>i.name):[]
     //找到_d里有d里没有的
     let toUninstall=_dependencies.filter(e=>!dependencies.includes(e))
     console.log(`remove ${toUninstall.join(' ')}`)
-    toUninstall.forEach(e=>{uninstall(global,project,e)})
-    writeFileSync('slang.json',JSON.stringify(project,null,4))
+    toUninstall.forEach(e=>{uninstall(global,project,e,dir)})
+    writeFileSync(path.join(dir,'slang.json'),JSON.stringify(project,null,4))
     console.log('uninstall done')
 }
-export function publish(global:GlobalConfig,project:ProjectConfig){
+export async function publish(global:GlobalConfig,project:ProjectConfig,dir:string=process.cwd()){
     console.log('publishing...')
-    let data=compress(project.lib.local)
-    ajax.post(global.server+'/api/publish/module',{
+    if(!global.server)throw new Error('server not configured,run: slang config server <url>')
+    if(!global.password)throw new Error('token not configured,run: slang config password <token>')
+    let data=await compress(project.lib.local,dir)
+    let res=await ajax.post(global.server+'/api/publish/module',{
         author:project.author,
         token:global.password,
         name:project.name,
         module:{
             version:project.version,
+            slang:project.slang||'1.0.0',
             license:project.license,
-            dependencies:project.lib.data,
+            dependencies:project.lib.data||[],
             source:null,
             hex:createHash('sha256').update(Buffer.from(data,'base64')).digest('hex')
         },
         data
     })
-        .then((res)=>{
-        if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
-        console.log('publish done')
-    })
+    if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
+    console.log('publish done')
 }
 //上传vm
-export function pvm(global:GlobalConfig,path:string,isa:string,version:string,license:string){
+export async function pvm(global:GlobalConfig,path:string,isa:string,version:string,license:string){
     console.log('publishing vm...')
-    ajax.post(global.server+'/api/publish/vm',{
+    let res=await ajax.post(global.server+'/api/publish/vm',{
         module:{
             version: version,
             isa,
             author: global.username,
             license: license,
             source:null,
-            hex: createHash('sha256').update(readFileSync(path,'binary')).digest('hex')
+            hex: createHash('sha256').update(readFileSync(path)).digest('hex')
         },data:readFileSync(path).toString('base64')
     })
-        .then((res)=>{
-        if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
-        console.log('publish done')
-    })
+    if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
+    console.log('publish done')
 }

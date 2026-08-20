@@ -5,6 +5,8 @@
     "lib": ["ES2016","DOM","ES2019"],
     "types": ["node"],
     "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,

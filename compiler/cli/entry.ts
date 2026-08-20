@@ -1,4 +1,4 @@
-import {compiler,start,run,init,install,uninstall,pvm,publish} from './command'
+import {compiler,start,run,init,install,uninstall,pvm,publish,config as C} from './command'
 import {Command} from 'commander'
 import {readFileSync, writeFileSync, existsSync, mkdirSync} from 'fs'
 import {DefaultGlobalConfig, GlobalConfig, ProjectConfig} from './config'
@@ -45,16 +45,16 @@ program
 program
     .command('init')
     .description('init slang project')
-    .action(()=>{
-        init()
+    .action(async ()=>{
+        await init()
     })
 program
     .command('install')
     .description('install slang package')
     .argument('<name>', 'package name')
     .argument('<version>', 'package version')
-    .action((name: string, version: string) => {
-        install(readGlobal(),readProject(),name,version)
+    .action(async (name: string, version: string) => {
+        await install(readGlobal(),readProject(),name,version)
     })
 program
     .command('uninstall')
@@ -70,14 +70,26 @@ program
     .argument('<isa>', 'isa')
     .argument('<version>', 'version')
     .argument('<license>', 'license')
-    .action((path: string, isa: string, version: string, license: string) => {
-        pvm(readGlobal(),path,isa,version,license)
+    .action(async (path: string, isa: string, version: string, license: string) => {
+        await pvm(readGlobal(),path,isa,version,license)
     })
 program
     .command('publish')
     .description('publish slang package')
-    .action(()=>{
-        publish(readGlobal(),readProject())
+    .action(async ()=>{
+        await publish(readGlobal(),readProject())
     })
-
-await program.parseAsync()
+program
+    .command('config')
+    .description('config slang')
+    .argument('<config>', 'config name')
+    .argument('<value>', 'config value')
+    .action((config: string, value: string) => {
+        C(config,value)
+    })
+try{
+    await program.parseAsync()
+}catch(e:any){
+    console.error(e?.message||e)
+    process.exit(1)
+}

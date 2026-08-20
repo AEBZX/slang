@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest",
-    "build": "rolldown -i cli/entry.ts -o dist/cli.js",
+    "build": "rolldown cli/entry.ts -o dist/cli.js -f esm -p node --external lzma-native",
     "publish": "node build-cli.mjs & npm publish"
   },
   "bin": {
