@@ -1,15 +1,18 @@
 import {Parser as $, TokenType} from '../../utils'
-const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.d(';'))
-const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.d(';'))
-const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.d(';'))
-const MulAssign=$.s('MulAssign',$.r('Expression'),$.d('*='),$.r('Expression'),$.d(';'))
-const DivAssign=$.s('DivAssign',$.r('Expression'),$.d('/='),$.r('Expression'),$.d(';'))
-const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.d(';'))
-const BitAndAssign=$.s('BitAndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.d(';'))
-const BitOrAssign=$.s('BitOrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.d(';'))
-const BitXorAssign=$.s('BitXorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.d(';'))
-const BitShlAssign=$.s('BitShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.d(';'))
-const BitShrAssign=$.s('BitShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.d(';'))
+//赋值语句的结尾分号可选:for 步进里允许 i=i+1 / i+=1 等不带分号(步进为命令列表)
+//注意用 $.c(';') 而非 $.c($.d(';')):choose 仅在子规则返回非 null 时提交位置,
+//delete 规则返回 null 会回溯,分号永远不被消费导致后续解析错位
+const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.c(';'))
+const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.c(';'))
+const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.c(';'))
+const MulAssign=$.s('MulAssign',$.r('Expression'),$.d('*='),$.r('Expression'),$.c(';'))
+const DivAssign=$.s('DivAssign',$.r('Expression'),$.d('/='),$.r('Expression'),$.c(';'))
+const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.c(';'))
+const BitAndAssign=$.s('BitAndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.c(';'))
+const BitOrAssign=$.s('BitOrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.c(';'))
+const BitXorAssign=$.s('BitXorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.c(';'))
+const BitShlAssign=$.s('BitShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.c(';'))
+const BitShrAssign=$.s('BitShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.c(';'))
 const Assign=$.o('Assign',
     $.r('AAssign'),
     $.r('AddAssign'),

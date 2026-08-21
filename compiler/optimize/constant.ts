@@ -146,6 +146,20 @@ const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     tool.state.set($.value(data.target) as number,v)
     tool.replace(bid,index,new LOAD(data.target,['reg',id]))
 }
+//函数/线程调用会修改任意容器(数组/映射/对象按引用传参):offset 折叠状态必须作废
+//否则 arr=字面量 → func(arr) 原地改数组 → 后续 arr[0] 仍按字面量折叠,结果错
+//(例:bubble_sort(arr,8) 后 if(arr[0]==1&&arr[7]==9) 按 [3,1,4,...] 折叠成恒假)
+//线程(thread/tz)同样并发写容器,一并清空
+const C_CALL:opt_visitor=(data:CALL, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.target)
+    tool.mem_state.clear()
+}
+const C_TZ:opt_visitor=(data:TZ, tool, bid, index)=>{
+    const $=tool.$
+    $.Z(data.cond,data.target)
+    tool.mem_state.clear()
+}
 //取地址不是常量(依赖运行期容器位置),只记录依赖不折叠
 //且 offset_addr 后经 mov 解引用写,写目标无法静态回溯到对象槽,mem_state 会过期
 //(例:arr[1]=arr[1]+5 写回后,后续 offset_get arr[1] 仍按 mem_state 旧值 20 折叠 → 结果错)
@@ -184,7 +198,8 @@ export default new Map<any,opt_visitor>([
     [CMP,C_CMP],
     [JZ,C_JZ_CZ_TZ],
     [CZ,C_JZ_CZ_TZ],
-    [TZ,C_JZ_CZ_TZ],
+    [TZ,C_TZ],
+    [CALL,C_CALL],
     [OFFSET_GET,C_OFFSET_GET],
     [OFFSET_ADDR,C_OFFSET_ADDR],
     [IN,C_IN],

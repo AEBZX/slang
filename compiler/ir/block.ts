@@ -17,8 +17,15 @@ const I_Class:asm_factory=(data:HClass,tool)=>{
     //顶层函数的函数槽初始化同样在根块;此前在类块生成,main 成员访问读成员槽=0,call 跳块0死循环
     for(let i of child){
         if(i.entry)tool.entry=true
-        tool.cache.push(i.name)
-        tool.gen(i.value)
+        if(i.value instanceof HLambdaExpr){
+            tool.cache.push(i.name)
+            tool.gen(i.value)
+        } else {
+            //变量成员槽自引用(值=自身槽号):成员 offset 键=var[槽] 必须唯一,
+            //此前槽=初始值 null,多个变量成员键相同('\0' 池id)→ offset 相互覆盖
+            //(如 name 与 price 都写键'\0',后写的覆盖先写的,读回错值)
+            tool.code.push(['mov',['reg',i.name],['reg',i.name],['value',0]])
+        }
         tool.entry=false
     }
     //构造函数块,param为构造参数

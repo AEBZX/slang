@@ -342,6 +342,13 @@ describe('命令解析 (Commands)', () => {
         expect(result.type).toBe('ForStatement')
     })
 
+    it('for 循环步进支持无分号赋值: i=i+1 / i+=1', () => {
+        const r1 = parse_entry('ForStatement', all_rules, 'for(var i:number=0;i<10;i=i+1){break;}') as ast_data
+        expect(r1.type).toBe('ForStatement')
+        const r2 = parse_entry('ForStatement', all_rules, 'for(var i:number=0;i<10;i+=2){break;}') as ast_data
+        expect(r2.type).toBe('ForStatement')
+    })
+
     it('foreach 循环: foreach(i:item){break;}', () => {
         const result = parse_entry('ForeachStatement', all_rules, 'foreach(i:item){break;}') as ast_data
         expect(result.type).toBe('ForeachStatement')

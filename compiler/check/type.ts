@@ -105,7 +105,9 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 let iden=[]
                 type.params.forEach((value,key)=>{iden.push(value)})
                 for(let i=0;i<postfix.args.length;i++)
-                    if(type_merge(iden[i],call(postfix.args[i]),scope)!=iden[i])
+                    //结构兼容判定:type_merge 对 FixType 返回新实例,=== 判等恒失败
+                    //(数组/map 实参误报 mismatch);合并结果 VoidType 才是真正不兼容
+                    if(type_merge(iden[i],call(postfix.args[i]),scope) instanceof VoidType)
                         scope.thr(`function parameter type mismatch at line ${ast.line.join('\n')}`)
                 type=type.returnType
             }

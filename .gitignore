@@ -25,3 +25,11 @@ package/data
 /package/user.json
 /package/vm.json
 /package/dist/
+/slang-plugin-jetbrains.iml
+/slang-plugin-jetbrains/.gradle/
+/slang-plugin-jetbrains/build/
+/slang-plugin-jetbrains/gradle/
+/slang-plugin-jetbrains/.intellijPlatform/
+/slang-plugin-jetbrains/.gradle/
+/slang-jetbrains-plugin/.run/
+/slang-jetbrains-plugin/gradle/

@@ -65,6 +65,7 @@ elseif(UNIX AND NOT APPLE)
         endif()
     endif()
 elseif(APPLE)
+    enable_language(OBJCXX)   #gui.cpp 在 macOS 以 Objective-C++ 编译
     find_library(COCOA_FW Cocoa)
     find_library(WEBKIT_FW WebKit)
     if(COCOA_FW AND WEBKIT_FW)

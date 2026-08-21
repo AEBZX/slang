@@ -159,7 +159,10 @@ const I_PrefixDecrementExpr:asm_factory=(data:HPreDecrementExpr,tool)=>{
 }
 const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //要call的区域的指针
-    let id=tool.cache.pop()
+    //cache 空(语句级调用,如 if 分支内的 out_ok()):pop 返回 undefined → 发射 a=undefined
+    //(写盘时 u32 强制 0)指令引用 var[0],依赖前面误写的 var[0]=var[槽] 碰巧指向正确块,
+    //布局一变就错;空 cache 时分配新槽
+    let id=tool.cache.length>0?tool.cache.pop():tool.id()
     tool.cache.push(id)
     //成员方法调用 c.inc():param[1]=对象(this),实参从param[2]起
     //此前 this 参数不传,成员方法 param_load this 读到未设置值

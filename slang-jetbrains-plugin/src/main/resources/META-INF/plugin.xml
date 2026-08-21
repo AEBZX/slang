@@ -1,0 +1,35 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>cn.ae.slang</id>
+    <idea-version since-build="252" until-build="262.*"/>
+    <!-- Public plugin name should be written in Title Case.
+     Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
+    <name>Slang</name>
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor url="https://www.github.com/AEBZX/slang">Slang</vendor>
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
+    <description><![CDATA[
+        Example of a plugin that is ready to work in a distributed environment.<br>
+        <em>Plugin is supposed to be installed into both frontend and backend IDE,
+        the set of features to be available is determined by their registration in either backend or frontend-specific XML descriptor files</em>
+    ]]></description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.webstorm</depends>
+    <depends>JavaScript</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- 文件类型注册 -->
+        <fileType name="Slang File"
+                  implementationClass="cn.ae.slang.SlangFileType"
+                  fieldName="INSTANCE"
+                  language="Slang"
+                  extensions="sl"/>
+        <internalFileTemplate name="SlangSourceFile"/>
+    </extensions>
+    <actions>
+        <action id="NewSlangFile" class="cn.ae.slang.CreateFileAction" text="Slang Source File">
+            <add-to-group group-id="NewGroup" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

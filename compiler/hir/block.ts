@@ -1,6 +1,8 @@
 import {BlockType, Class, File, HClass, hir_visitor, HModule, HScope, HVariable, Module, Variable} from '../utils'
 export const H_Module:hir_visitor=(node:Module,scope,call)=>{
-    let id=scope.id()
+    //复用 pre 预注册的 id(pre 按文件序先分配全部块 id,跨文件/前向引用才能解析)
+    let id=scope.get((node.type as BlockType).local.join('.'))!=null
+        ?scope.get((node.type as BlockType).local.join('.')):scope.id()
     scope.set((node.type as BlockType).local.join('.'),id)
     scope=scope.enter()
     let children=node.children.map(i=>call(i,scope)) as HModule[]
@@ -8,7 +10,8 @@ export const H_Module:hir_visitor=(node:Module,scope,call)=>{
     return new HModule(id,children)
 }
 export const H_Class:hir_visitor=(node:Class,scope,call)=>{
-    let id=scope.id()
+    let id=scope.get((node.type as BlockType).local.join('.'))!=null
+        ?scope.get((node.type as BlockType).local.join('.')):scope.id()
     scope.set((node.type as BlockType).local.join('.'),id)
     scope=scope.enter()
     //this指向当前实例,分配id并注册,成员方法内可引用
@@ -19,10 +22,12 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
     if(up_local.length>1)
         scope.set('up',scope.get(up_local.slice(0,-1).join('.')))
     //预注册成员id:先分配成员id,供成员方法内this.x等解析
+    //复用 pre 已注册的 '类名.成员名' id,避免跨文件时成员引用为 null
     let class_name=(node.type as BlockType).local.join('.')
     for(let i of node.children)
         if(i instanceof Variable){
-            let mid=scope.id()
+            let mid=scope.get(class_name+'.'+i.name)!=null
+                ?scope.get(class_name+'.'+i.name):scope.id()
             scope.set(i.name,mid)
             scope.global.set(class_name+'.'+i.name,mid)
         }

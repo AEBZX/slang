@@ -212,11 +212,14 @@ void RETN(Runtime* t,int a,int b,int c)
     (void)a;(void)b;(void)c;
     while (t->blockStack.size() > 0)
     {
-        const bool is_func = t->blockStack.peek();
+        //只认函数帧(type==1):循环帧(type==2)是 break 的目标,return 必须越过;
+        //此前 is_func=peek() 转 bool,type==2 为真 → while 内 return 停在循环帧,
+        //函数帧泄漏在栈上,后续调用帧错乱(如 while 内 return 后函数继续执行到末尾 return)
+        const int type = t->blockStack.peek();
         const int ret_idx = t->indexStack.pop();
         const int ret_blk = t->indexStack.pop();
         t->blockStack.pop();
-        if (is_func)
+        if (type == 1)
         {
             t->block = ret_blk;
             t->index = ret_idx - 1;

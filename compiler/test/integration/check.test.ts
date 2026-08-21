@@ -21,6 +21,26 @@ describe('check 端到端', () => {
         expect(errors).toEqual([])
     })
 
+    it('函数声明在调用者之后(前向引用)可正常检查', () => {
+        //修复前:C_Function 按声明顺序注册 LambdaType,main 先于 add 时报 "() can only be applied to function"
+        const errors = check_code(
+            'public static main:number(){return add(1,2);}\npublic add:number(a:number,b:number){return a+b;}\n'
+        )
+        expect(errors).toEqual([])
+    })
+
+    it('数组/Map 参数调用不报类型不匹配', () => {
+        //修复前:type_merge 对 FixType 返回新实例,调用点 === 判等恒失败
+        const errors = check_code(
+            'public f:void(a:number[]){return;}\npublic static main:void(){var x:number[]=[1];f(x);}\n'
+        )
+        expect(errors).toEqual([])
+        const errors2 = check_code(
+            'public g:void(m:number{}){return;}\npublic static main:void(){var x:number{}=[a:1];g(x);}\n'
+        )
+        expect(errors2).toEqual([])
+    })
+
     it('未定义变量报错', () => {
         const errors = check_code('public main:void(){return x;}\n')
         expect(errors.join()).toContain('x is not defined')

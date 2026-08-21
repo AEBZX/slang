@@ -103,14 +103,6 @@ public:
                 if (c[0]==155) std::fprintf(stderr, " OUT");
                 std::fprintf(stderr, "\n");
             }
-            if (std::getenv("DSH_VM_TRACE"))
-            {
-                const auto& c = cmds.at(block)[index];
-                std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
-                if (c[0]==135 && c[1]==57) std::fprintf(stderr, " ai=%d", VarPool::unsafeReadVar(pool, 57));
-                if (c[0]==7 && c[1]==69) std::fprintf(stderr, " fe=%d", VarPool::unsafeReadVar(pool, 69));
-                std::fprintf(stderr, "\n");
-            }
             (*runner)(this,cmds.at(block)[index]);
             index++;
         }

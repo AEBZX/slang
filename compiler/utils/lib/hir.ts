@@ -78,6 +78,14 @@ export class HIR{
             for(let j of node.children)
                 flat(visit(j,this.scope))
         }
+        //入口块(static main)移到末尾:IR 按扁平序生成根块(block 0),
+        //main 的函数体里调用其他函数时其槽须已加载;多文件/前向引用时
+        //main 若在文件序前部,调用会先于被调函数的槽加载执行 → var[槽]=0 → call 跳块0死循环
+        let entry_index=module.findIndex(h=>h instanceof HVariable&&h.entry)
+        if(entry_index>=0){
+            let entry=module.splice(entry_index,1)[0]
+            module.push(entry)
+        }
         return module
     }
 }

@@ -1,4 +1,4 @@
-import {Block, BlockType, Class, File, Interface, Module, Scope} from '../utils'
+import {Block, BlockType, Class, File, Function, Interface, LambdaType, Module, Scope} from '../utils'
 export default function symbol(data:File[],scope:Scope){
     //重名检测
     let _name=(d:Class|Module|Interface|File,prefix:string='')=>{
@@ -98,6 +98,19 @@ export default function symbol(data:File[],scope:Scope){
     link()
     for(let i of data)
         _static(i,'')
+    //函数块预注册 LambdaType:checker 按文件/声明顺序 visit,被引用函数若声明在后,
+    //C_Function 尚未执行,标识符解析到 BlockType 导致 "() can only be applied to function"
+    //(跨文件引用时文件顺序敏感:main.sl 引用 mathlib.sl 的函数即触发)
+    let _ft=(d:Block)=>{
+        for(let i of d.children)
+            if(i instanceof Function)
+                scope.global.sym(i,new LambdaType(i.params,i.return_type,false))
+        for(let i of d.children)
+            if(i instanceof Class||i instanceof Interface||i instanceof Module||i instanceof File)
+                _ft(i)
+    }
+    for(let i of data)
+        _ft(i)
     let ls=(d:Class|Interface|File|Module)=>{
         for(let i of d.children)
             if(i instanceof Class||i instanceof Interface)

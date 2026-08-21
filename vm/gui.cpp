@@ -6,6 +6,7 @@
 #include "gui.h"
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <mutex>
 #include <queue>
 #include <string>
