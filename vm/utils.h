@@ -29,6 +29,7 @@
     #include <netdb.h>
     #include <pwd.h>
     #include <sys/socket.h>
+    #include <sys/wait.h>   //WIFEXITED/WEXITSTATUS(exec),macOS 与 Linux 同源
     #include <unistd.h>
     using SOCKET = int;
 #define INVALID_SOCKET (-1)
@@ -49,6 +50,7 @@ private:
     std::unordered_map<int, SOCKET> conns;
     int nextHandle = 0;
     //fuck windows,fuck microsoft,傻逼初始化
+    //非 Windows 平台无需 WSA 初始化,空实现内联消除调用开销
     static void ensureInit()
     {
 #ifdef _WIN32
@@ -56,6 +58,8 @@ private:
             Guard() { WSADATA wsa; WSAStartup(MAKEWORD(2, 2), &wsa); }
             ~Guard() { WSACleanup(); }
         } guard;
+#else
+        (void)0;
 #endif
     }
 
@@ -65,10 +69,15 @@ private:
         size_t sent = 0;
         while (sent < len)
         {
-            auto n = ::send(sock, data + sent,
-                            static_cast<int>(len - sent), 0);
+            //Windows send 长度参数为 int,POSIX 为 size_t;分平台取块长避免截断
+#ifdef _WIN32
+            const int chunk = static_cast<int>(len - sent);
+#else
+            const auto chunk = len - sent;
+#endif
+            const auto n = ::send(sock, data + sent, chunk, 0);
             if (n <= 0) return false;
-            sent += n;
+            sent += static_cast<size_t>(n);
         }
         return true;
     }
@@ -79,10 +88,14 @@ private:
         size_t got = 0;
         while (got < n)                       // 关键:凑满n字节才算成功
         {
-            auto r = ::recv(sock, out + got,
-                            static_cast<int>(n - got), 0);
+#ifdef _WIN32
+            const int chunk = static_cast<int>(n - got);
+#else
+            const auto chunk = n - got;
+#endif
+            const auto r = ::recv(sock, out + got, chunk, 0);
             if (r <= 0) return false;         // 0=对端关闭 <0=出错
-            got += r;
+            got += static_cast<size_t>(r);
         }
         return true;
     }
@@ -224,10 +237,15 @@ public:
 namespace fs = std::filesystem;
 inline std::string readFile(const std::string& local)
 {
-    std::ifstream in(local, std::ios::binary);
+    //istreambuf_iterator 逐字符读极慢,改为 ate 定位 + 预分配整块读
+    std::ifstream in(local, std::ios::binary | std::ios::ate);
     if (!in) return "";
-    std::string content((std::istreambuf_iterator<char>(in)),
-                         std::istreambuf_iterator<char>());
+    const auto size = in.tellg();
+    if (size <= 0) return "";
+    in.seekg(0);
+    std::string content(static_cast<size_t>(size), '\0');
+    in.read(content.data(), size);
+    if (in.gcount() != size) return "";
     return content;
 }
 inline std::vector<char> readBinary(const std::string& local)
@@ -260,6 +278,7 @@ inline bool isFolder(const std::string& local)
 inline std::vector<std::string> children(const std::string& local)
 {
     std::vector<std::string> result;
+    result.reserve(16);   //常见目录条目数,避免多次扩容
     for (std::error_code ec; const auto& entry : fs::directory_iterator(local, ec))
         result.push_back(entry.path().filename().string());
     return result;
@@ -301,9 +320,11 @@ inline bool deleteFolder(const std::string& local)
 inline void console(const std::string& data)
 {
     //多线程(thread 指令)并发输出需互斥,否则交错/丢失
+    //保持 std::cout+flush 语义(io 单测经 rdbuf 重定向捕获输出,不能改输出通道;
+    //sync_with_stdio 关闭时机与 ios_base::Init 静态初始化顺序无保证,不可用)
     static std::mutex out_mtx;
     std::lock_guard<std::mutex> lock(out_mtx);
-    std::cout <<data<<std::flush;
+    std::cout << data << std::flush;
 }
 inline void read(std::string* data)
 {

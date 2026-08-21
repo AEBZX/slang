@@ -1,12 +1,11 @@
 {
   "name": "@aebzx/slang-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "vitest",
-    "build": "rolldown cli/entry.ts -o dist/cli.js -f esm -p node --external lzma-native",
-    "publish": "node build-cli.mjs & npm publish"
+    "build": "node build-cli.mjs"
   },
   "bin": {
     "slang": "dist/cli.js"

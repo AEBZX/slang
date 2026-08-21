@@ -41,7 +41,9 @@ export class HLambdaExpr extends HPrimaryExpr{
 }
 export class HFixExpr extends HExpr{}
 export class HIndexExpr extends HFixExpr{
-    constructor(public target:HExpr,public index:HExpr) {
+    //is_string:字符串索引 s[i](独立 str_get 操作码)。
+    //不能与容器共用 offset_get:数组 owner 槽号与字符串池id同数字空间,VM 无法区分
+    constructor(public target:HExpr,public index:HExpr,public is_string:boolean=false) {
         super()
     }
 }

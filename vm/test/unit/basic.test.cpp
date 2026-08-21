@@ -242,7 +242,7 @@ TEST_CASE("math: map completeness", "[runtime]")
 TEST_CASE("basic: map completeness", "[runtime]")
 {
     const auto table = basic();
-    REQUIRE(table.size() == 73);
+    REQUIRE(table.size() == 81);
     REQUIRE(table.count(0) == 1);   //mov_rr
     REQUIRE(table.count(84) == 1);  //load_rr
     REQUIRE(table.count(88) == 1);  //cz_rr
@@ -263,4 +263,6 @@ TEST_CASE("basic: map completeness", "[runtime]")
     REQUIRE(table.count(159) == 1); //param_set
     REQUIRE(table.count(163) == 1); //param_load
     REQUIRE(table.count(167) == 1); //delete
+    REQUIRE(table.count(170) == 1); //str_get_rrr
+    REQUIRE(table.count(177) == 1); //str_get_vvv
 }

@@ -41,6 +41,10 @@ export class ASMTool{
     list:[number,[asm_command[],number[]]][]
     asm:Map<number,[asm_command[],number[]]>
     cache:number[]
+    //continue 目标块栈:与表达式 cache 分离。while 把条件块id压这里,
+    //continue 弹它做 jmp 目标;若混用 cache,循环体内的函数调用表达式
+    //(语句级 p())会 pop 走条件块id,continue 弹空 cache → jmp undefined → 跳块0死循环
+    continue_stack:number[]=[]
     entry:boolean
     id(){
         return this.index++

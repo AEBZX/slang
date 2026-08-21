@@ -119,7 +119,12 @@ const I_IndexExpr:asm_factory=(data:HIndexExpr,tool)=>{
     tool.gen(data.target)
     tool.cache.push(index_id)
     tool.gen(data.index)
-    tool.code.push(['offset_get',['reg',id],['value',id],['value',index_id]])
+    //字符串索引 s[i]:独立 str_get 操作码(VM 按字符取子串、越界 null)。
+    //不能用 offset_get:数组 owner 槽号与字符串池id同数字空间,VM 端无法区分
+    if(data.is_string)
+        tool.code.push(['str_get',['reg',id],['value',id],['value',index_id]])
+    else
+        tool.code.push(['offset_get',['reg',id],['value',id],['value',index_id]])
 }
 const I_MemberExpr:asm_factory=(data:HMemberExpr,tool)=>{
     let id=tool.cache.pop()

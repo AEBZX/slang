@@ -29,6 +29,8 @@ export const BinMap=new Map([
     ['ret',122],
     //retn 原在 121 与 pop 的 value 槽位重叠,已挪到 169(delete 之后,避开 pop 区间)
     ['retn',169],
+    //字符串索引 s[i]:独立操作码(offset_get 的字符串回退会与数组 owner 槽号数字碰撞误判)
+    ['str_get',170],
     ['gc',123],
     //3参
     ['offset_set',124],
@@ -235,6 +237,14 @@ export class OFFSET_ADDR extends IR{
     }
     generate(): bin {
         return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]
+    }
+}
+//字符串索引:生成与 offset_get 同构的 (reg,value,value),但操作码独立,
+//VM 端只按字符取子串,不做 offset 表回退(避免与容器键空间混淆)
+export class STR_GET extends OFFSET_GET{
+    constructor(target:asm_args,data:asm_args,offset:asm_args) {
+        super(target,data,offset)
+        this.id='str_get'
     }
 }
 export class IN extends IR{

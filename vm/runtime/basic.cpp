@@ -63,6 +63,8 @@ OFFSET_SET_F(1,0,0) OFFSET_SET_F(1,0,1) OFFSET_SET_F(1,1,0) OFFSET_SET_F(1,1,1)
 //OFFSET_GET a b c:var[A]=var[offset[B][C]]
 //vid==0 表示 offset 越界(不存在,编译器槽号从1起),返回 null 值("\0" 池id)
 //foreach 终止依赖 arr[i]!=null,越界若返回槽0残留(返回值槽)会死循环
+//字符串索引走独立 str_get(170):数组 owner 槽号与字符串池id同数字空间,
+//在 offset_get 里做字符串回退会误判数组(owner 槽号恰为字符串池id时按字符返回)
 #define OFFSET_GET_F(fa, fb, fc) \
 void offset_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
@@ -76,6 +78,23 @@ void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_get_f##fa##fb##fc}); }
 OFFSET_GET_F(0,0,0) OFFSET_GET_F(0,0,1) OFFSET_GET_F(0,1,0) OFFSET_GET_F(0,1,1)
 OFFSET_GET_F(1,0,0) OFFSET_GET_F(1,0,1) OFFSET_GET_F(1,1,0) OFFSET_GET_F(1,1,1)
+//STR_GET a b c:var[A]=字符串[var[B]][var[C]] 的单字符子串
+//对象槽存字符串池id,索引槽存数字池id;越界(负/超长/非字符串)返回 null("\0")
+//编译器只在 StringType 索引时发射此操作码,与容器 offset 完全分离
+#define STR_GET_F(fa, fb, fc) \
+void str_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=key(d,fa,a); \
+    const Const& oc=d->data.get(key(d,fb,b)); \
+    int i=static_cast<int>(d->data.get(key(d,fc,c)).num); \
+    if(!oc.type && i>=0 && i<static_cast<int>(oc.str.size())) \
+        v(d,A,d->data.link(std::string(oc.str.substr(i,1)))); \
+    else \
+        v(d,A,d->data.link(std::string("\0",1))); } \
+void STR_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},str_get_f##fa##fb##fc}); }
+STR_GET_F(0,0,0) STR_GET_F(0,0,1) STR_GET_F(0,1,0) STR_GET_F(0,1,1)
+STR_GET_F(1,0,0) STR_GET_F(1,0,1) STR_GET_F(1,1,0) STR_GET_F(1,1,1)
 
 //OFFSET_ADDR a b c:var[A]=offset[B][C] 的 var_id(地址=槽号,不 link 成池id)
 //编译器取地址后 mov value 解引用写 var[var[A]];link(vid) 会把槽号当池id,写入错槽
@@ -327,6 +346,8 @@ std::unordered_map<int,CommandRun> basic()
         {136,OFFSET_GET_F100},{137,OFFSET_GET_F101},{138,OFFSET_GET_F110},{139,OFFSET_GET_F111},
         {140,OFFSET_ADDR_F000},{141,OFFSET_ADDR_F001},{142,OFFSET_ADDR_F010},{143,OFFSET_ADDR_F011},
         {144,OFFSET_ADDR_F100},{145,OFFSET_ADDR_F101},{146,OFFSET_ADDR_F110},{147,OFFSET_ADDR_F111},
+        {170,STR_GET_F000},{171,STR_GET_F001},{172,STR_GET_F010},{173,STR_GET_F011},
+        {174,STR_GET_F100},{175,STR_GET_F101},{176,STR_GET_F110},{177,STR_GET_F111},
         {159,PARAM_SET_R_R},{160,PARAM_SET_R_V},{161,PARAM_SET_V_R},{162,PARAM_SET_V_V},
         {163,PARAM_LOAD_R_R},{164,PARAM_LOAD_R_V},{165,PARAM_LOAD_V_R},{166,PARAM_LOAD_V_V},
         {167,DELETE_R},{168,DELETE_V},

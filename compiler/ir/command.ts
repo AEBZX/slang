@@ -73,7 +73,9 @@ const I_Break:asm_factory=(data:HBreak,tool)=>{
     tool.code.push(['ret',['value',0],['value',0],['value',0]])
 }
 const I_Continue:asm_factory=(data:HContinue,tool)=>{
-    let continue_block=tool.cache.pop()
+    //continue 目标从专用 continue_stack 取(见 ASMTool.continue_stack 注释):
+    //不能从表达式 cache 取,循环体内语句级函数调用会把 cache 里的条件块id弹走
+    let continue_block=tool.continue_stack[tool.continue_stack.length-1]
     tool.code.push(['jmp',['reg',continue_block],['reg',1],['value',0]])
 }
 const I_VM:asm_factory=(data:HVM, tool)=>{
@@ -123,7 +125,7 @@ const I_WhileStatement:asm_factory=(data:HWhileStatement,tool)=>{
     //ret(break)弹到最近循环帧退出循环;retn弹到函数帧不被cz帧截断
     tool.code.push(['cz',['reg',id],['reg',1],['reg',2]])
     tool.push(id)
-    tool.cache.push(id)
+    tool.continue_stack.push(id)
     //循环体末尾追加跳回条件块,实现多次循环(原循环体执行后直接退出,仅循环一次)
     let body=data.commands instanceof HListCommand?data.commands.commands:[data.commands]
     tool.gen(new HIfStatement(
@@ -131,6 +133,7 @@ const I_WhileStatement:asm_factory=(data:HWhileStatement,tool)=>{
         new HListCommand([...body,new HContinue()]),
         new HBreak()
     ))
+    tool.continue_stack.pop()
     tool.pop()
 }
 const I_ListCommand:asm_factory=(data:HListCommand,tool)=>{

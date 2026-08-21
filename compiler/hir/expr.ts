@@ -19,7 +19,7 @@ import {
     NotPrefix, NullLiteral,
     NumberLiteral,
     Postfix, PostfixExpression, PrefixExpression, ReferencePrefix, ShiftLeftExpression, ShiftRightExpression,
-    StringLiteral, SubtractiveExpression, TernaryExpression
+    StringLiteral, StringType, SubtractiveExpression, TernaryExpression
 } from '../utils'
 const H_NumberLiteral:hir_visitor=(node:NumberLiteral,scope,call)=>new HNumberLiteral(parseFloat(node.value))
 const H_StringLiteral:hir_visitor=(node:StringLiteral,scope,call)=>new HStringLiteral(node.value)
@@ -71,7 +71,8 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     let primary=call(_primary,scope)
     for(let i of node.postfix){
         if(i instanceof IndexPostfix)
-            primary=new HIndexExpr(primary,call(i.index,scope))
+            //字符串索引标记:primary 类型为 StringType 时走独立 str_get(见 HIndexExpr 注释)
+            primary=new HIndexExpr(primary,call(i.index,scope),_primary.type instanceof StringType)
         if(i instanceof ArgumentsPostfix)
             primary=new HArgumentsExpr(primary,i.args.map(i=>call(i,scope)))
         if(i instanceof MemberPostfix){

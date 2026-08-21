@@ -10,7 +10,7 @@ import {
     IndexPostfix, InequalityExpression,
     LambdaExpression, LambdaType, ListCommand, MemberPostfix, ModAssign, ModExpression, MulAssign, MultiplicativeExpression,
     NullLiteral, NumberLiteral, NumberType, PostfixExpression, Return,
-    ShiftLeftExpression, ShiftRightExpression,
+    ShiftLeftExpression, ShiftRightExpression, StringType,
     SubAssign,
     SubtractiveExpression, SwitchStatement, Throw, TryStatement, VarDeclaration, VoidType, WhileStatement
 } from '../utils'
@@ -114,6 +114,22 @@ const D_ForStatement:desugar_visitor=(node:ForStatement,call)=>call(new ListComm
     ))
 ]))
 const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
+    //字符串遍历:元素为字符;字符串是 StringType 而非 FixType,
+    //此前无条件 fix.pop() 剥数组/映射后缀 → StringType.fix 为 undefined,desugar 崩溃
+    if(node.data.type instanceof StringType)
+        return call(new ListCommand([
+            new VarDeclaration(node.iden,new StringType(),node.data),
+            new ForStatement(
+                [new VarDeclaration('foreach',new NumberType(),new NumberLiteral('0'))],
+                new InequalityExpression(new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))]),
+                    new NullLiteral('')),
+                [new Increment(new IdentifierExpr('foreach'))],
+                new ListCommand([
+                    new Assign(new IdentifierExpr(node.iden),
+                        new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))])),
+                    node.commands
+                ]))
+        ]))
     let type=node.data.type as FixType
     type.fix.pop()
     type=new FixType(type.t,type.fix)
