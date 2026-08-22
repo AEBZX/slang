@@ -191,6 +191,20 @@ describe('check 端到端', () => {
         expect(check_code('public m:void(s:string){foreach(c:s){return;}}\n')).toEqual([])
     })
 
+    it('private 成员访问控制', () => {
+        //外部访问 private 成员报错(此前 private 只解析不检查)
+        expect(check_code('public A:class{private f:number(){return 1;}}\npublic m:number(a:A){return a.f();}\n').join())
+            .toContain('private member')
+        //外部访问 private 变量成员报错
+        expect(check_code('public A:class{private v:var:number;}\npublic m:number(a:A){return a.v;}\n').join())
+            .toContain('private member')
+        //类内部(方法/构造函数)访问 private 通过
+        expect(check_code('public A:class{private f:number(){return 1;}public g:number(){return this.f();}}\n')).toEqual([])
+        expect(check_code('public A:class{private v:var:number;public constructor:void(){this.v=1;}public g:number(){return this.v;}}\n')).toEqual([])
+        //public 成员外部访问通过
+        expect(check_code('public A:class{public f:number(){return 1;}}\npublic m:number(a:A){return a.f();}\n')).toEqual([])
+    })
+
     it('map 键必须是字符串', () => {
         // m['a'] 字符串字面量键通过
         expect(check_code('public foo:number(m:number{}){return m["a"];}\n')).toEqual([])

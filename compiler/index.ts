@@ -26,8 +26,9 @@ export default function (code:string[],optimize_level:number,output:boolean=fals
     check_start=performance.now()-check_start
     if(output)console.log(`check OK:${check_start}ms,${scope.error.length} errors:`)
     if(scope.error.length!=0){
-        console.log(scope.error.join('\n'))
-        process.exit(0)
+        //库函数不得 process.exit:测试/嵌入场景会直接杀掉宿主进程(worker 异常终止挂起)。
+        //抛错由调用方处理(CLI 层 entry.ts 已 catch 并退出)
+        throw new Error(scope.error.join('\n'))
     }
     if(output)console.log('compiler:desugar and hir')
     let desugar_start=performance.now()

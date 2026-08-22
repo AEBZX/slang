@@ -26,8 +26,6 @@ export function build(code:Map<number,IR[]>,tool:IRTool){
                 if(typeof m=='number')methods.add(m)
             }
             //条件跳转/条件调用:目标可解析时建条件边
-            //注意优先级:必须整体加括号,否则 JZ/TZ 不检查 resolve 结果,
-            //value 形式目标解析为 null 时 CFG[null] 崩溃
             if((i instanceof JZ||i instanceof TZ||i instanceof CZ)&&resolve(i.target)!=null){
                 let t=resolve(i.target) as number
                 //槽值跟踪到的非块id(如字面量常量)不是合法跳转目标,无法静态建边,跳过

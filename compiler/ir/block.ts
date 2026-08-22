@@ -6,8 +6,7 @@ const I_Class:asm_factory=(data:HClass,tool)=>{
         data.constructor_id=id
     }
     //类槽初始化:load 类槽=构造块id(与顶层函数lambda的函数槽初始化一致)
-    //构造块id用tool.id()显式分配;类槽是HIR的HClass.name(HFile的children是裸HClass,无HVariable包装,
-    //此前不push类槽,gen(HNumberLiteral)的cache.pop()拿到空槽→load var0,而 new 读 var[类槽]=0,call跳块0死循环)
+    //构造块id用tool.id()显式分配;类槽是HIR的HClass.name(HFile的children是裸HClass,无HVariable包装)
     let class_block_id=tool.id()
     tool.cache.push(data.name)
     tool.gen(new HNumberLiteral(class_block_id))
@@ -22,7 +21,6 @@ const I_Class:asm_factory=(data:HClass,tool)=>{
             tool.gen(i.value)
         } else {
             //变量成员槽自引用(值=自身槽号):成员 offset 键=var[槽] 必须唯一,
-            //此前槽=初始值 null,多个变量成员键相同('\0' 池id)→ offset 相互覆盖
             //(如 name 与 price 都写键'\0',后写的覆盖先写的,读回错值)
             tool.code.push(['mov',['reg',i.name],['reg',i.name],['value',0]])
         }

@@ -5,7 +5,7 @@ import ast_parse from '../../parser/ast'
 import {
     asm_args, ast_data, BINARY, BIT_NOT, CALL, CMP, CZ, File, GC, IN, IR, IRTool, JMP,
     JZ, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET,
-    POP, PUSH, RET, RETN, THREAD, TZ, to
+    POP, PUSH, RET, RETN, STR_GET, THREAD, TZ, to
 } from '../../utils'
 import check from '../../check'
 import desugar from '../../desugar'
@@ -127,6 +127,13 @@ class Sim {
                 let om = this.offsets.get(this.resolve(ins.target))
                 if (!om) { om = new Map(); this.offsets.set(this.resolve(ins.target), om) }
                 om.set(this.resolve(ins.offset), this.resolve(ins.value))
+            } else if (ins instanceof STR_GET) {
+                //字符串索引:对象槽存字符串值,索引为数字 → 单字符;越界/非字符串返回 null("\0")
+                //必须在 OFFSET_GET 之前:STR_GET 继承自 OFFSET_GET,后者会走 offset 映射
+                const s = this.resolve(ins.data)
+                const i = this.resolve(ins.offset)
+                this.slots.set(this.resolve(ins.target),
+                    typeof s == 'string' && typeof i == 'number' && i >= 0 && i < s.length ? s[i] : '\0')
             } else if (ins instanceof OFFSET_GET) {
                 const om = this.offsets.get(this.resolve(ins.data))
                 this.slots.set(this.resolve(ins.target), om ? om.get(this.resolve(ins.offset)) : undefined)
@@ -264,5 +271,21 @@ describe('o0/o1/o2 语义等价(模拟执行)', () => {
         expect(norm(rs[0])).toBe(norm(rs[1]))
         expect(norm(rs[1])).toBe(norm(rs[2]))
         expect(norm(rs[0])).toBe('3')
+    })
+    it('字符串索引 s[i]:o0/o1/o2 一致且取到字符', () => {
+        //str_get 独立操作码;越界返回 null 与 VM 对齐
+        const src = 'public static main:string(){var s:string="hello";return s[1];}\n'
+        const rs = run_levels(src)
+        expect(norm(rs[0])).toBe(norm(rs[1]))
+        expect(norm(rs[1])).toBe(norm(rs[2]))
+        expect(norm(rs[0])).toBe('"e"')
+    })
+    it('foreach 遍历字符串:o0/o1/o2 一致且字符计数正确', () => {
+        //回归:desugar 曾对 StringType 做 fix.pop 崩溃;字符串索引经 str_get
+        const src = 'public static main:number(){var s:string="hello";var n:number=0;foreach(ch:s){n=n+1;}return n;}\n'
+        const rs = run_levels(src)
+        expect(norm(rs[0])).toBe(norm(rs[1]))
+        expect(norm(rs[1])).toBe(norm(rs[2]))
+        expect(norm(rs[0])).toBe('5')
     })
 })

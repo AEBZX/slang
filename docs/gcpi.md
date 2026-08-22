@@ -86,6 +86,14 @@ out:{
 }
 in:boolean
 ```
+获取命令行信息
+```slang
+out:{
+    type:'args'
+}
+in:string[]
+```
+
 ## 系统信息获取(oper='system')
 ```slang
 out:'disk'|'memory_global'|'core_num'|'memory_self'

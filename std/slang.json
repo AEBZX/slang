@@ -1,0 +1,16 @@
+{
+    "name": "std",
+    "version": "1.0.0",
+    "author": "",
+    "license": "MIT",
+    "slang": "1.0.0",
+    "ignore": [],
+    "optimize": 2,
+    "output": "std",
+    "vm": "vm.exe",
+    "lib": {
+        "local": "lib",
+        "data": []
+    },
+    "lock": []
+}

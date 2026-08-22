@@ -26,7 +26,7 @@ function reads(i:IR):number[]{
     return ret
 }
 export function kill(tool:IRTool){
-    //跨块读:槽→读取它的块集合
+    //跨块读:槽->读取它的块集合
     let block_read=new Map<number,Set<number>>()
     for(let [bid,data] of tool.command)
         for(let i of data)

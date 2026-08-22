@@ -6,7 +6,7 @@ import CONSTANT from './constant'
 import PEEPHOLE from './peephole'
 import {asm_command, BINARY, bin, BIT_NOT, BLOCK_END, BLOCK_START, CMP, IR, IRTool, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, opt_visitor, PARAM_LOAD, POP, to} from '../utils'
 const round=10
-//跨块写扫描:模拟各块局部 state 解析 value 左值写目标,收集 槽→写入块集合
+//跨块写扫描:模拟各块局部 state 解析 value 左值写目标,收集 槽=>写入块集合
 //while 循环体在独立块修改变量后,块0内 if(变量==常量) 仍按初始化值折叠会错,折叠需保守
 const build_cross=(tool:IRTool)=>{
     let cross=new Map<number,Set<number>>()

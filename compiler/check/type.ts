@@ -125,6 +125,14 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 if(class_ instanceof Class)
                     for(let i of class_.children)
                         if(i.name==postfix.name) {
+                            //private 访问控制:仅类内部(scope 链 this 指向该类)可访问;
+                            //此前 private 只被解析存储,从不检查,外部可直接访问
+                            if(i.modifiers&&i.modifiers._private){
+                                let this_t=scope.get('this')
+                                let in_class=this_t instanceof ClassType&&this_t.local.join('.')==type.local.join('.')
+                                if(!in_class)
+                                    scope.thr(`private member '${postfix.name}' can only be accessed inside class ${type.local.join('.')} at line ${ast.line.join('\n')}`)
+                            }
                             type = scope.get_sym(i)
                             ast.types.push(type)
                             continue label

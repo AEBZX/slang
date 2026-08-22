@@ -50,7 +50,6 @@ private:
     std::unordered_map<int, SOCKET> conns;
     int nextHandle = 0;
     //fuck windows,fuck microsoft,傻逼初始化
-    //非 Windows 平台无需 WSA 初始化,空实现内联消除调用开销
     static void ensureInit()
     {
 #ifdef _WIN32
@@ -279,7 +278,8 @@ inline std::vector<std::string> children(const std::string& local)
 {
     std::vector<std::string> result;
     result.reserve(16);   //常见目录条目数,避免多次扩容
-    for (std::error_code ec; const auto& entry : fs::directory_iterator(local, ec))
+    std::error_code ec;
+    for ( const auto& entry : fs::directory_iterator(local, ec))
         result.push_back(entry.path().filename().string());
     return result;
 }

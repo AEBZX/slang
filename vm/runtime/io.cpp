@@ -118,6 +118,14 @@ static void out_shell(Runtime* t, const int obj)
         const bool ok = exec(field_str(t, obj, "data")) == 0;
         io_set(t, t->pool->data.link((double)(ok ? 1 : 0)));
     }
+    else if (type=="args")
+    {
+        t->io_array.clear();
+        for (const auto& arg : t->m->args)
+            t->io_array.push_back(t->pool->data.link(arg));
+        t->io_result = -1;
+        t->io_wait_recv = false;
+    }
 }
 static void out_gui(Runtime* t, const int obj)
 {

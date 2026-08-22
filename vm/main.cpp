@@ -1,5 +1,5 @@
 #include "main.h"
-int main(int argc, char* argv[])
+int main(int argc,const char* argv[])
 {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -7,7 +7,7 @@ int main(int argc, char* argv[])
 #endif
     if (argc >= 3 && std::string(argv[1]) == "run")
     {
-        Manage m = entry(std::string(argv[2]));
+        Manage m = entry(std::string(argv[2]),argv);
         m.start();
     }
     return 0;

@@ -6,12 +6,12 @@ import {
     ForeachStatement,
     Scope,
     Type,
-    VoidType
+    VoidType,LambdaExpression
 } from '../utils'
-import { LambdaExpression } from '../utils/model/ast/expr'
 import symbol from './symbol'
 import type_map from './type'
 import censor_map from './censor'
+//寻找检查器
 function find_checker(map: Map<any, any>, cls: any): any {
     while (cls) {
         if (map.has(cls)) return map.get(cls)

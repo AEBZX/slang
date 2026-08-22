@@ -148,6 +148,10 @@ let comment_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
             let value=stream.code.slice(start,stream.index).join('')
             return [true,value,TokenType.Comment]
         }
+        //非注释:回退已消费的 '/',交还其他 token 匹配(除法运算符)
+        //此前不回退 → '4/2' 的 '/' 被吞 → token 流缺 Divide → 整个文件解析失败
+        //(除法因此从未可用;% * + - 不走注释检查不受影响)
+        stream.index--
     }
     return [false,'',TokenType.Comment]
 }

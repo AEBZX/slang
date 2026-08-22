@@ -4,5 +4,5 @@
 
 #include "runtime/runtime.h"
 
-Manage entry(const std::string&);
+Manage entry(const std::string&, const char*[]);
 #endif

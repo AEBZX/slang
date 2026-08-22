@@ -56,7 +56,9 @@ struct SharedRunner{
 }
 
 //并发 join:两个线程同时 THREAD/join 同一块,验证 thread 数组并发修改不崩溃
-TEST_CASE("thread: 并发 join 同一块不崩溃(thread 数组竞争)", "[thread]")
+//测试名用英文:catch_discover_tests 以测试名作 ctest 过滤器参数,
+//中文名在 Windows 控制台 GBK 解码乱码 → No tests ran 误报失败
+TEST_CASE("thread: concurrent join same block (array race)", "[thread]")
 {
     for(int round=0;round<200;round++){
         Command cmds=build_add_block();
@@ -77,7 +79,7 @@ TEST_CASE("thread: 并发 join 同一块不崩溃(thread 数组竞争)", "[threa
 }
 
 //并发执行同一函数块:槽共享导致结果错乱,但不崩溃;数值必须是参数组合之一
-TEST_CASE("thread: 两线程共享槽并发执行同一函数块", "[thread]")
+TEST_CASE("thread: shared slots concurrent same block", "[thread]")
 {
     SharedRunner sr(build_add_block());
     for(int round=0;round<500;round++){

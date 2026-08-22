@@ -10,7 +10,7 @@ import ajax from 'axios'
 import {c as _compress,x as _decompress} from 'tar'
 import lzma from 'lzma-native'
 import {createHash} from 'crypto'
-//lzma 压缩/解压(base64 交换格式为 .tar.xz;tar 库本身不支持 xz,需先解压为纯 tar)
+import * as child_process from "node:child_process";
 function lzma_compress(buf:Buffer):Promise<string>{
     return new Promise((resolve)=>{
         lzma.compress(buf,{preset:9,synchronous:true},(res)=>{resolve(res.toString('base64'))})
@@ -89,15 +89,13 @@ export function compiler(global:GlobalConfig,project:ProjectConfig,dir:string=pr
 }
 export function start(vm:string,file:string){
     file=path.resolve(file)
-    spawn(vm, ['run',file], {
-        stdio: 'ignore',
-    }).unref()
+    child_process.execSync(process.cwd()+'/vm.exe run '+file)
 }
 export function run(global:GlobalConfig,project:ProjectConfig){
     compiler(global, project)
     start(project.vm,project.output+'.sbin')
 }
-export async function init(){
+export async function init(global:GlobalConfig){
     let folder_name=path.basename(process.cwd())||'app'
     const name=await input({message:'项目名:',default:folder_name})
     const version=await input({message:'版本:',default:'1.0.0'})
@@ -110,21 +108,35 @@ export async function init(){
         ],
         default:2
     })
-    //此处先放鸽子
-    //从SPMServer获取VMList
+    //从SPMServer获取VMList;服务器未配置/不可达/列表为空都容错,
+    //否则 vm_list[0].version 在空数组时崩(Cannot read properties of undefined)
     let vm_list:{version:string,isa:string}[]=[]
     if(global.server){
-        let res=await ajax.get(global.server+'/api/list/vm')
-        vm_list=res.data.data.map(i=>{return {version:i.version,isa:i.isa}})
+        try{
+            let res=await ajax.get(global.server+'/api/list/vm')
+            if(res.data&&Array.isArray(res.data.data))
+                vm_list=res.data.data.map(i=>{return {version:i.version,isa:i.isa}})
+        }catch(e){
+            //不静默:打印真实原因(连接拒绝/超时/解析等),否则 vm_list=[] 后在
+            //select default 处报 "Cannot read properties of undefined (reading 'version')",无从排查
+            console.error(`[init] 获取 VM 列表失败: ${(e as Error)?.message||e}`)
+            vm_list=[]
+        }
     }
+    //无可用 VM 时跳过选择/下载,直接用默认 vm 名
+    let vm_name=os.type()=='Windows_NT'?'vm.exe':'vm'
     const vm=await select({
         message: '选择虚拟机:',
         choices: vm_list.map(i=>{return {name:i.version+'('+i.isa+'指令集)',value:i.version}}),
         default:vm_list[0].version+'('+vm_list[0].isa+'指令集)'
     })
     //下载vm虚拟机
-    let data=await ajax.post(global.server+'/api/download/vm',{params:{version:vm.split(' ')[0]}})
-    writeFileSync(process.cwd()+'/vm.exe',Buffer.from(data.data,'base64'))
+    //参数放顶层:服务器端解构 req.body 顶层 version({params:...} 是 axios 请求配置,不会进 body)
+    //必须检查 code:服务器失败时返回 {code:非200,data:null},不检查直接
+    //Buffer.from(null,'base64') → "Received an instance of Object"(typeof null==='object')
+    let res=await ajax.post(global.server+'/api/download/vm',{version:vm.split(' ')[0]})
+    if(res.data.code!=200)throw new Error(`${res.data.code}:${res.data.message}`)
+    writeFileSync(process.cwd()+'/'+vm_name,Buffer.from(res.data.data,'base64'))
     const output=await input({message:'输出路径:(.sbin)',default:`${folder_name}`})
     const local=await input({message:'库目录:',default:'lib'})
     writeFileSync('slang.json',JSON.stringify({
@@ -222,7 +234,11 @@ export async function publish(global:GlobalConfig,project:ProjectConfig,dir:stri
 //上传vm
 export async function pvm(global:GlobalConfig,path:string,isa:string,version:string,license:string){
     console.log('publishing vm...')
+    //顶层必须传 author/token:服务器端 publishVM 校验用户表(i.username==author&&i.token==token),
+    //此前只放 module.author,顶层 author/token 为 undefined → 恒 401 Unauthorized
     let res=await ajax.post(global.server+'/api/publish/vm',{
+        author: global.username,
+        token: global.password,
         module:{
             version: version,
             isa,

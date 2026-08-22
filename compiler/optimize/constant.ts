@@ -85,7 +85,9 @@ const C_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data)
     if($.pvalue(data.data)==null)return
-    let res=!($.pvalue(data.data)==1?1:0)
+    //非零即真:pvalue==1?1:0 把 2/9 等非零值误当 0 → !9 折叠成 1(应 0)
+    //(9>7 未折叠时 state 残留 load 的 9,not(9) 被折成 1,|| cond 恒真)
+    let res=!($.pvalue(data.data)?1:0)
     let id=tool._id()
     tool.pool.set(id,res?1:0)
     $.set(data.data,['reg',res?1:0])
@@ -98,7 +100,9 @@ const C_BIT_NOT:opt_visitor=(data:BIT_NOT, tool, bid, index)=>{
     let res=~$.pvalue(data.data)
     let id=tool._id()
     tool.pool.set(id,res)
-    $.set(data.data,['reg',res?1:0])
+    //res 是任意整数(~0=-1):此前 res?1:0 把非零真值归一化成 1,
+    //state 记录 1 而实际 -1 → 后续 cmp/运算按 1 折叠,~0==-1 被折成 1==-1=假
+    $.set(data.data,['reg',res])
     tool.replace(bid,index,new LOAD(data.data,['reg',id]))
 }
 const C_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
@@ -117,7 +121,12 @@ const C_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
     let lslot=$.value(data.left)
     if(typeof lslot=='number'){
         let blocks=tool.cross.get(lslot)
-        if(blocks&&blocks.size>0&&!(blocks.size==1&&blocks.has(bid)))return
+        if(blocks&&blocks.size>0&&!(blocks.size==1&&blocks.has(bid))){
+            //残留 state(load 的原始值)与运行时槽值(cmp 结果)不一致,
+            //后续 C_NOT 等折叠会用它 → 错(如 4>6 未折叠时 state=4,not 折成 0 而运行时 not(0)=1)
+            tool.state.set(lslot,null)
+            return
+        }
     }
     let res=_CMP.get(o as number)(l as number,r as number)
     let id=tool._id()
@@ -136,7 +145,6 @@ const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     if(v==null){
         //运行时读(跨块写/mem_state 失效):target 槽编译期值未知
         //必须清空 state,否则残留此前指令写入的值(如对象句柄),后续 cmp/运算误折叠
-        //(例:arr[1]=arr[1]+5 后 if(arr[1]==25),target 槽残留句柄 12,折叠成 12==25=假)
         let t=$.value(data.target)
         if(typeof t=='number')tool.state.set(t,null)
         return
@@ -147,9 +155,6 @@ const C_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     tool.replace(bid,index,new LOAD(data.target,['reg',id]))
 }
 //函数/线程调用会修改任意容器(数组/映射/对象按引用传参):offset 折叠状态必须作废
-//否则 arr=字面量 → func(arr) 原地改数组 → 后续 arr[0] 仍按字面量折叠,结果错
-//(例:bubble_sort(arr,8) 后 if(arr[0]==1&&arr[7]==9) 按 [3,1,4,...] 折叠成恒假)
-//线程(thread/tz)同样并发写容器,一并清空
 const C_CALL:opt_visitor=(data:CALL, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.target)

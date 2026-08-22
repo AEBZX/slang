@@ -33,10 +33,10 @@ const G_Class:ast_generate=(data,tree)=>{
             local.push(v as string)
         for(let [k,v] of (data.children.get('child_1') as ast_data).children)
             if(typeof v=='object')children.push(tree(v,tree))
-    }else{
+    }else
         for(let [k,v] of first.children)
             if(typeof v=='object')children.push(tree(v,tree))
-    }
+    if(local.length==0)local=['std','ObjectInterface']
     return new Class(null,null,local,children)
 }
 const G_Interface:ast_generate=(data,tree)=>{
@@ -52,6 +52,7 @@ const G_Interface:ast_generate=(data,tree)=>{
         for(let [k,v] of first.children)
             if(typeof v=='object')children.push(tree(v,tree))
     }
+    if(local.length==0)local=['std','ObjectInterface']
     return new Interface(null,null,local,children)
 }
 const G_Enum:ast_generate=(data,tree)=>{
@@ -83,6 +84,7 @@ const G_Block:ast_generate=(data,tree)=>{
     let ret=tree(data.children.get('child_3') as ast_data,tree) as Block
     ret.modifiers=new Modifier(!_Modifier.includes('static'),_Modifier.includes('async'),_Modifier.includes('private'))
     ret.name=data.children.get('child_1') as string
+    if(ret instanceof Class&&ret.name=='ObjectInterface')ret.implement=[]
     return ret
 }
 const G_File:ast_generate=(data,tree)=>{

@@ -22,10 +22,6 @@ if(NOT Catch2_FOUND)
 endif()
 
 enable_testing()
-#===== GUI(oper='GUI')后端检测:找不到对应依赖时 GUI 不可用,不影响其余功能 =====
-#Windows:WebView2 SDK(优先 SLANG_WEBVIEW2_DIR,否则 NuGet 缓存 microsoft.web.webview2)
-#Linux  :WebKitGTK(pkg-config webkit2gtk-4.1,回退 4.0)
-#macOS  :Cocoa + WebKit(系统框架)
 set(SLANG_WEBVIEW2_FOUND FALSE)
 set(SLANG_GUI_LINK "")
 if(WIN32)

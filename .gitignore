@@ -30,6 +30,7 @@ package/data
 /slang-plugin-jetbrains/build/
 /slang-plugin-jetbrains/gradle/
 /slang-plugin-jetbrains/.intellijPlatform/
-/slang-plugin-jetbrains/.gradle/
 /slang-jetbrains-plugin/.run/
 /slang-jetbrains-plugin/gradle/
+*.exe
+std/lib

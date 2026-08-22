@@ -53,12 +53,11 @@ inline TaskCond nameCond(const int v,const std::string& n)
 class Runtime:public Thread
 {
 public:
+    std::vector<std::string>* args;
     VarPool* pool = nullptr;
     bool alive=true;
     Command* command=nullptr;
     int* thread=nullptr;
-    //帧类型:0=块帧(if/while 的 cz),1=函数帧(call),2=循环帧(while 的 cz)
-    //ret(break)弹到最近循环帧,retn 弹到最近函数帧
     Stack<int> blockStack;
     Stack<int> indexStack;
     Stack<int> stack;
@@ -95,14 +94,6 @@ public:
                 alive=false;
                 break;
             }
-            if (std::getenv("DSH_VM_TRACE"))
-            {
-                const auto& c = cmds.at(block)[index];
-                std::fprintf(stderr, "trc blk=%d idx=%d op=%d a=%d b=%d c=%d", block, index, c[0], c[1], c[2], c[3]);
-                if (c[0]==89 || c[0]==88 || c[0]==92) std::fprintf(stderr, " cond=%d", pv(pool, 1, c[2]));
-                if (c[0]==155) std::fprintf(stderr, " OUT");
-                std::fprintf(stderr, "\n");
-            }
             (*runner)(this,cmds.at(block)[index]);
             index++;
         }
@@ -116,8 +107,6 @@ inline void r(Runtime* runtime,std::array<int,4> c)
 }
 class Manage
 {
-    //unique_ptr 容器:扩容/增删只移动指针,Runtime 实例地址稳定,运行中线程的 this 不悬垂
-    //此前 vector<Runtime> 扩容会移动实例,运行中线程经旧地址访问已释放内存
     std::vector<std::unique_ptr<Runtime>> thread;
     int thread_num;
     VarPool pool;
@@ -132,10 +121,12 @@ class Manage
     //thread 数组互斥:join(子线程 push_back)与 start 遍历/gc erase 并发,vector 竞争会崩溃
     std::mutex tmtx;
 public:
+    std::vector<std::string> args;
     NetRuntime net;
     Manage(const std::unordered_map<int,double>& num, const std::unordered_map<int,std::string>& str,
-        const Command& c,const Runner& r)
+        const Command& c,const Runner& r,const std::vector<std::string>& a)
     {
+        args=a;
         thread_num=1;
         pool.init(num, str);
         command=c;
@@ -156,6 +147,7 @@ public:
         thread[0]->m=this;
         thread[0]->runner=&runner;
         thread[0]->_run=&_run;
+        thread[0]->args=&args;
         runner=r;
         Old_M=Memory();
         M=Memory();
@@ -196,14 +188,10 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
-    //析构时等待所有线程结束:detach 的子线程在 Manage 析构后访问已释放的 pool/command 会崩溃
-    //(实测:并发 join 后析构,detach 线程抛 std::out_of_range: unordered_map::at)
     ~Manage(){
         for (auto& t:thread)
             t->join();
     }
-    //thread 指令:新建真线程跑块(此前同步 run 在 thread[size-1] 上,覆盖主线程且非并发)
-    //多线程同时 THREAD 同一函数块时,thread 数组并发 push_back 竞争会崩溃,加锁保护
     static void join(Manage* m,const int block)
     {
         auto t=std::make_unique<Runtime>();
@@ -217,9 +205,10 @@ public:
         t->runner=&m->runner;
         t->_run=&m->_run;
         t->_join=&join;
+        t->args=&m->args;
         Runtime* rt;
         {
-            std::lock_guard<std::mutex> lock(m->tmtx);
+            std::lock_guard lock(m->tmtx);
             m->thread.push_back(std::move(t));
             rt=m->thread.back().get();
         }

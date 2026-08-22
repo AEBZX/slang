@@ -46,7 +46,10 @@ program
     .command('init')
     .description('init slang project')
     .action(async ()=>{
-        await init()
+        //必须传 readGlobal():init 内部用 global.server 请求 VM 列表,
+        //此前裸调 init() 无 global 参数,函数内 global 是 Node 全局对象,
+        //global.server 恒 undefined → 从不请求 → vm_list 空 → select default 崩
+        await init(readGlobal())
     })
 program
     .command('install')

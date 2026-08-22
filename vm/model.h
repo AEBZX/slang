@@ -81,7 +81,7 @@ public:
     }
     int link(const double v)
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard lock(mtx);
         auto k = std::bit_cast<uint64_t>(v);
         if (const auto it = numI.find(k); it != numI.end())
         {
@@ -185,7 +185,7 @@ private:
     mutable std::mutex vmtx;
     int alloc_base() const
     {
-        return (int)(0x40000000 | (0x3FFFFFFF & (uintptr_t)this));
+        return static_cast<int>(0x40000000 | (0x3FFFFFFF & (uintptr_t)this));
     }
 public:
     ConstPool data;
@@ -215,7 +215,7 @@ public:
     //(如并发调用同一函数),lock_var 的 var_lock[id] 表并发插入导致 unordered_map 损坏崩溃
     static void lock_var(VarPool* data,const int id)
     {
-        std::lock_guard<std::mutex> lock(data->vmtx);
+        std::lock_guard lock(data->vmtx);
         if (!data->var_lock[id])
             data->var_lock[id]=true;
     }

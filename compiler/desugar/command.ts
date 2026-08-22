@@ -3,7 +3,8 @@ import {
     AddAssign,
     AdditiveExpression, ArgumentsPostfix,
     Assign, BitAndAssign, BitOrAssign, BitShlAssign, BitShrAssign, BitwiseAndExpression, BitwiseOrExpression,
-    BitwiseXorExpression, BitXorAssign, BooleanLiteral, BooleanType, Break, Call, Decrement,
+    BitwiseXorExpression, BitXorAssign, BooleanLiteral, BooleanType, Break, Call, Case,
+    Continue, Decrement,
     desugar_visitor, DivAssign, DivisionExpression, DoWhileStatement, EqualityExpression, Expression,
     FixType, ForeachStatement, ForStatement, IdentifierExpr, IfStatement,
     Increment,
@@ -12,7 +13,7 @@ import {
     NullLiteral, NumberLiteral, NumberType, PostfixExpression, Return,
     ShiftLeftExpression, ShiftRightExpression, StringType,
     SubAssign,
-    SubtractiveExpression, SwitchStatement, Throw, TryStatement, VarDeclaration, VoidType, WhileStatement
+    SubtractiveExpression, SwitchStatement, Throw, TryStatement, VarDeclaration, VoidType, WhileStatement,Command
 } from '../utils'
 const D_Assign:desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data)
@@ -103,19 +104,31 @@ const D_DoWhileStatement:desugar_visitor=(node:DoWhileStatement,call)=>
         node.commands,
         new WhileStatement(node.condition,node.commands)
     ]))
-const D_ForStatement:desugar_visitor=(node:ForStatement,call)=>call(new ListCommand([
-    ...node.init,
-    call(new WhileStatement(
-        node.condition,
-        new ListCommand([
-            node.commands,
-            ...node.step
-        ])
-    ))
-]))
+const D_ForStatement:desugar_visitor=(node:ForStatement,call)=>{
+    let rewrite=(cmd:Command):Command=>{
+        if(cmd instanceof Continue)
+            return new ListCommand([...node.step, cmd])
+        if(cmd instanceof ListCommand)
+            return new ListCommand(cmd.commands.map(rewrite))
+        if(cmd instanceof IfStatement)
+            return new IfStatement(cmd.condition, rewrite(cmd.commands),
+                cmd.else_?rewrite(cmd.else_):cmd.else_)
+        if(cmd instanceof SwitchStatement)
+            return new SwitchStatement(cmd.condition,
+                cmd.case_list.map(c=>new Case(c.condition,rewrite(c.commands))),
+                cmd.default_?rewrite(cmd.default_):cmd.default_)
+        return cmd
+    }
+    return call(new ListCommand([
+        ...node.init,
+        call(new WhileStatement(
+            node.condition,
+            new ListCommand([rewrite(node.commands), ...node.step])
+        ))
+    ]))
+}
 const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
-    //字符串遍历:元素为字符;字符串是 StringType 而非 FixType,
-    //此前无条件 fix.pop() 剥数组/映射后缀 → StringType.fix 为 undefined,desugar 崩溃
+    //字符串遍历:元素为字符;字符串是 StringType 而非 FixType
     if(node.data.type instanceof StringType)
         return call(new ListCommand([
             new VarDeclaration(node.iden,new StringType(),node.data),

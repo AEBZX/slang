@@ -1,8 +1,11 @@
 #include <cstring>
 
 #include "main.h"
-Manage entry(const std::string& path)
+Manage entry(const std::string& path,char* args[])
 {
+    std::vector<std::string> arg={};
+    for (int i=3;args[i]!=nullptr;i++)
+        arg.push_back(args[i]);
     const std::vector<char> data=readBinary(path);
     if (data.empty()) throw std::runtime_error("sbin读取失败:"+path);
     size_t pos=0;
@@ -84,5 +87,5 @@ Manage entry(const std::string& path)
     }
     if (pos!=size) throw std::runtime_error("sbin文件存在残留字节");
     if (block>=0) throw std::runtime_error("sbin块未闭合");
-    return Manage(num,str,command,r);
+    return Manage(num,str,command,r,arg);
 }

@@ -1,18 +1,50 @@
 #include "runtime.h"
-#define BIN3(name, op, fa, fb, fc) \
+//浮点二元运算(add/sub/mul/div):保留 double,禁止 (int) 截断
+//此前 (int) 截断 → 1/4=0、10/4=2,浮点运行时全错;
+//O2 常量折叠用 JS 浮点算出 0.25,造成 O0/O2 语义不一致(差分暴露)
+#define BIN3_F(name, op, fa, fb, fc) \
 void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=dst(d,fa,a); \
-    int r=(int)d->data.get(src(d,fb,b)).num op (int)d->data.get(src(d,fc,c)).num; \
-    v(d,A,d->data.link((double)r)); } \
+    double l=d->data.get(src(d,fb,b)).num; \
+    double r=d->data.get(src(d,fc,c)).num; \
+    v(d,A,d->data.link(l op r)); } \
 void name##_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
     t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},name##_f##fa##fb##fc}); }
-#define BIN3_ALL(name, op) \
-BIN3(name,op,0,0,0) BIN3(name,op,0,0,1) BIN3(name,op,0,1,0) BIN3(name,op,0,1,1) \
-BIN3(name,op,1,0,0) BIN3(name,op,1,0,1) BIN3(name,op,1,1,0) BIN3(name,op,1,1,1)
+#define BIN3_F_ALL(name, op) \
+BIN3_F(name,op,0,0,0) BIN3_F(name,op,0,0,1) BIN3_F(name,op,0,1,0) BIN3_F(name,op,0,1,1) \
+BIN3_F(name,op,1,0,0) BIN3_F(name,op,1,0,1) BIN3_F(name,op,1,1,0) BIN3_F(name,op,1,1,1)
 
-BIN3_ALL(add,+) BIN3_ALL(sub,-) BIN3_ALL(mul,*) BIN3_ALL(div,/) BIN3_ALL(mod,%)
-BIN3_ALL(shr,>>) BIN3_ALL(shl,<<) BIN3_ALL(and,&) BIN3_ALL(or,|) BIN3_ALL(xor,^)
+//整数二元运算(mod/shr/shl/and/or/xor):位运算/取模按 32 位整数语义(与 JS 折叠一致)
+#define BIN3_I(name, op, fa, fb, fc) \
+void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=dst(d,fa,a); \
+    int l=(int)d->data.get(src(d,fb,b)).num; \
+    int r=(int)d->data.get(src(d,fc,c)).num; \
+    v(d,A,d->data.link((double)(l op r))); } \
+void name##_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},name##_f##fa##fb##fc}); }
+#define BIN3_I_ALL(name, op) \
+BIN3_I(name,op,0,0,0) BIN3_I(name,op,0,0,1) BIN3_I(name,op,0,1,0) BIN3_I(name,op,0,1,1) \
+BIN3_I(name,op,1,0,0) BIN3_I(name,op,1,0,1) BIN3_I(name,op,1,1,0) BIN3_I(name,op,1,1,1)
+
+BIN3_F_ALL(add,+) BIN3_F_ALL(sub,-) BIN3_F_ALL(mul,*) BIN3_F_ALL(div,/)
+//mod:整数取模,除数 0 保护(否则 x86 int 除零 → 0xC0000094 崩溃;返回 0 不崩)
+#define MOD_F(name, fa, fb, fc) \
+void mod_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n; \
+    int A=dst(d,fa,a); \
+    int l=(int)d->data.get(src(d,fb,b)).num; \
+    int r=(int)d->data.get(src(d,fc,c)).num; \
+    v(d,A,d->data.link((double)(r==0?0:l%r))); } \
+void mod_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
+    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mod_f##fa##fb##fc}); }
+#define MOD_ALL(name) \
+MOD_F(name,0,0,0) MOD_F(name,0,0,1) MOD_F(name,0,1,0) MOD_F(name,0,1,1) \
+MOD_F(name,1,0,0) MOD_F(name,1,0,1) MOD_F(name,1,1,0) MOD_F(name,1,1,1)
+MOD_ALL(mod)
+BIN3_I_ALL(shr,>>) BIN3_I_ALL(shl,<<) BIN3_I_ALL(and,&) BIN3_I_ALL(or,|) BIN3_I_ALL(xor,^)
 
 //一元:not/bit_not(就地:var[A]=link(op 池值(var[A])))
 #define UN1(name, op, fa) \

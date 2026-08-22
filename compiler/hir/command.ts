@@ -16,8 +16,6 @@ const H_VarDeclaration:hir_visitor=(node:VarDeclaration,scope,call)=>{
 }
 const H_Call:hir_visitor=(node:Call,scope,call)=>{
     let c=node.data as PostfixExpression
-    //await 标志直接用 AST 的 await_ 字段;此前从 c.types[length-2] 猜,
-    //纯函数调用(单 Arguments postfix)时 types=[返回类型]无 LambdaType,越界崩溃且 async 函数不线程
     let param=c.postfix.pop() as ArgumentsPostfix
     return node.await_?new HThread(call(c,scope),param.args.map(i=>call(i,scope))):
         new HCall(call(c,scope),param.args.map(i=>call(i,scope)))

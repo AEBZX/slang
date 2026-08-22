@@ -17,9 +17,6 @@ import {
 const P_MOV:opt_visitor=(data:MOV, tool, bid, index)=>{
     const $=tool.$
     //仅当源和目标参数完全一致(mov x x)才冗余
-    //state比较会把"mov执行后的记录值"误当"mov前已冗余",误删取地址(&a)与写入
-    //mov reg X reg X 是对象句柄初始化(对象槽自引用),不能当冗余删除,否则 offset 对象链断裂
-    //仅非 reg-reg 的同形(mov value X value X 等)才按冗余删
     if(data.left[0]==data.right[0]&&data.left[1]==data.right[1]&&data.left[0]!='reg')tool._mark(bid,index)
     if(!tool.dead(bid,index)){
         $.tset(data.left,bid,index,true,data)
@@ -93,7 +90,10 @@ const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
 const P_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
     const $=tool.$
     let last=$.t(data.data)
-    if(last!=null&&last[3] instanceof NOT){
+    //必须紧邻(index-1):last_touch 只被部分指令更新,中间若有其他写
+    //(如 !((A)||(B)) 内层/外层 not 共用同一槽,中间隔着 || 的 cmp/mov),
+    //last 残留内层 not → 误判 not(not(x)) 把两个 not 都删 → 结果错
+    if(last!=null&&last[3] instanceof NOT&&last[0]==bid&&last[1]==index-1){
         tool._mark(bid,index)
         tool._mark(last[0],last[1])
     }else $.tset(data.data,bid,index,true,data)
@@ -101,7 +101,7 @@ const P_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
 const P_BIT_NOT:opt_visitor=(data:BIT_NOT, tool, bid, index)=>{
     const $=tool.$
     let last=$.t(data.data)
-    if(last!=null&&last[3] instanceof BIT_NOT){
+    if(last!=null&&last[3] instanceof BIT_NOT&&last[0]==bid&&last[1]==index-1){
         tool._mark(bid,index)
         tool._mark(last[0],last[1])
     }else $.tset(data.data,bid,index,true,data)

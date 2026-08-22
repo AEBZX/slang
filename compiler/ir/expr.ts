@@ -290,17 +290,21 @@ const I_BinaryExpr:asm_factory=(data:HBinaryExpr,tool)=>{
     if(tool.CmpDict.has(data.op))
         tool.code.push(['cmp',['reg',id],['value',right_id],['reg',tool.CmpDict.get(data.op)]])
     //&&,||
+    //id/right_id 是槽号,必须用 HIdentifierExpr 包装:
+    //此前裸传 number,内层 I_BinaryExpr 的 gen(number) 是空操作 →
+    //== 的左操作数/&| 的操作数引用未初始化工具槽,结果写错槽
+    //(&& 的 then 分支碰巧保留原值才对;false||true 等组合即错)
     if(data.op=='&&')
         tool.gen(new HIfStatement(
-            new HBinaryExpr(id,'==',new HBooleanLiteral(false)),
-            new HAssign(id,new HBooleanLiteral(false)),
-            new HAssign(id,new HBinaryExpr(id,'&',right_id))
+            new HBinaryExpr(new HIdentifierExpr(id),'==',new HBooleanLiteral(false)),
+            new HAssign(new HIdentifierExpr(id),new HBooleanLiteral(false)),
+            new HAssign(new HIdentifierExpr(id),new HBinaryExpr(new HIdentifierExpr(id),'&',new HIdentifierExpr(right_id)))
         ))
     if(data.op=='||')
         tool.gen(new HIfStatement(
-            new HBinaryExpr(id,'==',new HBooleanLiteral(true)),
-            new HAssign(id,new HBooleanLiteral(true)),
-            new HAssign(id,new HBinaryExpr(id,'|',right_id))
+            new HBinaryExpr(new HIdentifierExpr(id),'==',new HBooleanLiteral(true)),
+            new HAssign(new HIdentifierExpr(id),new HBooleanLiteral(true)),
+            new HAssign(new HIdentifierExpr(id),new HBinaryExpr(new HIdentifierExpr(id),'|',new HIdentifierExpr(right_id)))
         ))
 }
 const I_TernaryExpr:asm_factory=(data:HTernaryExpr,tool)=> {
@@ -314,10 +318,12 @@ const I_TernaryExpr:asm_factory=(data:HTernaryExpr,tool)=> {
     tool.gen(data.trueExpr)
     tool.cache.push(fe)
     tool.gen(data.falseExpr)
+    //条件用 cond 槽(此前误用结果槽 id → 条件恒取结果槽旧值,三元结果错);
+    //槽号必须 HIdentifierExpr 包装(与 &&/|| 同类 bug:gen(number) 是空操作)
     tool.gen(new HIfStatement(
-        new HBinaryExpr(id,'==',new HBooleanLiteral(true)),
-        new HAssign(id,te),
-        new HAssign(id,fe)
+        new HBinaryExpr(new HIdentifierExpr(cond),'==',new HBooleanLiteral(true)),
+        new HAssign(new HIdentifierExpr(id),new HIdentifierExpr(te)),
+        new HAssign(new HIdentifierExpr(id),new HIdentifierExpr(fe))
     ))
 }
 export default new Map<any,asm_factory>([
