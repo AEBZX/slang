@@ -36,6 +36,7 @@ const G_Class:ast_generate=(data,tree)=>{
     }else
         for(let [k,v] of first.children)
             if(typeof v=='object')children.push(tree(v,tree))
+    //无 implements 的类默认实现 std.ObjectInterface(作为父路径,见 symbol chain)
     if(local.length==0)local=['std','ObjectInterface']
     return new Class(null,null,local,children)
 }
@@ -84,7 +85,8 @@ const G_Block:ast_generate=(data,tree)=>{
     let ret=tree(data.children.get('child_3') as ast_data,tree) as Block
     ret.modifiers=new Modifier(!_Modifier.includes('static'),_Modifier.includes('async'),_Modifier.includes('private'))
     ret.name=data.children.get('child_1') as string
-    if(ret instanceof Class&&ret.name=='ObjectInterface')ret.implement=[]
+    //ObjectInterface 接口/类本身不实现自己(否则 collect 递归 implement 死循环栈溢出)
+    if((ret instanceof Class||ret instanceof Interface)&&ret.name=='ObjectInterface')ret.implement=[]
     return ret
 }
 const G_File:ast_generate=(data,tree)=>{

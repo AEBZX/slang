@@ -1,7 +1,7 @@
 #include <cstring>
 
 #include "main.h"
-Manage entry(const std::string& path,char* args[])
+Manage entry(const std::string& path,const char* args[])
 {
     std::vector<std::string> arg={};
     for (int i=3;args[i]!=nullptr;i++)

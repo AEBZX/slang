@@ -31,13 +31,21 @@ const D_File:desugar_visitor=(node:File,call)=>{
 }
 const D_Enum:desugar_visitor=(node:Enum,call)=>{
     let index=0
-    return call(new Class(node.modifiers, node.name, ['std','ObjectInterface'], node.children.map(i =>
+    let cls=new Class(node.modifiers, node.name, ['std','ObjectInterface'], node.children.map(i =>
         new Variable(new Modifier(false, false, false), i, new NumberType(), new NumberLiteral(`${index++}`))
-    )))
+    ))
+    //保留 check 阶段注册的 BlockType:转 Class 后 type 丢失 → H_Class 读 node.type.local 崩
+    cls.type=node.type
+    return call(cls)
 }
-const D_Function:desugar_visitor=(node:Function,call)=>call(new Variable(node.modifiers, node.name,
+const D_Function:desugar_visitor=(node:Function,call)=>{
+    let ret=new Variable(node.modifiers, node.name,
         new LambdaType(node.params, node.return_type,node.modifiers._async),
-        new LambdaExpression(node.params, node.return_type, node.commands)))
+        new LambdaExpression(node.params, node.return_type, node.commands))
+    //保留 check 阶段注册的 BlockType:H_Variable 读 node.type.local 解析绝对路径槽
+    ret.type=node.type
+    return call(ret)
+}
 const D_Variable:desugar_visitor=(node:Variable,call)=>{
     node.value=node.value==null?new NullLiteral(''):call(node.value)
     return node

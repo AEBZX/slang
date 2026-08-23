@@ -114,6 +114,10 @@ export class IRTool{
                 this.state.set(left,this.pool.get(this.state.get(value[1]) as number))
             else if(!p&&this.state.get(value[1])!=null)
                 this.state.set(left,this.state.get(value[1]))
+            //value 解析不出(槽未知/未初始化):必须清空 left 残留状态,
+            //否则 mov x=未知 后 x 仍保留旧常量,后续 cmp/运算被错误折叠
+            else
+                this.state.set(left,null)
         },
         mset:(target:asm_args,offset:asm_args,value:asm_args)=>{
             let t:number=null,o:number|string=null,v:number|string=null

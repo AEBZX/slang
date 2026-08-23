@@ -3,6 +3,7 @@
 //此前 (int) 截断 → 1/4=0、10/4=2,浮点运行时全错;
 //O2 常量折叠用 JS 浮点算出 0.25,造成 O0/O2 语义不一致(差分暴露)
 #define BIN3_F(name, op, fa, fb, fc) \
+    \
 void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=dst(d,fa,a); \

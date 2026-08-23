@@ -74,7 +74,13 @@ const C_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>{
     $.Z(data.result,data.right,data.left)
     //操作数未知(参数/未初始化)不可折叠,否则 undefined 参与运算得到 NaN
     let l=$.value(data.left),r=$.value(data.right)
-    if(l==null||r==null)return
+    if(l==null||r==null){
+        //结果槽残留此前 LOAD 的旧值(如 2.56*p 的 id 槽先 LOAD 2.56 再原地 mul,
+        //p 为调用返回值时状态残留 2.56),不清空后续 cmp/运算会按 2.56 误折叠
+        let rs=$.value(data.result)
+        if(typeof rs=='number')tool.state.set(rs,null)
+        return
+    }
     let res=_BINARY.get(data.id)(l as number,r as number)
     let id=tool._id()
     $.set(data.result,['reg',res])
@@ -84,7 +90,12 @@ const C_BINARY:opt_visitor=(data:BINARY, tool, bid, index)=>{
 const C_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data)
-    if($.pvalue(data.data)==null)return
+    if($.pvalue(data.data)==null){
+        //not 原地写 data 槽:操作数未知时清残留,防止陈旧值被后续折叠
+        let rs=$.value(data.data)
+        if(typeof rs=='number')tool.state.set(rs,null)
+        return
+    }
     //非零即真:pvalue==1?1:0 把 2/9 等非零值误当 0 → !9 折叠成 1(应 0)
     //(9>7 未折叠时 state 残留 load 的 9,not(9) 被折成 1,|| cond 恒真)
     let res=!($.pvalue(data.data)?1:0)
@@ -96,7 +107,12 @@ const C_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
 const C_BIT_NOT:opt_visitor=(data:BIT_NOT, tool, bid, index)=>{
     const $=tool.$
     $.Z(data.data)
-    if($.pvalue(data.data)==null)return
+    if($.pvalue(data.data)==null){
+        //bit_not 原地写 data 槽:操作数未知时清残留
+        let rs=$.value(data.data)
+        if(typeof rs=='number')tool.state.set(rs,null)
+        return
+    }
     let res=~$.pvalue(data.data)
     let id=tool._id()
     tool.pool.set(id,res)

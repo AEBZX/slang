@@ -41,8 +41,11 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
     return new HClass(id,children,constructor_id,this_id)
 }
 export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
-    //复用类预注册的成员id
-    let id=scope.get(node.name)!=null?scope.get(node.name):scope.id()
+    //优先用绝对路径槽(跨模块唯一):模块静态字段同名(如 file.type 与 system.type)时,
+    //pre 的裸名全局注册互相覆盖,scope.get(node.name) 会拿到别的模块的槽,
+    //vm '%type' 与 std.file.type 分叉成两个槽/错误端口
+    let abs=(node.type as BlockType).local.join('.')
+    let id=scope.get(abs)!=null?scope.get(abs):(scope.get(node.name)!=null?scope.get(node.name):scope.id())
     scope.set(node.name,id)
     //第一个static的main标记为入口
     let entry=node.name=='main'&&!node.modifiers.unstatic&&!scope.global.entry

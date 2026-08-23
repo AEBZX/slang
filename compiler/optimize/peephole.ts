@@ -46,7 +46,9 @@ const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
     let _data:IR=data
     let r=$.value(data.right)
     let l=$.value(data.left)
-    if(data.id=='add'&&l==0||r==0)_data=new MOV(data.result,l==0?data.right:data.left)
+    //原写法 (add&&l==0)||(r==0) 优先级错误:r==0 会逃逸到所有运算,
+    //div/mod 被字面 0 除时误折成 MOV x(x/0 应为 inf、x%0 无定义)
+    if(data.id=='add'&&(l==0||r==0))_data=new MOV(data.result,l==0?data.right:data.left)
     if(data.id=='sub') {
         if(r==0)_data=new MOV(data.result, data.left)
         if(l==r&&l!=null)_data=new MOV(data.result,['reg',0])
@@ -61,15 +63,18 @@ const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
         if(r==l&&r!=null)_data=new MOV(data.result,['reg',1])
     }
     if(data.id=='mod'&&l==r&&l!=null)_data=new MOV(data.result,['reg',1])
-    if(data.id=='shl'||data.id=='shr'&&r==0)_data=new MOV(data.result,data.left)
+    //位运算的 0 恒等折叠必须限定整数操作数:VM 的 and/or/xor/shr/shl 按 int32 语义
+    //(25.6|0=25),浮点 x 折成 MOV x 会丢失截断
+    if(data.id=='shl'||data.id=='shr'&&r==0&&Number.isInteger(l))_data=new MOV(data.result,data.left)
     if(data.id=='and') {
         if (l == r && l != null)_data= new MOV(data.result, data.left)
         if (r == 0) _data = new MOV(data.result,['reg',0])
     }
-    if(data.id=='or'&&(l==r&&l!=null)||r==0)_data=new MOV(data.result,data.left)
+    if(data.id=='or'&&((l==r&&l!=null)||(r==0&&Number.isInteger(l))))_data=new MOV(data.result,data.left)
     if(data.id=='xor'){
         if(l==r&&l!=null)_data=new MOV(data.result,['reg',0])
-        if(r==0)_data=new MOV(data.result,data.left)
+        //x^0 恒等同样只对整数成立(浮点 x^0 会截断)
+        if(r==0&&Number.isInteger(l))_data=new MOV(data.result,data.left)
         //a^1^1=a
         if(r==1){
             let last=$.t(data.left)
