@@ -20,10 +20,10 @@ package/node_modules
 demo
 vm/.tmp*
 package/data
-/package/config.json
-/package/module.json
-/package/user.json
-/package/vm.json
+/package/data/config.json
+/package/data/module.json
+/package/data/user.json
+/package/data/vm.json
 /package/dist/
 /slang-jetbrains-plugin/.run/
 /slang-jetbrains-plugin/gradle/

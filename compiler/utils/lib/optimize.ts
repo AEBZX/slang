@@ -158,7 +158,27 @@ export class IRTool{
             return t.get(this.$.value(offset))
         },
         pvalue:(id:asm_args)=>this.state.get(this.$.value(id) as number),
-        z:(data:asm_args):asm_args=>this.$.value(data)&&typeof this.$.value(data)=='number'?['reg',this.$.value(data) as number]:data,
+        //z 通过引用修改操作数:若 value 形式(读槽)能解析为数字常量,原地改为 reg 字面量形式,
+        //这样 Z 循环调用 z(i) 就通过引用更新调用方 data.left/right 等数组,
+        //后续字节码生成直接嵌入常量而无需解引用槽
+        //(常量 0 也可正确折叠:原写法 v&&typeof... 遇 0 短路)
+        //注意:必须内置跨块写保护,否则 C_MOV 等处 data.right[0]=='value' 检查被绕过,
+        //跨块写的残留值会被误传播(如 while 循环体改 i 后 if(i==5) 误折叠成恒假)
+        z:(data:asm_args):asm_args=>{
+            //仅 value 形式(读槽)才考虑折叠成字面量
+            if(data[0]!='value'||typeof data[1]!='number')
+                return data
+            //跨块写保护:该槽被其他块写入则值不确定,保守不传播
+            let blocks=this.cross.get(data[1])
+            if(blocks&&blocks.size>0)
+                return data
+            let v=this.state.get(data[1])
+            if(typeof v=='number'){
+                data[0]='reg'
+                data[1]=v
+            }
+            return data
+        },
         Z:(...data:asm_args[])=>{
             for(let i of data)
                 this.$.z(i)
@@ -266,7 +286,9 @@ export class IRTool{
         return this._replace.some(([b,i])=>b==bid&&i==index)
     }
     dead(bid:number,index:number){
-        return this.mark.includes([bid,index])
+        //原写法 includes([bid,index]) 每次新建数组,按引用比较恒 false,
+        //P_MOV/P_LOAD 中已 _mark 的指令仍被 tset 污染 last_touch
+        return this.mark.some(([b,i])=>b==bid&&i==index)
     }
     _mark(bid:number,index:number){
         this.changed=true

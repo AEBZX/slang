@@ -65,7 +65,8 @@ const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
     if(data.id=='mod'&&l==r&&l!=null)_data=new MOV(data.result,['reg',1])
     //位运算的 0 恒等折叠必须限定整数操作数:VM 的 and/or/xor/shr/shl 按 int32 语义
     //(25.6|0=25),浮点 x 折成 MOV x 会丢失截断
-    if(data.id=='shl'||data.id=='shr'&&r==0&&Number.isInteger(l))_data=new MOV(data.result,data.left)
+    //注意优先级:原写法 id=='shl'||(id=='shr'&&...) 使 shl 无条件折叠,x<<3 被误折成 x
+    if((data.id=='shl'||data.id=='shr')&&r==0&&Number.isInteger(l))_data=new MOV(data.result,data.left)
     if(data.id=='and') {
         if (l == r && l != null)_data= new MOV(data.result, data.left)
         if (r == 0) _data = new MOV(data.result,['reg',0])
@@ -88,9 +89,11 @@ const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
         }
     }
     if(_data!=data)tool.replace(bid,index,_data)
+    //result 是写目标,left/right 是读操作数;原第三行重复 tset(result,false) 覆盖了写标记,
+    //且 right 的读依赖从未记录
     $.tset(data.result,bid,index,true,_data)
     $.tset(data.left,bid,index,false,_data)
-    $.tset(data.result,bid,index,false,_data)
+    $.tset(data.right,bid,index,false,_data)
 }
 const P_NOT:opt_visitor=(data:NOT, tool, bid, index)=>{
     const $=tool.$
@@ -117,8 +120,9 @@ const P_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
     let r=$.value(data.right),l=$.rvalue(data.left),o=$.value(data.oper)
     if(o==null)return
     if(r==l&&r!=null){
-        if([0,4,5].includes(o as number))_data=new MOV(data.right,['reg',1])
-        if([1,2,3].includes(o as number))_data=new MOV(data.right,['reg',0])
+        //CMP 结果槽是 data.left(VM: cmp a b c,结果存 a),折叠应写 left 而非 right
+        if([0,4,5].includes(o as number))_data=new MOV(data.left,['reg',1])
+        if([1,2,3].includes(o as number))_data=new MOV(data.left,['reg',0])
         if(data!=_data)tool.replace(bid,index,_data)
         $.tset(data.left,bid,index,true,_data)
         $.tset(data.right,bid,index,false,_data)

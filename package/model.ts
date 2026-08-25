@@ -38,6 +38,18 @@ export type Config={
     token:string,
     smtp:string
 }
+export type CompilerChild={
+    version:string,
+    hex:string,
+    source:string
+}
+export type Compiler={
+    author:string,
+    version:string,
+    license:string,
+    child:CompilerChild[]
+}
+export type CompilerConfig=Compiler[]
 export type ModuleConfig=Module[]
 export type VMConfig=VM[]
 export type UserConfig=User[]

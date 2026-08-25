@@ -32,7 +32,9 @@ const D_PostfixExpression:desugar_visitor=(node:PostfixExpression,call)=>{
 const D_BinaryExpression:desugar_visitor=(node:BinaryExpression,call)=>{
     node.left=call(node.left)
     node.right=call(node.right)
-    if(node instanceof LogicalAndExpression||node instanceof LogicalOrExpression&&
+    //缺括号:原写法 A||(B&&C&&D) 使 LogicalAndExpression 无条件包装(boolean 也被转 !=null),
+    //与 LogicalOrExpression 只对非 boolean 包装的行为不对称
+    if((node instanceof LogicalAndExpression||node instanceof LogicalOrExpression)&&
         !(node.right.type instanceof BooleanType)&&!(node.left.type instanceof BooleanType)){
         node.right=new InequalityExpression(node.right,new NullLiteral(''))
         node.left=new InequalityExpression(node.left,new NullLiteral(''))

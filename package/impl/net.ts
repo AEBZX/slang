@@ -1,5 +1,5 @@
 import API from '../api.ts'
-import type {Module, ModuleVersion, Result, VMConfig, VM, ModuleConfig} from '../model'
+import type {Module, ModuleVersion, Result, VMConfig, VM, ModuleConfig, CompilerConfig, CompilerChild} from '../model'
 import {readFileSync, writeFileSync} from 'fs'
 import {createHash} from 'crypto'
 import {existsSync} from 'fs'
@@ -9,14 +9,7 @@ const dir=()=>process.env.SPM_CONFIG_DIR||'.'
 export default class NetImpl extends API{
     publishModule(author:string,token: string,name:string, module: ModuleVersion, data: Buffer){
         let config=this.getModuleConfig().data
-        let user=this.getUserConfig().data
-        let ok=false
-        for(let i of user)
-            if(i.username==author&&i.token==token) {
-                ok = true
-                break
-            }
-        if(!ok)return{
+        if(!this.verify(author,token).data)return{
             message:'Unauthorized',
             data:null,
             code:401
@@ -33,7 +26,6 @@ export default class NetImpl extends API{
                 pkg = i
                 break
             }
-        //模块已有:作者必须一致、版本不得重复(与 publishVM 对齐)
         if(pkg&&pkg.author!=author)return{
             message:'Author mismatch',
             data:null,
@@ -75,14 +67,7 @@ export default class NetImpl extends API{
     }
     publishVM(author:string,token: string, vm: VM, data: Buffer){
         let config=this.getVMConfig().data
-        let user=this.getUserConfig().data
-        let ok=false
-        for(let i of user)
-            if(i.username==author&&i.token==token) {
-                ok = true
-                break
-            }
-        if(!ok)return{
+        if(!this.verify(author,token))return{
             message:'Unauthorized',
             data:null,
             code:401
@@ -122,6 +107,68 @@ export default class NetImpl extends API{
             code:200
         }
     }
+    publishCompiler(author:string,token: string, version: string, compiler:CompilerChild, data: string){
+        let config=this.getCompilerConfig().data
+        if(!this.verify(author,token))return{
+            message:'Unauthorized',
+            data:null,
+            code:401
+        }
+        if(compiler.hex!=createHash('sha256').update(data).digest('hex'))return{
+            message:'Hash mismatch',
+            data:null,
+            code:400
+        }
+        for(let i of config)
+            if(i.version==compiler.version)
+                return{
+                    message:'Version already exists',
+                    data:null,
+                    code:400
+                }
+        if(config.find(i=>i.version==version).author!=author)
+            return{
+                message:'Author mismatch',
+                data:null,
+                code:400
+            }
+        let source=''
+        while(true){
+            source = Math.random().toString(16).substring(2, 18)
+            if(existsSync(dir()+'/data/'+source))continue
+            break
+        }
+        compiler.source=source
+        mkdirSync(dir()+'/data',{recursive:true})
+        writeFileSync(dir()+'/data/'+source,data)
+        config.find(i=>i.version==compiler.version).child.push(compiler)
+        this.setCompilerConfig(config)
+        return {
+            message:'Success',
+            data:null,
+            code:200
+        }
+    }
+    createCompiler(author: string, token: string,license:string, version: string) {
+        let config=this.getCompilerConfig().data
+        if(!this.verify(author,token))return{
+            message:'Unauthorized',
+            data:null,
+            code:401
+        }
+        config.push({
+            version:version,
+            license:license,
+            author:author,
+            child:[]
+        })
+        this.setCompilerConfig(config)
+        return {
+            message:'Success',
+            data:null,
+            code:200
+        }
+    }
     listVM(){
         return {
             message:'Success',
@@ -133,6 +180,13 @@ export default class NetImpl extends API{
         return {
             message:'Success',
             data:this.getModuleConfig().data,
+            code:200
+        }
+    }
+    listCompiler(){
+        return {
+            message:'Success',
+            data:this.getCompilerConfig().data,
             code:200
         }
     }
@@ -162,6 +216,16 @@ export default class NetImpl extends API{
             }
         }catch{
             return{message:'Data file missing',data:null,code:500}
+        }
+    }
+    getCompiler(large_version:string,small_version:string){
+        const compiler=this.getCompilerConfig().data.find(i=>i.version==large_version)
+            .child.find(i=>i.version==small_version)
+        if(!compiler)return{message:'Compiler not found',data:null,code:404}
+        return {
+            message:'Success',
+            data:readFileSync(dir()+'/data/'+compiler.source,'utf-8'),
+            code:200
         }
     }
 }
