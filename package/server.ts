@@ -30,7 +30,9 @@ app.use(express.raw({
     limit: '1024mb'
 }))
 const cfg_dir=()=>process.env.SPM_CONFIG_DIR||'.'
-if(!fs.existsSync(cfg_dir()+'/config.json')){
+//数据文件已统一到 data/ 子目录(impl/config.ts 读 dir()+'/data/config.json'),
+//首次启动检查/写入必须与之一致,否则生成的文件永远不会被读到
+if(!fs.existsSync(cfg_dir()+'/data/config.json')){
     const username = await input({message: '请输入用户名:',default:'Admin'})
     const password = await input({message: '请输入密码:',default:'password'})
     const host=await input({message: '请输入启动地址:',default:'0.0.0.0'})
@@ -38,7 +40,8 @@ if(!fs.existsSync(cfg_dir()+'/config.json')){
     const email=await input({message: '请输入邮箱:',default:'email'})
     const smtp=await input({message: '请输入SMTP地址:',default:'smtp'})
     const token=await input({message: '请输入Token:',default:'token'})
-    fs.writeFileSync(cfg_dir()+'/config.json',JSON.stringify({
+    fs.mkdirSync(cfg_dir()+'/data',{recursive:true})
+    fs.writeFileSync(cfg_dir()+'/data/config.json',JSON.stringify({
         host:host,
         port:port,
         username:username,
@@ -47,9 +50,10 @@ if(!fs.existsSync(cfg_dir()+'/config.json')){
         token:token,
         smtp:smtp
     },null,4))
-    fs.writeFileSync(cfg_dir()+'/user.json',JSON.stringify([],null,4))
-    fs.writeFileSync(cfg_dir()+'/module.json',JSON.stringify([],null,4))
-    fs.writeFileSync(cfg_dir()+'/vm.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/data/user.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/data/module.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/data/vm.json',JSON.stringify([],null,4))
+    fs.writeFileSync(cfg_dir()+'/data/compiler.json',JSON.stringify([],null,4))
 }
 let conf=api.getConfig().data
 app.post('/api/download/vm',(req,res)=>{
@@ -122,13 +126,16 @@ app.post('/api/register',(req,res)=>{
     let {username,email}=req.body
     res.send(api.register(username,email))
 })
-app.post('/api/login',(req,res)=>{
-    let {username,password}=req.body
-    res.send(api.login(username,password))
-})
 app.post('/api/verify',(req,res)=>{
     let {username,token}=req.body
     res.send(api.verify(username,token))
+})
+app.get('/api/health',(req,res)=>{
+    res.send({
+        code:200,
+        message:'is SPM Server',
+        data:null
+    })
 })
 app.use((err:any, req:any, res:any, next:any)=>{
     const code=err.status||err.statusCode||500

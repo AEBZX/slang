@@ -67,7 +67,7 @@ export default class NetImpl extends API{
     }
     publishVM(author:string,token: string, vm: VM, data: Buffer){
         let config=this.getVMConfig().data
-        if(!this.verify(author,token))return{
+        if(!this.verify(author,token).data)return{
             message:'Unauthorized',
             data:null,
             code:401
@@ -109,7 +109,7 @@ export default class NetImpl extends API{
     }
     publishCompiler(author:string,token: string, version: string, compiler:CompilerChild, data: string){
         let config=this.getCompilerConfig().data
-        if(!this.verify(author,token))return{
+        if(!this.verify(author,token).data)return{
             message:'Unauthorized',
             data:null,
             code:401
@@ -119,16 +119,23 @@ export default class NetImpl extends API{
             data:null,
             code:400
         }
-        for(let i of config)
-            if(i.version==compiler.version)
-                return{
-                    message:'Version already exists',
-                    data:null,
-                    code:400
-                }
-        if(config.find(i=>i.version==version).author!=author)
+        //先找大版本(Compiler),不检查子版本号与父版本号的匹配
+        let parent=config.find(i=>i.version==version)
+        if(!parent)return{
+            message:'Compiler version not found',
+            data:null,
+            code:404
+        }
+        if(parent.author!=author)
             return{
                 message:'Author mismatch',
+                data:null,
+                code:400
+            }
+        //检查该大版本下是否已存在相同小版本
+        if(parent.child.some(i=>i.version==compiler.version))
+            return{
+                message:'Version already exists',
                 data:null,
                 code:400
             }
@@ -139,9 +146,10 @@ export default class NetImpl extends API{
             break
         }
         compiler.source=source
+        compiler.date=Date.now()
         mkdirSync(dir()+'/data',{recursive:true})
         writeFileSync(dir()+'/data/'+source,data)
-        config.find(i=>i.version==compiler.version).child.push(compiler)
+        parent.child.push(compiler)
         this.setCompilerConfig(config)
         return {
             message:'Success',
@@ -151,10 +159,15 @@ export default class NetImpl extends API{
     }
     createCompiler(author: string, token: string,license:string, version: string) {
         let config=this.getCompilerConfig().data
-        if(!this.verify(author,token))return{
+        if(!this.verify(author,token).data)return{
             message:'Unauthorized',
             data:null,
             code:401
+        }
+        if(config.some(i=>i.version==version))return{
+            message:'Version already exists',
+            data:null,
+            code:400
         }
         config.push({
             version:version,
@@ -219,8 +232,10 @@ export default class NetImpl extends API{
         }
     }
     getCompiler(large_version:string,small_version:string){
-        const compiler=this.getCompilerConfig().data.find(i=>i.version==large_version)
-            .child.find(i=>i.version==small_version)
+        const config=this.getCompilerConfig().data
+        const parent=config.find(i=>i.version==large_version)
+        if(!parent)return{message:'Compiler not found',data:null,code:404}
+        const compiler=parent.child.find(i=>i.version==small_version)
         if(!compiler)return{message:'Compiler not found',data:null,code:404}
         return {
             message:'Success',

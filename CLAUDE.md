@@ -56,9 +56,7 @@ slang->
                   index.ts:入口
              cli->脚手架入口
                 command.ts:命令入口
-                config.ts:配置类
-                download.ts:拉取/下载类功能支持
-                entry.ts:入口
+                cli.ts:入口
              desugar->语法糖转换
                   command.ts:命令语法糖转换
                   expr.ts:表达式语法糖转换
@@ -95,6 +93,7 @@ slang->
          model.h:模型
          utils.h:标准跨平台操作库
          init.cpp:读取sbin文件初始化
+         gui.h,gui.cpp:GUI实现
          runtime->虚拟机运行时
                 runtime.h:虚拟机运行时定义
                 io.cpp:IO命令处理
@@ -102,7 +101,6 @@ slang->
                 basic.cpp:基础命令处理
      package->包管理器服务器
               server.ts:入口
-              page/:默认开放在0.0.0.0:3000的页面
               model.ts:模型类
               api.ts:接口API
               impl->实现
@@ -111,7 +109,23 @@ slang->
                     net.ts:上传下载等处理
                     user.ts:用户处理
                     index.ts:入口
-              config.json:配置文件
+     std->标准库
+          file.sl:文件操作
+          math.sl:数学操作
+          system.sl:系统操作
+          io.sl:IO操作
+          index.sl:入口
+          type.sl:类型操作
+     cli->工具链
+          command.ts:命令实现
+          entry.ts:入口文件
+          model.ts:模型定义
+          utils->工具
+                 ajax.ts:ajax实现
+                 net.ts:与SPM交互实现
+                 utils.ts:基础工具实现
+                 index.ts:入口
+            
 ~~~
 ## 编码规范
 - 变量命名约定:变量采用下划线命名法,如identifier_type_parser

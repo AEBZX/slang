@@ -29,3 +29,5 @@ package/data
 /slang-jetbrains-plugin/gradle/
 *.exe
 std/lib
+/script/
+/cli/dist/

@@ -2,7 +2,7 @@
 //覆盖:list/publish/download 的模块与 VM、鉴权(401)、哈希校验(400)、版本冲突(400)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createHash } from 'crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import * as path from 'path'
 import * as process from 'process'
@@ -29,17 +29,20 @@ async function get(url: string): Promise<any> {
 
 beforeAll(async () => {
     //进程 worker 不支持 chdir,用 SPM_CONFIG_DIR 隔离数据目录
+    //数据文件统一在 data/ 子目录(impl/config.ts 读 dir()+'/data/*.json')
     process.env.SPM_CONFIG_DIR = dir
-    writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
+    mkdirSync(path.join(dir, 'data'), { recursive: true })
+    writeFileSync(path.join(dir, 'data/config.json'), JSON.stringify({
         host: '127.0.0.1', port: 2319, username: 'admin', password: 'p',
         email: 'admin@spm.dev', token: 'smtp-token', smtp: 'smtp.example.com'
     }))
-    writeFileSync(path.join(dir, 'user.json'), JSON.stringify([
+    writeFileSync(path.join(dir, 'data/user.json'), JSON.stringify([
         { email: 'alice@spm.dev', token: 'tok-alice', username: 'alice' },
         { email: 'bob@spm.dev', token: 'tok-bob', username: 'bob' }
     ]))
-    writeFileSync(path.join(dir, 'module.json'), '[]')
-    writeFileSync(path.join(dir, 'vm.json'), '[]')
+    writeFileSync(path.join(dir, 'data/module.json'), '[]')
+    writeFileSync(path.join(dir, 'data/vm.json'), '[]')
+    writeFileSync(path.join(dir, 'data/compiler.json'), '[]')
     const mod = await import('../server.ts')
     server = mod.app.listen(0, '127.0.0.1')
     await new Promise<void>(resolve => server.once('listening', resolve))
@@ -130,13 +133,6 @@ describe('package HTTP API', () => {
         expect(res.code).toBe(400)
     })
 
-    it('page 静态页面可访问', async () => {
-        const r = await fetch(base + '/')
-        expect(r.status).toBe(200)
-        const html = await r.text()
-        expect(html).toContain('SPM')
-    })
-
     it('同一模块发布第二版本:列表仅一个 pkg,版本数 2', async () => {
         const data = Buffer.from('demo-mod v1.1.0')
         const res = await post('/api/publish/module', {
@@ -185,11 +181,7 @@ describe('package HTTP API', () => {
         expect(res.code).toBe(400)
     })
 
-    it('login 与 verify 端点', async () => {
-        const ok = await post('/api/login', { username: 'alice', password: 'tok-alice' })
-        expect(ok.code).toBe(200)
-        const bad = await post('/api/login', { username: 'alice', password: 'wrong' })
-        expect(bad.code).toBe(400)
+    it('verify 端点', async () => {
         const vok = await post('/api/verify', { username: 'alice', token: 'tok-alice' })
         expect(vok.code).toBe(200)
         expect(vok.data).toBe(true)
@@ -201,7 +193,7 @@ describe('package HTTP API', () => {
     it('register 创建用户、token 入库、重复注册被拒', async () => {
         const r = await post('/api/register', { username: 'carol', email: 'carol@spm.dev' })
         expect(r.code).toBe(200)
-        const users = JSON.parse(readFileSync(path.join(dir, 'user.json'), 'utf-8'))
+        const users = JSON.parse(readFileSync(path.join(dir, 'data/user.json'), 'utf-8'))
         const carol = users.find((u: any) => u.username == 'carol')
         expect(carol).toBeTruthy()
         expect(carol.token).toBeTruthy()
@@ -233,5 +225,67 @@ describe('package HTTP API', () => {
         const j = await r.json() as Result<any>
         expect(j.code).toBe(400)
         expect(j.message).toBeTruthy()
+    })
+
+    it('compiler:创建大版本、发布小版本、列表、下载', async () => {
+        const source = 'compiler source v1.0.0'
+        const create = await post('/api/publish/compiler/create', {
+            author: 'alice', token: 'tok-alice', license: 'MIT', version: '1.0'
+        })
+        expect(create.code).toBe(200)
+        const add = await post('/api/publish/compiler/add', {
+            author: 'alice', token: 'tok-alice', version: '1.0',
+            type: { version: '1.0.0', hex: sha256(Buffer.from(source)), source: '' },
+            data: source
+        })
+        expect(add.code).toBe(200)
+        const list = await get('/api/list/compiler')
+        expect(list.code).toBe(200)
+        const ver = list.data.find((c: any) => c.version == '1.0')
+        expect(ver).toBeTruthy()
+        expect(ver.child[0].version).toBe('1.0.0')
+        const dl = await post('/api/download/compiler', { large_version: '1.0', small_version: '1.0.0' })
+        expect(dl.code).toBe(200)
+        expect(dl.data).toBe(source)
+    })
+
+    it('compiler:重复大版本/小版本、非作者、错误 token 被拒', async () => {
+        const dup_create = await post('/api/publish/compiler/create', {
+            author: 'alice', token: 'tok-alice', license: 'MIT', version: '1.0'
+        })
+        expect(dup_create.code).toBe(400)
+        const source = 'compiler source v1.0.1'
+        const dup_add = await post('/api/publish/compiler/add', {
+            author: 'alice', token: 'tok-alice', version: '1.0',
+            type: { version: '1.0.0', hex: sha256(Buffer.from(source)), source: '' },
+            data: source
+        })
+        expect(dup_add.code).toBe(400)
+        const hijack = await post('/api/publish/compiler/add', {
+            author: 'bob', token: 'tok-bob', version: '1.0',
+            type: { version: '1.0.2', hex: sha256(Buffer.from(source)), source: '' },
+            data: source
+        })
+        expect(hijack.code).toBe(400)
+        const unauth = await post('/api/publish/compiler/create', {
+            author: 'alice', token: 'wrong-token', license: 'MIT', version: '2.0'
+        })
+        expect(unauth.code).toBe(401)
+    })
+
+    it('compiler:下载不存在的大/小版本返回 404 而非崩溃', async () => {
+        const big = await post('/api/download/compiler', { large_version: '99.0', small_version: '1.0.0' })
+        expect(big.code).toBe(404)
+        const small = await post('/api/download/compiler', { large_version: '1.0', small_version: '99.0' })
+        expect(small.code).toBe(404)
+    })
+
+    it('compiler:哈希不匹配被拒(400)', async () => {
+        const res = await post('/api/publish/compiler/add', {
+            author: 'alice', token: 'tok-alice', version: '1.0',
+            type: { version: '1.0.3', hex: 'deadbeef', source: '' },
+            data: 'tampered compiler'
+        })
+        expect(res.code).toBe(400)
     })
 })

@@ -1,3 +1,34 @@
+export type GlobalConfig={
+    server:string,
+    username:string,
+    password:string,
+    token:string
+}
+export const DefaultGlobalConfig={
+    server:'',
+    username:'',
+    password:'',
+    token:''
+} as GlobalConfig
+export type ProjectConfig={
+    name:string
+    version:string
+    author:string
+    license:string
+    ignore:string[]
+    optimize:number
+    output:string
+    venv:{
+        dir:string,
+        compiler:string,
+        vm:string,
+        compiler_version:string,
+        vm_version:string
+    }
+    dependency:{name:string,version:string}[]
+    lib:{local:string,data:{name:string,version:string}[]}
+    lock?:{name:string,dependencies:{name:string,version:string}[]}[]
+}
 export type ModuleVersion={
     version:string,
     dependencies:{
@@ -40,8 +71,7 @@ export type Config={
 export type CompilerChild={
     version:string,
     hex:string,
-    source:string,
-    date:number
+    source:string
 }
 export type Compiler={
     author:string,

@@ -75,7 +75,7 @@ describe('CLI publish/install 端到端', () => {
         expect(pkg).toBeTruthy()
         expect(pkg.author).toBe('alice')
         expect(pkg.version[0].version).toBe('1.0.0')
-        //服务器存储的下载数据:非空且为 .tar.xz(修复前 compress 同步回调未触发,上传的是空数据)
+        //服务器存储的下载数据:非空且为 .tar.xz(修复前 utils 同步回调未触发,上传的是空数据)
         const dl = await post(global.server + '/api/download/module', { name: 'math', version: '1.0.0' })
         expect(dl.code).toBe(200)
         const buf = Buffer.from(dl.data, 'base64')

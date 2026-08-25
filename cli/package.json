@@ -1,0 +1,27 @@
+{
+  "name": "cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@types/lzma-native": "^4.0.4",
+    "@types/node": "^26.3.0",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.6.0",
+    "axios": "^1.19.0",
+    "axios-retry": "^4.5.0",
+    "commander": "^15.0.0",
+    "lzma-native": "^8.0.6",
+    "rolldown": "^1.2.5",
+    "tar": "^7.5.22"
+  }
+}

@@ -1,7 +1,6 @@
 import API from '../api.ts'
 import type {CompilerConfig, Config, ModuleConfig, Result, User, UserConfig, VMConfig} from '../model'
 import {readFileSync,writeFileSync} from 'fs'
-import {} from '@inquirer/prompts'
 //数据目录:默认 cwd;测试可用 SPM_CONFIG_DIR 隔离(进程 worker 不支持 chdir)
 const dir=()=>process.env.SPM_CONFIG_DIR||'.'
 export default class ConfigImpl extends API{

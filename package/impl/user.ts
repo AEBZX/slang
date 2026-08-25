@@ -32,7 +32,7 @@ export default class UserImpl extends API{
                 pass: config.token
             }
         })
-        //SMTP 不可用时邮件发送失败不影响注册(token 已入库);catch 避免 unhandled rejection
+        //SMTP 不可用时邮件发送失败不影响注册
         Email.sendMail({
             from: config.email,
             to: email,
@@ -49,19 +49,6 @@ export default class UserImpl extends API{
             message:'Registration successful',
             data:null,
             code:200
-        }
-    }
-    login(username:string,password:string){
-        let user=this.getUserConfig().data
-        for(let i of user)if(i.username==username&&i.token==password)return {
-            message:'Login successful',
-            data:null,
-            code:200
-        }
-        return {
-            message:'Invalid username or password',
-            data:null,
-            code:400
         }
     }
     verify(username: string, token: string) {
