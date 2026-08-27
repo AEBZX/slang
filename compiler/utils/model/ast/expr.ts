@@ -28,7 +28,7 @@ export class MapExpression extends PrimaryExpression{
     }
 }
 export class LambdaExpression extends PrimaryExpression{
-    constructor(public params:Map<string,Type>,public ret:Type,public body:Command) {
+    constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public ret:Type,public body:Command) {
         super()
     }
 }
@@ -46,7 +46,7 @@ export class IndexPostfix extends Postfix{
     }
 }
 export class ArgumentsPostfix extends Postfix{
-    constructor(public args:Expression[]) {
+    constructor(public generic:Type[],public args:Expression[]) {
         super()
     }
 }

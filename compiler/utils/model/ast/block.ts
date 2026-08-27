@@ -23,12 +23,12 @@ export class Module extends Block{
     }
 }
 export class Class extends Block{
-    constructor(modifiers:Modifier,name:string,public implement:string[],public children:Block[]) {
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public implement:Type,public children:Block[]) {
         super(modifiers,name)
     }
 }
 export class Interface extends Block{
-    constructor(modifiers:Modifier,name:string,public implement:string[],public children:Block[]) {
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public implement:Type,public children:Block[]) {
         super(modifiers,name)
     }
 }
@@ -38,7 +38,7 @@ export class Enum extends Block{
     }
 }
 export class Function extends Block{
-    constructor(modifiers:Modifier,name:string,public params:Map<string,Type>,public return_type:Type,public commands:Command) {
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public params:Map<string,Type>,public return_type:Type,public commands:Command) {
         super(modifiers,name)
     }
 }

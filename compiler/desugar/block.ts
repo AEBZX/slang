@@ -18,10 +18,9 @@ const D_Module:desugar_visitor=(node:Module,call)=>{
     return node
 }
 const D_Class:desugar_visitor=(node:Class,call)=>{
-    //成员函数加this参数:this指向当前类实例;constructor特殊处理不加
     for(let i of node.children)
         if(i instanceof Function&&i.modifiers.unstatic&&i.name!='constructor'&&!i.params.has('this'))
-            i.params=new Map([['this',new ClassType((node.type as any).local)],...i.params])
+            i.params=new Map([['this',new ClassType((node.type as any).local,[])],...i.params])
     node.children=node.children.map(i=>call(i)) as Block[]
     return node
 }
@@ -31,18 +30,16 @@ const D_File:desugar_visitor=(node:File,call)=>{
 }
 const D_Enum:desugar_visitor=(node:Enum,call)=>{
     let index=0
-    let cls=new Class(node.modifiers, node.name, ['std','ObjectInterface'], node.children.map(i =>
+    let cls=new Class(node.modifiers, node.name,new Map(), new ClassType(['std','ObjectInterface'],[]), node.children.map(i =>
         new Variable(new Modifier(false, false, false), i, new NumberType(), new NumberLiteral(`${index++}`))
     ))
-    //保留 check 阶段注册的 BlockType:转 Class 后 type 丢失 → H_Class 读 node.type.local 崩
     cls.type=node.type
     return call(cls)
 }
 const D_Function:desugar_visitor=(node:Function,call)=>{
     let ret=new Variable(node.modifiers, node.name,
-        new LambdaType(node.params, node.return_type,node.modifiers._async),
-        new LambdaExpression(node.params, node.return_type, node.commands))
-    //保留 check 阶段注册的 BlockType:H_Variable 读 node.type.local 解析绝对路径槽
+        new LambdaType(new Map(),node.params, node.return_type,node.modifiers._async),
+        new LambdaExpression(new Map(),node.params, node.return_type, node.commands))
     ret.type=node.type
     return call(ret)
 }

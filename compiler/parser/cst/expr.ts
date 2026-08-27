@@ -8,7 +8,7 @@ const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('E
 const MapExpression=$.o('MapExpression',$.t('[',
     $.w('MapExpression',$.s('MapData',TokenType.Identifier,$.d(':'),$.r('Expression')),',')
     ,']'))
-const LambdaExpression=$.s('LambdaExpression',
+const LambdaExpression=$.s('LambdaExpression',$.r('GenericList'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'),$.r('Commands'))
 const PrimaryExpression=$.o('PrimaryExpression',
@@ -28,8 +28,8 @@ const PostfixExpression=$.s('PostfixExpression',
             $.s('DecrementPostfix',$.d('--')),
             $.s('MemberPostfix',$.d('.'),TokenType.Identifier),
             $.s('IndexPostfix',$.d('['),$.r('Expression'),$.d(']')),
-            $.s('ArgumentsPostfix',$.d('('),$.w('Args',$.r('Expression'),','),$.d(')'))
-            )
+            $.s('ArgumentsPostfix',$.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.d('>'))
+                ,$.d('('),$.w('Args',$.r('Expression'),','),$.d(')')))
     )
 )
 const PrefixExpression=$.s('PrefixExpression',

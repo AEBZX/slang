@@ -17,7 +17,6 @@ import {
     type_checker, type_merge,
     VoidType, Variable, AddressPrefix
 } from '../utils'
-//表达式检查
 const S_Literal:type_checker=(ast:Literal,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     if(ast instanceof NullLiteral)return new VoidType()
     if(ast instanceof NumberLiteral)return new NumberType()
@@ -56,7 +55,7 @@ const S_MapExpression:type_checker=(ast:MapExpression,scope:Scope,call:(ast:ASTT
     }
     return new FixType(type, [new MapFix()])
 }
-const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.ret,false)
+const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.generic,ast.params,ast.ret,false)
 const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let type=call(ast.expr)
     ast.types=ast.types||[]
@@ -99,23 +98,33 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
                 type=new VoidType()
             }else{
+                let index=0
+                for(let [k,v] of type.generic){
+                    if(type_merge(v,postfix.generic[index],scope)!=v)
+                        scope.thr(`function generic type mismatch at line ${ast.line.join('\n')}`)
+                    scope.set_generic(k,v)
+                    index++
+                }
+                //检查形式泛型和实际泛型,数量一致且实际泛型implement||=形式泛型
+                if(postfix.generic.length!=type.generic.size)
+                    scope.thr(`function generic count mismatch at line ${ast.line.join('\n')}`)
                 //匹配形参实参检查类型,最小公共超类型必须是形参
                 if(postfix.args.length!=type.params.size)
                     scope.thr(`function parameter count mismatch at line ${ast.line.join('\n')}`)
                 let iden=[]
                 type.params.forEach((value,key)=>{iden.push(value)})
                 for(let i=0;i<postfix.args.length;i++)
-                    //结构兼容判定:type_merge 对 FixType 返回新实例,=== 判等恒失败
-                    //(数组/map 实参误报 mismatch);合并结果 VoidType 才是真正不兼容
                     if(type_merge(iden[i],call(postfix.args[i]),scope) instanceof VoidType)
                         scope.thr(`function parameter type mismatch at line ${ast.line.join('\n')}`)
+                for(let [k,v] of type.generic)
+                    scope.generic.delete(k)
                 type=type.returnType
             }
         }
         if(postfix instanceof MemberPostfix){
             //up链:外层类的up再向上取一层
             if(postfix.name=='up'&&type instanceof ClassType){
-                type=type.local.length>1?new ClassType(type.local.slice(0,-1)):type
+                type=type.local.length>1?new ClassType(type.local.slice(0,-1),[]):type
                 ast.types.push(type)
                 continue
             }
@@ -125,8 +134,6 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 if(class_ instanceof Class)
                     for(let i of class_.children)
                         if(i.name==postfix.name) {
-                            //private 访问控制:仅类内部(scope 链 this 指向该类)可访问;
-                            //此前 private 只被解析存储,从不检查,外部可直接访问
                             if(i.modifiers&&i.modifiers._private){
                                 let this_t=scope.get('this')
                                 let in_class=this_t instanceof ClassType&&this_t.local.join('.')==type.local.join('.')
@@ -161,7 +168,6 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
     return type
 }
 const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
-    //new会吞掉expr最外层的(),expr的求值交给NewPrefix分支
     let is_new=ast.prefix[0] instanceof NewPrefix
     let type=is_new?null:call(ast.expr)
     let index=0
@@ -233,7 +239,7 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                                 scope.thr(`new can only be applied to class at line ${ast.line.join('\n')}`)
                             }
                         }
-                        type=new ClassType(_type.local)
+                        type=new ClassType(_type.local,[])
                     }else
                         type=_type
                     //参数是否对应
@@ -296,7 +302,7 @@ const S_Block:type_checker=(ast:Class|Module|Interface|Enum,scope:Scope,call:(as
     return new BlockType(name.split('.'))
 }
 const S_Variable:type_checker=(ast:Variable,scope:Scope,call:(ast:ASTTree)=>Type)=>ast.t
-const S_Function:type_checker=(ast:Function,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.params,ast.return_type,false)
+const S_Function:type_checker=(ast:Function,scope:Scope,call:(ast:ASTTree)=>Type)=>new LambdaType(ast.generic,ast.params,ast.return_type,false)
 export default new Map<any,type_checker>([
     [Literal,S_Literal],
     [IdentifierExpr,S_IdentifierExpression],

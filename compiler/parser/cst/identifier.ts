@@ -6,9 +6,10 @@ const VoidType=$.s('VoidType',$.d('void'))
 const LambdaType=$.s('LambdaType',
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     '=>',$.r('Type'))
+const GenericType=$.s('GenericType',TokenType.Identifier)
 const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
     $.r('BooleanType'),$.r('StringType'),$.r('VoidType'),$.t('(',$.r('Type'),')'),
-    $.w('ClassType',TokenType.Identifier,$.d('.')))
+    $.s('ClassType',$.w('ClassTypeData',TokenType.Identifier,$.d('.')),$.c($.d('<'),$.w('GenericType',$.r('Type'),',')),$.d('>')))
 const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
     $.o('TypePostfix',
         $.s('MapPostfix',$.d('{'),$.d('}')),
@@ -23,5 +24,6 @@ export default [
     StringType,
     BasicType,
     VoidType,
-    Type
+    Type,
+    GenericType
 ]

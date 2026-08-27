@@ -1,5 +1,5 @@
 import {ast_data, ast_type, ASTTree} from '../data'
-import {BasicType, BlockType, ClassType, EnumType, FixType, NumberType, Type, VoidType} from '../model/ast'
+import {BasicType, BlockType, ClassType, EnumType, FixType, GenericType, NumberType, Type, VoidType} from '../model/ast'
 export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope:Scope)=>void)=>void
 export type type_checker=(ast:ASTTree,scope:Scope,call:(ast:ASTTree)=>Type)=>Type
 export class Scope{
@@ -8,6 +8,7 @@ export class Scope{
     chain:Map<string,string[]>
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
+    generic:Map<string,Type>
     error:string[]
     loop:boolean
     path:string
@@ -20,6 +21,7 @@ export class Scope{
         this.error=[]
         this.loop=false
         this.path=''
+        this.generic=new Map()
     }
     enter(){
         let s=new Scope(this,this.global)
@@ -46,6 +48,14 @@ export class Scope{
     set(name:string,data:ASTTree){
         this.data.set(name,data)
     }
+    get_generic(name:string):Type{
+        if(this.generic.has(name))return this.generic.get(name)
+        if(this.parent)return this.parent.get_generic(name)
+        if(this.global)return this.global.get_generic(name)
+    }
+    set_generic(name:string,type:Type){
+        this.generic.set(name,type)
+    }
     thr(msg:string){
         this.global.error.push(msg)
     }
@@ -63,9 +73,6 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
             //是否是一个类
             return scope.get(name1)===scope.get(name2)?type1:new VoidType()
         }
-        //情况1.5:EnumType——枚举值既可用于枚举类型赋值(var c:Color=Color.Red),
-        //也可作 number(C 风格);与其他枚举/类仅同 local 兼容
-        //此前 Color(BlockType)与 Color.Red(EnumType)constructor 不同 → 恒 VoidType → not assignable
         if(type1 instanceof EnumType||type2 instanceof EnumType){
             let e=type1 instanceof EnumType?type1:type2 as EnumType
             let o=type1 instanceof EnumType?type2:type1
@@ -73,6 +80,14 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
             if(o instanceof EnumType)return e.local.join('.')==(o as EnumType).local.join('.')?e:new VoidType()
             if(o instanceof BlockType)return (o as BlockType).local.join('.')==e.local.join('.')?o:new VoidType()
             if(o instanceof ClassType)return (o as ClassType).local.join('.')==e.local.join('.')?o:new VoidType()
+        }
+        //泛型
+        if(type1 instanceof GenericType||type2 instanceof GenericType){
+            type1=type1 instanceof GenericType?scope.get_generic(type1.generic):type1
+            type2=type2 instanceof GenericType?scope.get_generic(type2.generic):type2
+            if(type1==null)scope.thr(`generic type ${type1} not found`)
+            if(type2==null)scope.thr(`generic type ${type2} not found`)
+            return type_merge(type1,type2,scope)
         }
         //情况2:正常类型且都不是VoidType
         if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))return type1.constructor==type2.constructor?type1:new VoidType()

@@ -7,7 +7,7 @@ import {
     NumberType, PointFix,
     StringType,
     Type, TypeFix,
-    VoidType,ArrayFix, MapFix
+    VoidType, ArrayFix, MapFix, GenericType
 } from '../../utils'
 const G_NumberType:ast_generate=(data,tree)=>new NumberType()
 const G_StringType:ast_generate=(data,tree)=>new StringType()
@@ -16,21 +16,28 @@ const G_VoidType:ast_generate=(data,tree)=>new VoidType()
 const G_LambdaType:ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
     let ParamIdentifier=data.children.get('child_0') as ast_data
-    let ret=tree(data.children.get('child_2') as ast_data,tree)
+    let ret=tree(data.children.get('child_2') as ast_data)
     for(let [k,v] of ParamIdentifier.children)
         if(typeof v=='object')
             params.set(v.children.get('child_0') as string,
-                       tree(v.children.get('child_2') as ast_data,tree))
+                       tree(v.children.get('child_2') as ast_data))
     return new LambdaType(params,ret,false)
 }
+const G_GenericType:ast_generate=(data,tree)=>new GenericType(data.children.get('child_0') as string)
 const G_ClassType:ast_generate=(data,tree)=>{
     let local=new Array<string>()
-    for(let [k,v] of data.children)
+    let _data=data.children.get('child_0') as ast_data
+    for(let [k,v] of _data.children)
         local.push(v as string)
-    return new ClassType(local)
+    let generic=[]
+    if(data.children.has('child_1'))
+        for(let [k,v] of (data.children.get('child_1') as ast_data).children)
+            if(typeof v=='object')
+                generic.push(tree(v))
+    return new ClassType(local,generic)
 }
 const G_FixType:ast_generate=(data,tree)=>{
-    let basic=tree(data.children.get('child_0') as ast_data,tree)
+    let basic=tree(data.children.get('child_0') as ast_data)
     let fix:TypeFix[]=[]
     let FixList=data.children.get('child_1') as ast_data
     for(let [k,v] of FixList.children)
@@ -57,5 +64,6 @@ export default {
     'VoidType':G_VoidType,
     'LambdaType':G_LambdaType,
     'ClassType':G_ClassType,
-    'Type':G_FixType
+    'Type':G_FixType,
+    'GenericType':G_GenericType
 }

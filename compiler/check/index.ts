@@ -77,10 +77,6 @@ function visit(ast: ASTTree, scope: Scope) {
 export default function check(files: File[]): Scope {
     const scope = new Scope(null, new Scope(null, null))
     symbol(files, scope)
-    //多文件同模块去重:标准库 6 个文件都声明 public std:module,symbol 合并时把旧子节点
-    //推入最后注册的模块,但各文件自己的模块节点仍留在 File.children 里;
-    //不剪枝的话 desugar/hir/ir 会对每份重复模块树各生成一遍代码(入口块指令数爆炸,
-    //优化器 O(n²) 卡死)。只保留全局注册表指向的那棵(合并后的完整树)
     for (let file of files) {
         file.children = file.children.filter(b => scope.global.data.get(b.name) === b)
     }

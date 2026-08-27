@@ -36,8 +36,8 @@ const G_Assign:ast_generate=(data,tree)=>{
                 return new BitShrAssign(left,right)
         }
     }
-    let left=tree(data.children.get('child_0') as ast_data,tree)
-    let right=tree(data.children.get('child_1') as ast_data,tree)
+    let left=tree(data.children.get('child_0') as ast_data)
+    let right=tree(data.children.get('child_1') as ast_data)
     const op:Record<string,string>={
         'AAssign':'=','AddAssign':'+=','SubAssign':'-=','MulAssign':'*=',
         'DivAssign':'/=','ModAssign':'%=','BitAndAssign':'&=','BitOrAssign':'|=',
@@ -47,83 +47,83 @@ const G_Assign:ast_generate=(data,tree)=>{
 }
 const G_VarDeclaration:ast_generate=(data,tree)=>{
     let name=(data.children.get('child_0') as ast_data).children.get('child_0') as string
-    let type=tree(data.children.get('child_1') as ast_data,tree)
-    let value=data.children.has('child_2')?tree(data.children.get('child_2') as ast_data,tree):null
+    let type=tree(data.children.get('child_1') as ast_data)
+    let value=data.children.has('child_2')?tree(data.children.get('child_2') as ast_data):null
     return new VarDeclaration(name,type,value)
 }
 const G_Call:ast_generate=(data,tree)=>{
     let await_=data.children.get('child_0')=='await'
     let expr=data.children.get(await_?'child_1':'child_0') as ast_data
-    return new Call(tree(expr,tree),await_)
+    return new Call(tree(expr),await_)
 }
 const G_Return:ast_generate = (data, tree) => {
-    let ret=data.children.has('child_0')?tree(data.children.get('child_0') as ast_data,tree):null
+    let ret=data.children.has('child_0')?tree(data.children.get('child_0') as ast_data):null
     return new Return(ret)
 }
 const G_Break:ast_generate=(data,tree)=>new Break()
 const G_Continue:ast_generate=(data,tree)=>new Continue()
-const G_Throw:ast_generate=(data,tree)=>new Throw(tree(data.children.get('child_0') as ast_data,tree))
+const G_Throw:ast_generate=(data,tree)=>new Throw(tree(data.children.get('child_0') as ast_data))
 const G_VM:ast_generate=(data,tree)=>new VM(data.children.get('child_0') as string)
-const G_Increment:ast_generate=(data,tree)=>new Increment(tree(data.children.get('child_0') as ast_data,tree))
-const G_Decrement:ast_generate=(data,tree)=>new Decrement(tree(data.children.get('child_0') as ast_data,tree))
-const G_Condition:ast_generate=(data,tree)=>tree(data.children.get('child_0') as ast_data,tree)
+const G_Increment:ast_generate=(data,tree)=>new Increment(tree(data.children.get('child_0') as ast_data))
+const G_Decrement:ast_generate=(data,tree)=>new Decrement(tree(data.children.get('child_0') as ast_data))
+const G_Condition:ast_generate=(data,tree)=>tree(data.children.get('child_0') as ast_data)
 const G_IfStatement:ast_generate=(data,tree)=>new IfStatement(
-    tree(data.children.get('child_0') as ast_data,tree),
-    tree(data.children.get('child_1') as ast_data,tree),
-    data.children.has('child_2')?tree(data.children.get('child_2') as ast_data,tree):null
+    tree(data.children.get('child_0') as ast_data),
+    tree(data.children.get('child_1') as ast_data),
+    data.children.has('child_2')?tree(data.children.get('child_2') as ast_data):null
 )
 const G_WhileStatement:ast_generate=(data,tree)=>new WhileStatement(
-    tree(data.children.get('child_0') as ast_data,tree),
-    tree(data.children.get('child_1') as ast_data,tree)
+    tree(data.children.get('child_0') as ast_data),
+    tree(data.children.get('child_1') as ast_data)
 )
 const G_DoWhileStatement:ast_generate=(data,tree)=>new DoWhileStatement(
-    tree(data.children.get('child_0') as ast_data,tree),
-    tree(data.children.get('child_1') as ast_data,tree)
+    tree(data.children.get('child_0') as ast_data),
+    tree(data.children.get('child_1') as ast_data)
 )
 const G_ForStatement:ast_generate=(data,tree)=>{
     let init=[]
     let Init=data.children.get('child_0') as ast_data
     for(let [k,v] of Init.children)
         if(typeof v=='object')
-            init.push(tree(v,tree))
+            init.push(tree(v))
     let step=[]
     let Step=data.children.get('child_2') as ast_data
     for(let [k,v] of Step.children)
         if(typeof v=='object')
-            step.push(tree(v,tree))
-    return new ForStatement(init,tree(data.children.get('child_1') as ast_data,tree),step,
-        tree(data.children.get('child_3') as ast_data,tree))
+            step.push(tree(v))
+    return new ForStatement(init,tree(data.children.get('child_1') as ast_data),step,
+        tree(data.children.get('child_3') as ast_data))
 }
 const G_ForeachStatement:ast_generate=(data,tree)=>new ForeachStatement(
     (data.children.get('child_0') as ast_data).children.get('child_0') as string,
-    tree(data.children.get('child_1') as ast_data,tree),
-    tree(data.children.get('child_2') as ast_data,tree)
+    tree(data.children.get('child_1') as ast_data),
+    tree(data.children.get('child_2') as ast_data)
 )
 const G_SwitchStatement:ast_generate=(data,tree)=>{
-    let cond=tree(data.children.get('child_0') as ast_data,tree)
+    let cond=tree(data.children.get('child_0') as ast_data)
     let list=data.children.get('child_1') as ast_data
     let cases:Case[]=[]
     for(let [k,v] of list.children)
         if(typeof v=='object')
-            cases.push(new Case(tree(v.children.get('child_0') as ast_data,tree),tree(v.children.get('child_1') as ast_data,tree)))
-    return new SwitchStatement(cond,cases,data.children.has('child_2')?tree(data.children.get('child_2') as ast_data,tree):null)
+            cases.push(new Case(tree(v.children.get('child_0') as ast_data),tree(v.children.get('child_1') as ast_data)))
+    return new SwitchStatement(cond,cases,data.children.has('child_2')?tree(data.children.get('child_2') as ast_data):null)
 }
 const G_TryStatement:ast_generate=(data,tree)=>{
     return new TryStatement(
-        tree(data.children.get('child_0') as ast_data,tree),
+        tree(data.children.get('child_0') as ast_data),
         {
             iden:data.children.get('child_1') as string,
-            type:tree(data.children.get('child_2') as ast_data,tree),
-            command:tree(data.children.get('child_3') as ast_data,tree)
+            type:tree(data.children.get('child_2') as ast_data),
+            command:tree(data.children.get('child_3') as ast_data)
         },
-        data.children.has('child_4')?tree(data.children.get('child_4') as ast_data,tree):null
+        data.children.has('child_4')?tree(data.children.get('child_4') as ast_data):null
     )
 }
 const G_Commands:ast_generate=(data,tree)=>{
     let commands=[]
     for(let [k,v] of data.children)
         if(typeof v=='object')
-            commands.push(tree(v,tree))
+            commands.push(tree(v))
     return new ListCommand(commands)
 }
 export default {

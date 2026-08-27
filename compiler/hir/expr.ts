@@ -19,7 +19,7 @@ import {
     NotPrefix, NullLiteral,
     NumberLiteral,
     Postfix, PostfixExpression, PrefixExpression, ReferencePrefix, ShiftLeftExpression, ShiftRightExpression,
-    StringLiteral, StringType, SubtractiveExpression, TernaryExpression
+    StringLiteral, StringType, SubtractiveExpression, TernaryExpression, HScope
 } from '../utils'
 const H_NumberLiteral:hir_visitor=(node:NumberLiteral,scope,call)=>new HNumberLiteral(parseFloat(node.value))
 const H_StringLiteral:hir_visitor=(node:StringLiteral,scope,call)=>new HStringLiteral(node.value)

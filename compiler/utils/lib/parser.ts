@@ -250,15 +250,15 @@ class Parser{
     }
 }
 function generate(entry:ast_data,reg:{[key:string]:ast_generate}){
-    let g:ast_generate=(data:ast_data,tree:ast_generate)=>{
+    let g=(data:ast_data):ASTTree=>{
         if(data.type in reg){
-            let ret=reg[data.type](data,tree)
+            let ret=reg[data.type](data,g)
             if(ret&&typeof ret=='object')
                 ret.line=[...data.line]
             return ret
         }
     }
-    return g(entry,g)
+    return g(entry)
 }
 export default {
     s:seg_rule,

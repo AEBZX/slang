@@ -1,17 +1,21 @@
 import {Parser as $, TokenType} from '../../utils'
-const ModuleName=$.w('ModuleName',TokenType.Identifier,'.')
+const GenericList=$.s('GenericList',$.d('<'),
+    $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),',')
+    ,$.d('>'))
+const ModuleName=$.s('ModuleName',$.r('Type'))
 const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
 const Modifier=$.l('Modifiers',$.o('Modifier',
     'public','private','unstatic','static','async','sync'
 ))
-//Module 缺 {} 包裹,内部 blocks 永远匹配零个(原实现 module 块是空壳)
 const _module=$.s('Module',$.d('module'),$.t('{',$.r('blocks'),'}'))
-const _class=$.s('Class',$.d('class'),$.c($.d('implements'),$.r('ModuleName')),
+const _class=$.s('Class',$.d('class'),$.c($.r('GenericList'))
+    ,$.c($.d('implements'),$.r('ModuleName')),
     $.t('{',$.r('blocks'),'}'))
-const _interface=$.s('Interface',$.d('interface'),$.c($.d('implements'),$.r('ModuleName')),
+const _interface=$.s('Interface',$.d('interface'),$.c($.r('GenericList'))
+    ,$.c($.d('implements'),$.r('ModuleName')),
     $.t('{',$.r('blocks'),'}'))
 const _enum=$.s('Enum',$.d('enum'),$.d('{'),$.w('EnumList',TokenType.Identifier,','),'}')
-const _function=$.s('Function',
+const _function=$.s('Function',$.c($.r('GenericList')),
     $.r('Type'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.r('Commands'))
@@ -33,5 +37,5 @@ export default [
     _var,
     block,
     blocks,
-    file
+    file,GenericList
 ]

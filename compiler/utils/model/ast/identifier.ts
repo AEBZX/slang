@@ -10,13 +10,18 @@ export class NumberType extends LiteralType{}
 export class BooleanType extends LiteralType{}
 export class StringType extends LiteralType{}
 export class VoidType extends BasicType{}
+export class GenericType extends BasicType{
+    constructor(public generic:string){
+        super()
+    }
+}
 export class LambdaType extends BasicType{
-    constructor(public params:Map<string,Type>,public returnType:Type,public _await:boolean){
+    constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public returnType:Type,public _await:boolean){
         super()
     }
 }
 export class ClassType extends BasicType{
-    constructor(public local:string[]){
+    constructor(public local:string[],public generic:Type[]){
         super()
     }
 }

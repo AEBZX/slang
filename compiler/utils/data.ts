@@ -26,7 +26,7 @@ export class ASTTree{
     line:string[]
 }
 export class HIRTree{}
-export type ast_generate=(data:ast_data,tree:ast_generate)=>ASTTree
+export type ast_generate=(data:ast_data,tree:(data:ast_data)=>ASTTree)=>ASTTree
 export type ast_rule={
     type:string,
     name:string,

@@ -33,7 +33,7 @@ import {
     VoidType,
     WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
     Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
-    PrefixExpression, AddressPrefix
+    PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand
 } from '../utils'
 //各种模块
 const C_Class:check_visitor=(ast:Class,scope,call)=>{
@@ -42,8 +42,10 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
             scope.thr(`${ast.name} is class at line ${ast.line.join('\n')}`)
     //检查 implements 链:所有接口的函数与变量必须都在 class 中定义
     let interface_members=new Map<string,string>()
-    let collect=(iface:string[])=>{
-        let impl=scope.get(iface.join('.'))
+    let collect=(iface:Type)=>{
+        if(!(iface instanceof ClassType))
+            scope.thr(`${iface} is not a class at line ${ast.line.join('\n')}`)
+        let impl=scope.get((iface as ClassType).local.join('.'))
         if(impl instanceof Interface){
             for(let i of impl.children){
                 if(i instanceof Function)interface_members.set(i.name,'function')
@@ -60,14 +62,16 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
             scope.thr(`class ${ast.name} must implement ${kind} ${name} at line ${ast.line.join('\n')}`)
     for(let i of ast.children) {
         scope=scope.enter()
+        for(let [k,v] of ast.generic)
+            scope.set_generic(k,v)
         //up指向外层类(顶层指向自己),支持up.up链式向上
         let abs=scope.path?scope.path+'.'+ast.name:ast.name
         let up_local=scope.path?scope.path.split('.'):abs.split('.')
-        let up_type=new ClassType(up_local)
+        let up_type=new ClassType(up_local,[])
         scope.set('up',up_type)
         scope.sym(up_type,up_type)
         //this指向当前类实例
-        let this_type=new ClassType(abs.split('.'))
+        let this_type=new ClassType(abs.split('.'),[])
         scope.set('this',this_type)
         scope.sym(this_type,this_type)
         scope.path=abs
@@ -85,6 +89,8 @@ const C_Module:check_visitor=(ast:Module,scope,call)=>{
 }
 const C_Function:check_visitor=(ast:Function,scope,call)=>{
     scope=scope.enter()
+    for(let [k,v] of ast.generic)
+        scope.set_generic(k,v)
     //阻断外层循环/捕获/switch,break/continue/throw 不能跳出函数
     scope.data.set('while',null as any)
     scope.data.set('switch',null as any)
@@ -97,7 +103,7 @@ const C_Function:check_visitor=(ast:Function,scope,call)=>{
     scope.set('return',ast.return_type)
     scope.sym(ast.return_type,ast.return_type)
     //函数本身可作为值/成员调用(存入全局符号表,供跨作用域成员访问)
-    scope.global.sym(ast,new LambdaType(ast.params,ast.return_type,false))
+    scope.global.sym(ast,new LambdaType(ast.generic,ast.params,ast.return_type,false))
     call(ast.commands,scope)
     scope=scope.leave()
 }
@@ -107,6 +113,8 @@ const C_Interface:check_visitor=(ast:Class,scope,call)=>{
             scope.thr(`${ast.name} is interface at line ${ast.line.join('\n')}`)
     for(let i of ast.children){
         scope=scope.enter()
+        for(let [k,v] of ast.generic)
+            scope.set_generic(k,v)
         scope.path=scope.path?scope.path+'.'+ast.name:ast.name
         call(i,scope)
         scope=scope.leave()
@@ -314,6 +322,19 @@ const C_TryStatement:check_visitor=(ast:TryStatement,scope,call)=>{
     if(ast.finally_)
         call(ast.finally_,scope)
 }
+const C_ListCommand:check_visitor=(ast:ListCommand,scope,call)=>{
+    for(let i of ast.commands)
+        call(i,scope)
+}
+const C_LambdaExpression:check_visitor=(ast:LambdaExpression,scope,call)=>{
+    scope=scope.enter()
+    for(let [k,v] of ast.generic)
+        scope.set(k,v)
+    for(let [k,v] of ast.params)
+        scope.set(k,v)
+    scope.set('return',ast.ret)
+    call(ast.body,scope)
+}
 export default new Map<any,check_visitor>([
     [Class,C_Class],
     [Module,C_Module],
@@ -337,5 +358,7 @@ export default new Map<any,check_visitor>([
     [ForStatement,C_ForStatement],
     [ForeachStatement,C_ForeachStatement],
     [SwitchStatement,C_SwitchStatement],
-    [TryStatement,C_TryStatement]
+    [TryStatement,C_TryStatement],
+    [ListCommand,C_ListCommand],
+    [LambdaExpression,C_LambdaExpression]
 ])

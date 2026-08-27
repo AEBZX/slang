@@ -14,6 +14,7 @@ import {
     ShiftLeftExpression, ShiftRightExpression,
     StringLiteral, SubtractiveExpression, TernaryExpression, Type,GreaterExpression, LambdaExpression, LessExpression
 } from '../../utils'
+import {parseGeneric} from './block'
 const G_NumberLiteral:ast_generate=(data,tree)=>{
     return new NumberLiteral(data.children.get('child_0') as string)
 }
@@ -32,7 +33,7 @@ const G_Identifier:ast_generate=(data,tree)=>{
 const G_ArrayExpression:ast_generate=(data,tree)=>{
     let children=[]
     for(let [k,v] of data.children)
-        if(typeof v=='object')children.push(tree(v,tree))
+        if(typeof v=='object')children.push(tree(v))
     return new ArrayExpression(children)
 }
 const G_MapExpression:ast_generate=(data,tree)=>{
@@ -40,23 +41,24 @@ const G_MapExpression:ast_generate=(data,tree)=>{
     for(let [k,v] of data.children)
         if(typeof v=='object')
             children.set(v.children.get('child_0') as string,
-                         tree(v.children.get('child_1') as ast_data,tree))
+                         tree(v.children.get('child_1') as ast_data))
     return new MapExpression(children)
 }
 const G_LambdaExpression:ast_generate=(data,tree)=>{
-    const ParamIdentifier=data.children.get('child_0') as ast_data
+    let d=parseGeneric(data,tree)
+    const ParamIdentifier=data.children.get(d.is?'child_1':'child_0') as ast_data
     let param=new Map<string,Type>
     for(let [k,v] of ParamIdentifier.children)
         if(typeof v=='object')
             param.set(v.children.get('child_0') as string,
-                      tree(v.children.get('child_1') as ast_data,tree))
-    let type=tree(data.children.get('child_1') as ast_data,tree)
-    let command=tree(data.children.get('child_2') as ast_data,tree)
-    return new LambdaExpression(param,type,command)
+                      tree(v.children.get('child_1') as ast_data))
+    let type=tree(data.children.get(d.is?'child_2':'child_1') as ast_data)
+    let command=tree(data.children.get(d.is?'child_3':'child_2') as ast_data)
+    return new LambdaExpression(param,d.data,type,command)
 }
 const G_PostfixExpression:ast_generate=(data,tree)=>{
     let fix:Postfix[]=[]
-    let primary=tree(data.children.get('child_0') as ast_data,tree)
+    let primary=tree(data.children.get('child_0') as ast_data)
     let FixList=data.children.get('child_1') as ast_data
     for(let [k,v] of FixList.children)
         if(typeof v=='object')
@@ -71,17 +73,21 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
                     fix.push(new MemberPostfix(v.children.get('child_0') as string))
                     break
                 case 'IndexPostfix':
-                    fix.push(new IndexPostfix(tree(v.children.get('child_0') as ast_data,tree)))
+                    fix.push(new IndexPostfix(tree(v.children.get('child_0') as ast_data)))
                     break
                 case 'ArgumentsPostfix':{
                     let param=[]
-                    //v 里 Args 列表是唯一的 object 子节点,遍历其元素
-                    for(let [k,_v] of v.children)
-                        if(typeof _v=='object')
-                            for(let [__k,arg] of _v.children)
-                                if(typeof arg=='object')
-                                    param.push(tree(arg,tree))
-                    fix.push(new ArgumentsPostfix(param))
+                    let type=[]
+                    let args='child_0'
+                    if((v.children.get('child_0') as ast_data).type=='GenericData'){
+                        args='child_1'
+                        for(let [k,_v] of (v.children.get('child_0') as ast_data).children)
+                            type.push(tree(_v as ast_data))
+                    }
+                    for(let [__k,arg] of (v.children.get(args) as ast_data).children)
+                        if(typeof arg=='object')
+                            param.push(tree(arg))
+                    fix.push(new ArgumentsPostfix(type,param))
                     break
                 }
             }
@@ -91,7 +97,7 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
 }
 const G_PrefixExpression:ast_generate=(data,tree)=>{
     let fix:Prefix[]=[]
-    let primary=tree(data.children.get('child_1') as ast_data,tree)
+    let primary=tree(data.children.get('child_1') as ast_data)
     for(let [k,v] of (data.children.get('child_0') as ast_data).children)
         if(typeof v=='object')
             switch (v.type) {
@@ -165,18 +171,18 @@ const G_BinaryExpression:ast_generate=(data,tree)=>{
                 return new InequalityExpression(left,right)
         }
     }
-    let ret=tree(data.children.get('child_0') as ast_data,tree)
+    let ret=tree(data.children.get('child_0') as ast_data)
     let right=data.children.get('child_1') as ast_data
     for(let [k,v] of right.children)
         if(typeof v=='object')
-            ret=g(ret,tree(v.children.get('child_1') as ast_data,tree),(v.children.get('child_0') as ast_data).type as string)
+            ret=g(ret,tree(v.children.get('child_1') as ast_data),(v.children.get('child_0') as ast_data).type as string)
     return ret
 }
 const G_TernaryExpression:ast_generate=(data,tree)=>{
     return new TernaryExpression(
-        tree(data.children.get('child_0') as ast_data,tree),
-        tree(data.children.get('child_1') as ast_data,tree),
-        tree(data.children.get('child_2') as ast_data,tree)
+        tree(data.children.get('child_0') as ast_data),
+        tree(data.children.get('child_1') as ast_data),
+        tree(data.children.get('child_2') as ast_data)
     )
 }
 export default {
