@@ -21,35 +21,40 @@ async function download_module(name:string,version:string){
     return Buffer.from(check((await ajax.post('/api/download/module',{name,version})).data) as string,'base64')
 }
 async function download_compiler(large_version:string,small_version:string){
-    return check<string>(await ajax.post('/api/download/compiler',{large_version,small_version}))
+    return check<string>((await ajax.post('/api/download/compiler',{large_version,small_version})).data)
 }
 async function list_vm(){
-    return check<VMConfig>(await ajax.get('/api/list/vm'))
+    return check<VMConfig>((await ajax.get('/api/list/vm')).data)
 }
 async function list_module(){
-    return check<ModuleConfig>(await ajax.get('/api/list/module'))
+    return check<ModuleConfig>((await ajax.get('/api/list/module')).data)
 }
 async function list_compiler(){
-    return check<CompilerConfig>(await ajax.get('/api/list/compiler'))
+    return check<CompilerConfig>((await ajax.get('/api/list/compiler')).data)
 }
 async function publish_vm(author:string,token:string,module:VM,data:Buffer){
-    return check<void>(await ajax.post('/api/publish/vm',{author,token,module,data}))
+    //服务端 publishVM 接收 base64 字符串(Buffer.from(data,'base64')),直接传 Buffer 会被 axios 序列化成 JSON 数组
+    return check<void>((await ajax.post('/api/publish/vm',{author,token,module,data:data.toString('base64')})).data)
 }
-async function publish_module(author:string,token:string,module:ModuleVersion,data:Buffer){
-    return check<void>(await ajax.post('/api/publish/module',{author,token,module,data}))
+async function publish_module(name:string,author:string,token:string,module:ModuleVersion,data:Buffer){
+    //注意:必须传 name,服务端 publishModule 的 body 需要 name 字段
+    return check<void>((await ajax.post('/api/publish/module',{name,author,token,module,data:data.toString('base64')})).data)
 }
 async function publish_compiler(author:string,token:string,version:string,type:CompilerChild,data:string){
-    return check<void>(await ajax.post('/api/publish/compiler/add',{author,token,version,type,data}))
+    return check<void>((await ajax.post('/api/publish/compiler/add',{author,token,version,type,data})).data)
 }
 async function create_compiler(author:string,token:string,license:string,version:string){
-    return check<void>(await ajax.post('/api/publish/compiler/create',{author,token,license,version}))
+    return check<void>((await ajax.post('/api/publish/compiler/create',{author,token,license,version})).data)
 }
 async function register(username:string,email:string){
-    return check<void>(await ajax.post('/api/register',{username,email}))
+    return check<void>((await ajax.post('/api/register',{username,email})).data)
 }
 async function verify(username:string,token:string){
-    if(((await ajax.get('/api/health')).data as Result<void>).message!='is SPM Server')return '不是SPM服务器'
-    return check<boolean>(await ajax.post('/api/verify',{username,token}))?'':'用户不存在或者token配置不正确'
+    let health=(await ajax.get('/api/health')).data as Result<void>
+    if(health.message!='is SPM Server')return '不是SPM服务器'
+    let res=(await ajax.post('/api/verify',{username,token})).data as Result<boolean>
+    if(res.code!=200||!res.data)return '用户不存在或者token配置不正确'
+    return ''
 }
 export default {
     download:{

@@ -41,10 +41,15 @@ export function hash_verify(data:Buffer|string,hex:string){
 export function global_config():GlobalConfig{
     if(!existsSync(path.join(os.homedir(),'.slang','config.json')))
         writeFileSync(path.join(os.homedir(),'.slang','config.json'),JSON.stringify(DefaultGlobalConfig))
-    return JSON.parse(readFileSync(path.join(os.homedir(),'.slang','config.json'),'utf-8')) as GlobalConfig
+    //Windows 编辑器常写 BOM,JSON.parse 会报 Unexpected token,读时剥离
+    let raw=readFileSync(path.join(os.homedir(),'.slang','config.json'),'utf-8')
+    if(raw.charCodeAt(0)==0xFEFF)raw=raw.slice(1)
+    return JSON.parse(raw) as GlobalConfig
 }
 export function project_config(dir:string):ProjectConfig{
-    return JSON.parse(readFileSync(path.join(dir,'slang.json'),'utf-8')) as ProjectConfig
+    let raw=readFileSync(path.join(dir,'slang.json'),'utf-8')
+    if(raw.charCodeAt(0)==0xFEFF)raw=raw.slice(1)
+    return JSON.parse(raw) as ProjectConfig
 }
 export function verify(dir:string){
     if(!existsSync(path.join(dir,'slang.json')))

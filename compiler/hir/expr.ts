@@ -51,6 +51,20 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     //如果primary是identifier,那么尽量的匹配足够多的Member作为一整个Identifier
     //实例成员(x.f)不折叠,保留Member走成员访问;模块路径(A.B)折叠
     if(_primary instanceof IdentifierExpr){
+        //link 别名(如 io→std.io):折叠前先换成目标路径,否则 io.print 折叠成
+        //"io.print" 在 HIR 全局无此名,生成的指令操作数为 null,VM 卡死
+        //link_target 在文件子 scope 中注册,但 PostfixExpr 在函数体子 scope 中运行,
+        //需沿 parent 链向上查找
+        let find_link_target=(name:string,s:HScope):string|null=>{
+            while(s){
+                if(s.link_target.has(name))return s.link_target.get(name)
+                s=s.parent
+            }
+            return null
+        }
+        let target=find_link_target(_primary.name,scope)
+        if(target!=null)
+            _primary=new IdentifierExpr(target)
         let _type=_primary.type
         let is_instance=_type instanceof ClassType
         let g=(a:IdentifierExpr,fix:Postfix):IdentifierExpr=>{

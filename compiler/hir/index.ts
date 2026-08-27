@@ -21,6 +21,7 @@ export default function (data:File[]):[number,HBlock[]]{
             let id=scope.id()
             scope.set(v.as,id)
             scope.lnk(id,scope.get(v.module.join('.')))
+            scope.link_target.set(v.as,v.module.join('.'))
         })
     })
 }

@@ -4,7 +4,8 @@ import {fileURLToPath, pathToFileURL} from 'node:url'
 
 export function build_command(){
     let c=new Command()
-    c.version('1.0.0')
+    //版本标志避开 --version:commander 15 顶层 --version 会拦截所有子命令的同名 option
+    c.version('1.0.0', '-V, --ver')
     c.name('slang')
     c.description('slang工具链')
     c.command('init')
@@ -12,10 +13,10 @@ export function build_command(){
         .action(command.init)
     c.command('compiler')
         .description('编译slang项目')
-        .action(command.compiler)
+        .action(()=>command.compiler())
     c.command('run')
         .description('运行slang项目')
-        .action(command.run)
+        .action(()=>command.run())
     c.command('go')
         .description('编译并运行slang项目')
         .action(command.go)
@@ -44,7 +45,8 @@ export function build_command(){
         .option('--isa <isa>','指令集')
         .option('--version <version>','版本')
         .action(async (options:{path:string,license:string,isa:string,version:string})=>{
-            await command.publish_vm(options.path, options.license, options.isa, options.version)
+            //publish_vm(local,version,isa,license) —— 与函数签名顺序一致,不能按 option 声明顺序传
+            await command.publish_vm(options.path, options.version, options.isa, options.license)
         })
     publish.command('compiler')
         .description('发布编译器')

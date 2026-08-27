@@ -84,8 +84,15 @@ export default function check(files: File[]): Scope {
     for (let file of files) {
         file.children = file.children.filter(b => scope.global.data.get(b.name) === b)
     }
-    for (let file of files)
-        visit(file, scope)
+    for (let file of files) {
+        //link 别名作用域是文件级:每个文件进入独立子 scope 注册自身 links,不污染其他文件
+        let fs = scope.enter()
+        for (let v of file.links) {
+            let target = scope.get(v.module.join('.'))
+            if (target) fs.set(v.as, target)
+        }
+        visit(file, fs)
+    }
     //输出错误信息,有错误则停止
     if (scope.global.error.length) {
         let msg = scope.global.error.join('\n')

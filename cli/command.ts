@@ -100,7 +100,7 @@ async function install(name:string,version:string,d:boolean=true){
     if(!module)throw new Error(`不存在${name}@${version}`)
     //检查依赖是否冲突,以及需要安装的包
     let dependencies:{name:string,version:string}[]=[]
-    for(let i of module.dependencies){
+    for(let i of (module.dependencies||[])){
         if(config.lib.data.find((item)=>item.name==i.name&&item.version!=i.version))
             throw new Error(`依赖冲突${i.name}@${i.version}`)
         if(!config.lib.data.find((item)=>item.name==i.name))
@@ -111,6 +111,7 @@ async function install(name:string,version:string,d:boolean=true){
         name,
         version
     })
+    if(!config.lock)config.lock=[]
     config.lock.push({
         name,
         dependencies:dependencies
@@ -153,8 +154,10 @@ async function publish_module(){
     console.log(`publish ${config.name}`)
     let data=await compress(config.ignore, process.cwd())
     //token 用全局配置里的 token(注册后由服务器发到邮箱,用户 config set token 配置)
-    await net.publish.module(global.username,global.token,{
-        dependencies:config.dependency, hex: createHash('sha256').update(data).digest('hex'),
+    //旧 slang.json 可能没有 dependency 字段,默认空数组
+    let deps = config.dependency || []
+    await net.publish.module(config.name, global.username, global.token, {
+        dependencies: deps, hex: createHash('sha256').update(data).digest('hex'),
         source: '', version: config.version
     },data)
 }
@@ -210,25 +213,33 @@ async function config_verify(){
 }
 async function register(username:string,email:string){
     let config=global_config()
+    //服务端 register 返回 data:null,token 只通过邮箱发送,用户需 config set token <邮箱收到的token>
     await net.user.register(username,email)
-    console.log('注册成功,token已经发送到邮箱')
+    console.log('注册成功,token已发送到邮箱,请使用 config set token <token> 配置')
 }
-function compiler(){
+function compiler(cwd:string=process.cwd()){
     //读取虚拟环境运行:编译器是 init 时下载到 venv/compiler.js 的 JS 文件,用 node 执行
-    let config=project_config(process.cwd())
-    let dir=config.venv.dir||'venv'
-    spawnSync('node',[path.join(process.cwd(),dir,'compiler.js')
-        ,'--dir',process.cwd(),'--ignore',config.ignore.map(i=>path.join(process.cwd(),i)).join(';')
-            ,'--output',path.join(process.cwd(),config.output),'--optimize',config.optimize+''],{
+    let config=project_config(cwd)
+    let venv=config.venv.dir||'venv'
+    //编译时忽略 venv 目录(非源码),但保留 lib(标准库需参与编译)
+    //slang.json 的 ignore 字段是给 publish 打包用的,不能直接用于编译
+    let ignore=venv
+    //output 传文件名(不含路径和后缀),compiler.js 会拼成 dir+'/'+output+'.sbin'
+    let outName=config.output.replace(/\.sbin$/,'')
+    spawnSync('node',[path.join(cwd,venv,'compiler.js')
+        ,'compiler','--dir',cwd,'--ignore',ignore
+            ,'--output',outName,'--optimize',config.optimize+''],{
         stdio: 'inherit',
         shell: true
     })
 }
-function run(){
-    let config=project_config(process.cwd())
-    let dir=config.venv.dir||'venv'
+function run(cwd:string=process.cwd()){
+    let config=project_config(cwd)
+    let venv=config.venv.dir||'venv'
+    //output 可能不带 .sbin 后缀(手写 slang.json 时),兼容处理
+    let sbin=config.output.endsWith('.sbin')?config.output:config.output+'.sbin'
     //VM 是 init 时下载到 venv/vm(.exe) 的二进制,版本号字段不是路径
-    spawnSync(path.join(process.cwd(),dir,'vm'+(os.type()=='Windows_NT'?'.exe':'')),['run',path.join(process.cwd(),config.output)],{
+    spawnSync(path.join(cwd,venv,'vm'+(os.type()=='Windows_NT'?'.exe':'')),['run',path.join(cwd,sbin)],{
         stdio: 'inherit',
         shell: true
     })

@@ -14,7 +14,7 @@ program
     .option('--ignore <ignore>', 'ignore file,use ; split')
     .option('--output <output>', 'output file')
     .option('--optimize <optimize>', 'optimize level')
-    .action(({dir,_ignore,_output,optimize})=>{
+    .action(({dir,ignore:_ignore,output:_output,optimize})=>{
         optimize=parseInt(optimize)
         let ignore=_ignore?.split(';')??[]
         let output=dir+'/'+_output+'.sbin'

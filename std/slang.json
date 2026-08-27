@@ -4,7 +4,7 @@
     "author": "BZX",
     "license": "MIT",
     "slang": "1.0.0",
-    "ignore": [],
+    "ignore": ["lib","vm.exe"],
     "optimize": 2,
     "output": "std",
     "vm": "vm.exe",

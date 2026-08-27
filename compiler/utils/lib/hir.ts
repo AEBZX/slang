@@ -6,11 +6,13 @@ export class HScope{
     symbol:Map<string,number>
     index:number
     link:Map<number,number>
+    link_target:Map<string,string>  // link 别名→目标路径(如 io→std.io)
     entry:boolean
     constructor(public parent:HScope,public global:HScope){
         this.index=1
         this.symbol=new Map()
         this.link=new Map()
+        this.link_target=new Map()
         this.entry=false
     }
     lnk(id:number,data:number){

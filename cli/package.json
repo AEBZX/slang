@@ -1,10 +1,17 @@
 {
-  "name": "cli",
-  "version": "1.0.0",
+  "name": "@aebzx/slang-tool",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "pub": "npm publish"
+  },
+  "bin": {
+    "slang": "dist/cli.js"
   },
   "keywords": [],
   "author": "",

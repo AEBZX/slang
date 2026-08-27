@@ -5,8 +5,19 @@ import {
     HIdentifierExpr, HIfStatement, HIndexExpr, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNewExpr, HNotExpr,
     HNullLiteral,
     HNumberLiteral, HPostDecrementExpr, HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr, HReferenceExpr,
-    HStringLiteral, HTernaryExpr
+    HReturn, HStringLiteral, HTernaryExpr, HWhileStatement, HListCommand
 } from '../utils'
+//函数体内是否含显式 return(递归扫描 if/while/语句列表)
+//显式 return 已生成 retn,末尾再补 auto-retn 会形成双 retn:
+//kill 的 delete 插到第二个(死)retn 前,泄漏变量且破坏"delete 必须在 retn 前"的块尾回收
+const has_explicit_return=(cmds:any):boolean=>{
+    if(cmds instanceof HReturn)return true
+    if(cmds instanceof HListCommand)return cmds.commands.some(has_explicit_return)
+    if(cmds instanceof HIfStatement)
+        return has_explicit_return(cmds.commands)||has_explicit_return(cmds.else_)
+    if(cmds instanceof HWhileStatement)return has_explicit_return(cmds.commands)
+    return false
+}
 const I_NumberLiteral:asm_factory=(data:HNumberLiteral,tool)=>{
     let name=tool.cache.pop()
     let id:number
@@ -109,6 +120,9 @@ const I_LambdaExpr:asm_factory=(data:HLambdaExpr,tool)=>{
     for(let i=1;i<tool.param.length+1;i++)
         tool.code.push(['param_load',['reg',tool.param[i-1]],['reg',i],['value',0]])
     tool.gen(data.commands)
+    //函数末尾自动添加 retn,确保函数调用后 VM 正确退出;显式 return 已生成 retn 则不重复添加
+    if(!has_explicit_return(data.commands))
+        tool.code.push(['retn',['value',0],['value',0],['value',0]])
     tool.pop()
 }
 //offset value [array/map] [index] =>value=array/map[index]

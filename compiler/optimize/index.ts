@@ -8,41 +8,54 @@ import {asm_command, BINARY, bin, BIT_NOT, BLOCK_END, BLOCK_START, CMP, IR, IRTo
 const round=10
 //跨块写扫描:模拟各块局部 state 解析 value 左值写目标,收集 槽=>写入块集合
 //while 循环体在独立块修改变量后,块0内 if(变量==常量) 仍按初始化值折叠会错,折叠需保守
+//reg 左值(MOV reg X / LOAD reg X / CMP / BINARY 等)直接写槽 X,同样必须记录;
+//否则 CP 把循环体优化成 reg 直写后,后续轮 build_cross 丢失写记录,if(变量==常量) 被错误折叠
 const build_cross=(tool:IRTool)=>{
     let cross=new Map<number,Set<number>>()
+    const mark=(slot:number|undefined,bid:number)=>{
+        if(typeof slot!='number')return
+        if(!cross.has(slot))cross.set(slot,new Set())
+        cross.get(slot)!.add(bid)
+    }
     for(let [bid,data] of tool.command){
         let st=new Map<number,number|null>()
         for(let i of data){
             if(i instanceof MOV){
                 let l=i.left[0]=='reg'?i.left[1]:st.get(i.left[1])
-                if(i.left[0]=='value'&&typeof l=='number'){
-                    if(!cross.has(l))cross.set(l,new Set())
-                    cross.get(l).add(bid)
-                }
+                mark(l,bid)
                 let r=i.right[0]=='reg'?i.right[1]:st.get(i.right[1])
                 if(i.left[0]=='reg')st.set(i.left[1],typeof r=='number'?r:null)
                 else if(typeof l=='number')st.set(l,typeof r=='number'?r:null)
             }
             else if(i instanceof LOAD){
                 let r=i.reg[0]=='reg'?i.reg[1]:st.get(i.reg[1])
-                if(i.reg[0]=='value'&&typeof r=='number'){
-                    if(!cross.has(r))cross.set(r,new Set())
-                    cross.get(r).add(bid)
-                }
+                mark(i.reg[0]=='reg'?i.reg[1]:r,bid)
                 if(i.reg[0]=='reg')st.set(i.reg[1],null)
             }
-            else if(i instanceof PARAM_LOAD)
+            else if(i instanceof PARAM_LOAD){
+                mark(i.data[1],bid)
                 st.set(i.data[1],null)
-            else if(i instanceof POP)
+            }
+            else if(i instanceof POP){
+                mark(i.target[1],bid)
                 st.set(i.target[1],null)
-            else if(i instanceof CMP)
+            }
+            else if(i instanceof CMP){
+                mark(i.left[1],bid)
                 st.set(i.left[1],null)
-            else if(i instanceof BINARY)
+            }
+            else if(i instanceof BINARY){
+                mark(i.result[1],bid)
                 st.set(i.result[1],null)
-            else if(i instanceof NOT||i instanceof BIT_NOT)
+            }
+            else if(i instanceof NOT||i instanceof BIT_NOT){
+                mark(i.data[1],bid)
                 st.set(i.data[1],null)
-            else if(i instanceof OFFSET_GET||i instanceof OFFSET_ADDR)
+            }
+            else if(i instanceof OFFSET_GET||i instanceof OFFSET_ADDR){
+                mark(i.target[1],bid)
                 st.set(i.target[1],null)
+            }
         }
     }
     tool.cross=cross

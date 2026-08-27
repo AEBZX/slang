@@ -66,16 +66,14 @@ export default function symbol(data:File[],scope:Scope){
                 _static(i,name)
         }
     }
-    //link处理
+    //link处理:只校验目标模块存在(别名按文件级在 check/index.ts visit 时注册,
+    //保证别名只对当前文件可见且不污染其他文件)
     let link=()=>{
         for(let i of data){
-            scope=scope.enter()
             i.links.forEach(v=>{
                 if(!scope.get(v.module.join('.')))
                     scope.thr(`${v.module.join('.')} not found at line ${i.line.join('\n')}`)
-                else scope.set(v.as,scope.get(v.module.join('.')))
             })
-            scope=scope.leave()
         }
     }
     let chain=(father:string,child:string)=>{
