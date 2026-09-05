@@ -212,15 +212,20 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                 scope.thr(`new can only be applied to first at line ${ast.line.join('\n')}`)
             //检查ast.expr是不是postfix
             if(ast.expr instanceof PostfixExpression){
-                //最外围一定是函数调用
-                if(ast.expr.postfix[ast.expr.postfix.length-1] instanceof ArgumentsPostfix){
-                    let fix=ast.expr.postfix[ast.expr.postfix.length-1] as ArgumentsPostfix
-                    ast.expr.postfix.pop()
+                //找到第一个 ArgumentsPostfix (构造函数调用),可能其后有 MemberPostfix/ArgumentsPostfix 等
+                //原实现只处理 ArgumentsPostfix 在末尾,new Item(5).v 会报"() can only be applied to function"
+                let args_index=-1
+                for(let i=0;i<ast.expr.postfix.length;i++)
+                    if(ast.expr.postfix[i] instanceof ArgumentsPostfix){args_index=i;break}
+                if(args_index>=0){
+                    //拆下 ArgumentsPostfix 及之后的 trailing postfixes,call 时不带它们避免误处理
+                    let trailing=ast.expr.postfix.splice(args_index+1)
+                    let fix=ast.expr.postfix.splice(args_index)
                     let _type=call(ast.expr)
-                    ast.expr.postfix.push(fix)
+                    ast.expr.postfix=[...ast.expr.postfix,...fix,...trailing]  //恢复所有 postfixes
                     let iden_param=[]
                     let real_param=[]
-                    for(let v of fix.args)
+                    for(let v of (fix[0] as ArgumentsPostfix).args)
                         real_param.push(call(v))
                     if(_type instanceof BlockType){
                         let block=scope.get(_type.local.join('.'))
@@ -248,6 +253,54 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                     for(let i=0;i<iden_param.length;i++)
                         if(type_merge(iden_param[i],real_param[i],scope)!=iden_param[i])
                             scope.thr(`new can only be applied to class at line ${ast.line.join('\n')}`)
+                    //重新应用 trailing postfixes(如 .v .member [index] 等),原实现忽略导致成员访问结果为 ClassType
+                    for(let p of trailing){
+                        if(p instanceof MemberPostfix){
+                            if(type instanceof ClassType){
+                                let class_=scope.get(type.local.join('.'))
+                                if(class_ instanceof Class){
+                                    let found=false
+                                    for(let i of class_.children)
+                                        if(i.name==p.name){type=scope.get_sym(i);found=true;break}
+                                    if(!found)
+                                        scope.thr(`${p.name} is not defined at line ${ast.line.join('\n')}`)
+                                    continue
+                                }
+                            }
+                            if(type instanceof BlockType){
+                                let block=scope.get(type.local.join('.'))
+                                if(block instanceof Enum){
+                                    let found=false
+                                    for(let i of block.children)
+                                        if(i==p.name){type=new EnumType(type.local,i);found=true;break}
+                                    if(!found)
+                                        scope.thr(`${p.name} is not defined at line ${ast.line.join('\n')}`)
+                                    continue
+                                }
+                                type=scope.get_sym(scope.get([...type.local,p.name].join('.')))
+                                continue
+                            }
+                            scope.thr(`${p.name} is not defined at line ${ast.line.join('\n')}`)
+                            continue
+                        }
+                        if(p instanceof IndexPostfix){
+                            if(type instanceof FixType){
+                                let last=type.fix[type.fix.length-1]
+                                if(last instanceof ArrayFix||last instanceof MapFix)type=type.t
+                                else scope.thr(`[] can only be applied to map or array at line ${ast.line.join('\n')}`)
+                            }else
+                                scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
+                            continue
+                        }
+                        if(p instanceof ArgumentsPostfix){
+                            //方法调用 new A().make():type=成员的 LambdaType
+                            if(type instanceof LambdaType){
+                                type=type.returnType
+                            }else
+                                scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
+                            continue
+                        }
+                    }
                 }
             }
         }
@@ -267,6 +320,9 @@ const S_BinaryExpression:type_checker=(ast:BinaryExpression,scope:Scope,call:(as
        ast instanceof ModExpression||ast instanceof ShiftLeftExpression||
        ast instanceof ShiftRightExpression||ast instanceof BitwiseAndExpression||
        ast instanceof BitwiseOrExpression||ast instanceof BitwiseXorExpression){
+        //字符串拼接:string + string => string(仅 +)
+        if(ast instanceof AdditiveExpression&&left instanceof StringType&&right instanceof StringType)
+            return new StringType()
         if(!(left instanceof NumberType))scope.thr(`left operand is not number at line ${ast.line.join('\n')}`)
         if(!(right instanceof NumberType))scope.thr(`right operand is not number at line ${ast.line.join('\n')}`)
         return new NumberType()
@@ -278,9 +334,10 @@ const S_BinaryExpression:type_checker=(ast:BinaryExpression,scope:Scope,call:(as
         if(!(right instanceof NumberType))scope.thr(`right operand is not number at line ${ast.line.join('\n')}`)
         return new BooleanType()
     }
-    //相等比较:两边类型需兼容,返回 boolean
+    //相等比较:两边类型需兼容,返回 boolean;null(VoidType)可与任意类型比较(越界/缺键/字面量 null)
     if(ast instanceof EqualityExpression||ast instanceof InequalityExpression){
-        if(type_merge(left,right,scope) instanceof VoidType)
+        let null_side=left instanceof VoidType||right instanceof VoidType
+        if(!null_side&&type_merge(left,right,scope) instanceof VoidType)
             scope.thr(`type mismatch at line ${ast.line.join('\n')}`)
         return new BooleanType()
     }

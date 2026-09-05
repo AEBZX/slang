@@ -184,21 +184,32 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     let id=tool.cache.length>0?tool.cache.pop():tool.id()
     tool.cache.push(id)
     //成员方法调用 c.inc():param[1]=对象(this),实参从param[2]起
-    //此前 this 参数不传,成员方法 param_load this 读到未设置值
+    //此前 I_MemberExpr 内部会再 gen(target),new Item() 被求值两次且 this 槽被方法块id覆盖,
+    //call 又用未写入的 id 槽→call 块0 无限递归挂死;改为手动完成成员求值,对象只求值一次
     let obj_id:number|null=null
+    let this_id:number|null=null
     if(data.target instanceof HMemberExpr){
         obj_id=tool.id()
+        this_id=tool.id()
         tool.cache.push(obj_id)
         tool.gen(data.target.target)
-    }
-    tool.gen(data.target)
+        //I_NewExpr 会把结果槽留在 cache 顶,叶子表达式会 pop;统一 pop 掉残留
+        if(tool.cache[tool.cache.length-1]===obj_id)tool.cache.pop()
+        //保存 this=对象(offset_get 会覆盖 obj_id 槽为方法块id)
+        tool.code.push(['mov',['reg',this_id],['value',obj_id],['value',0]])
+        let member_id=tool.id()
+        tool.cache.push(member_id)
+        tool.gen(data.target.member)
+        tool.code.push(['offset_get',['reg',obj_id],['value',obj_id],['value',member_id]])
+    }else
+        tool.gen(data.target)
     //栈帧:保存当前函数局部槽(跳过槽0返回值),返回后恢复——递归不再覆盖caller的槽
     let frame=tool.frame_push()
     //用于参数设置
     let ls_id=tool.id()
     let index=1
-    if(obj_id!=null)
-        tool.code.push(['param_set',['reg',index++],['value',obj_id],['value',0]])
+    if(this_id!=null)
+        tool.code.push(['param_set',['reg',index++],['value',this_id],['value',0]])
     for(let i of data.args){
         tool.cache.push(ls_id)
         tool.gen(i)
@@ -207,8 +218,9 @@ const I_ArgumentsExpr:asm_factory=(data:HArgumentsExpr, tool)=>{
     //将param全部压入栈(push用value压槽值,reg形式压的是槽号)
     for(let i=0;i<tool.param.length;i++)
         tool.code.push(['push',['value',tool.param[i]],['value',0],['value',0]])
-    //拿到返回值
-    tool.code.push(['call',['value',id],['reg',1],['value',0]])
+    //拿到返回值:成员方法块id在obj_id槽,普通函数块id在id槽
+    let call_id=data.target instanceof HMemberExpr?obj_id!:id
+    tool.code.push(['call',['value',call_id],['reg',1],['value',0]])
     //出栈
     for(let i=tool.param.length-1;i>=0;i--)
         tool.code.push(['pop',['reg',tool.param[i]],['value',0],['value',0]])

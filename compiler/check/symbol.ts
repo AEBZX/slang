@@ -78,18 +78,18 @@ export default function symbol(data:File[],scope:Scope){
             })
         }
     }
+    //链传递:implement 关系传递到 grandfather,用 Set O(1) 替代 includes O(n)
     let chain=(father:string,child:string)=>{
-        scope.chain.set(father,[...(scope.chain.get(father)||[]),child])
-        //如果child是father的子,那么也是grandfather的子
-        let has=false,grand_father=''
-        scope.chain.forEach((v,k)=>{
-            if(k!=father&&v.includes(child)){
-                has=true
-                grand_father=k
+        let set=scope.chain.get(father)
+        if(!set) scope.chain.set(father,set=new Set())
+        if(set.has(child)) return
+        set.add(child)
+        //找所有包含 child 的 grandfather
+        for(const [k,v] of scope.chain){
+            if(k!==father && v.has(child)){
+                chain(k,child)
             }
-        })
-        if(has)
-            chain(grand_father,child)
+        }
     }
     //预操作
     let _pre=(d:Class|Interface)=>{

@@ -68,13 +68,16 @@ const G_Enum:ast_generate=(data,tree)=>{
 const G_Function:ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
     let generic=parseGeneric(data,tree)
-    let ParamIdentifier=data.children.get(generic.is?'child_1':'child_0') as ast_data
+    //CST: [GenericList?, Type, (ParamIdentifier), Commands]
+    //$.c 可选捕获无匹配时不占 child 槽位,故有无泛型索引整体偏移1
+    let off=generic.is?1:0
+    let ParamIdentifier=data.children.get(`child_${1+off}`) as ast_data
     for(let [k,v] of ParamIdentifier.children)
         if(typeof v=='object')
             params.set(v.children.get('child_0') as string,
                        tree(v.children.get('child_2') as ast_data))
-    return new Function(null,null,generic.data,params,tree(data.children.get('child_0') as ast_data),
-                       tree(data.children.get('child_2') as ast_data))
+    return new Function(null,null,generic.data,params,tree(data.children.get(`child_${0+off}`) as ast_data),
+                       tree(data.children.get(`child_${2+off}`) as ast_data))
 }
 const G_Variable:ast_generate=(data,tree)=>{
     let value=data.children.get('child_2')

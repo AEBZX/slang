@@ -79,12 +79,14 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
                     let param=[]
                     let type=[]
                     let args='child_0'
-                    if((v.children.get('child_0') as ast_data).type=='GenericData'){
+                    let first=v.children.get('child_0')
+                    if(first&&(first as ast_data).type=='GenericData'){
                         args='child_1'
-                        for(let [k,_v] of (v.children.get('child_0') as ast_data).children)
+                        for(let [k,_v] of (first as ast_data).children)
                             type.push(tree(_v as ast_data))
                     }
-                    for(let [__k,arg] of (v.children.get(args) as ast_data).children)
+                    let args_data=v.children.get(args)
+                    if(args_data) for(let [__k,arg] of (args_data as ast_data).children)
                         if(typeof arg=='object')
                             param.push(tree(arg))
                     fix.push(new ArgumentsPostfix(type,param))

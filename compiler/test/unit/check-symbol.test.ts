@@ -34,7 +34,7 @@ describe('symbol 符号表', () => {
         const scope = make_scope()
         symbol([ast], scope)
         expect(scope.global.error).toEqual([])
-        expect(scope.chain.get('I')).toContain('A')
+        expect(scope.chain.get('I').has('A')).toBe(true)
     })
 
     it('static 成员注册到全局', () => {

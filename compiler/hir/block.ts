@@ -44,8 +44,9 @@ export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
     //优先用绝对路径槽(跨模块唯一):模块静态字段同名(如 file.type 与 system.type)时,
     //pre 的裸名全局注册互相覆盖,scope.get(node.name) 会拿到别的模块的槽,
     //vm '%type' 与 std.file.type 分叉成两个槽/错误端口
-    let abs=(node.type as BlockType).local.join('.')
-    let id=scope.get(abs)!=null?scope.get(abs):(scope.get(node.name)!=null?scope.get(node.name):scope.id())
+    //type 可能非 BlockType(如枚举成员 Variable.type=null),此时无法取 abs 路径,fallback 到裸名
+    let abs=node.type instanceof BlockType?node.type.local.join('.'):null
+    let id=abs&&scope.get(abs)!=null?scope.get(abs):(scope.get(node.name)!=null?scope.get(node.name):scope.id())
     scope.set(node.name,id)
     //第一个static的main标记为入口
     let entry=node.name=='main'&&!node.modifiers.unstatic&&!scope.global.entry

@@ -2,7 +2,7 @@ import {
     AdditiveExpression,
     AddressPrefix,
     ArgumentsPostfix,
-    ArrayExpression, BinaryExpression, BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
+    ArrayExpression, BinaryExpression, BlockType, BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
     BooleanLiteral, DecrementPostfix, DecrementPrefix, DivisionExpression, EqualityExpression, GreaterEqualExpression,
     GreaterExpression, HAddressExpr, HArgumentsExpr, HArrayExpr,
     HBinaryExpr, HBitNotExpr,
@@ -94,6 +94,12 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
             let member_id=scope.get(i.name)
             if(_primary instanceof IdentifierExpr&&_primary.type instanceof ClassType)
                 member_id=scope.get((_primary.type as ClassType).local.join('.')+'.'+i.name)
+            //new Item(5).v:ArgumentsPostfix 后跟 MemberPostfix,primary 是 HArgumentsExpr
+            //此时 _primary 是类名(BlockType),成员应解析为类成员槽而非局部变量
+            if(primary instanceof HArgumentsExpr&&_primary instanceof IdentifierExpr&&_primary.type instanceof BlockType){
+                let cls=(_primary.type as BlockType).local.join('.')
+                member_id=scope.get(cls+'.'+i.name)
+            }
             primary=new HMemberExpr(primary,new HIdentifierExpr(member_id))
         }
         if(i instanceof IncrementPostfix)
@@ -121,9 +127,20 @@ const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
         if(i instanceof AddressPrefix)
             primary=new HAddressExpr(primary)
         //new:包装调用为 HNewExpr(对象分配+this传递),此前被忽略导致无对象
+        //new Item(5).v:primary=HMemberExpr(HArgumentsExpr,'Item.v') → 拆掉成员层,new 只包构造
+        //new A().make():primary=HArgumentsExpr(HMemberExpr(HArgumentsExpr,'A.make'),[]) →
+        //外层 ArgumentsPostfix 是方法调用,new 只包内层构造,再重建方法调用链
         if(i instanceof NewPrefix){
-            if(primary instanceof HArgumentsExpr)
+            if(primary instanceof HArgumentsExpr&&primary.target instanceof HMemberExpr&&primary.target.target instanceof HArgumentsExpr)
+                primary=new HArgumentsExpr(
+                    new HMemberExpr(
+                        new HNewExpr(primary.target.target.target,primary.target.target.args),
+                        primary.target.member),
+                    primary.args)
+            else if(primary instanceof HArgumentsExpr)
                 primary=new HNewExpr(primary.target,primary.args)
+            else if(primary instanceof HMemberExpr&&primary.target instanceof HArgumentsExpr)
+                primary=new HMemberExpr(new HNewExpr(primary.target.target,primary.target.args),primary.member)
             else
                 primary=new HNewExpr(primary,[])
         }

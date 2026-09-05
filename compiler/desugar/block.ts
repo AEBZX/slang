@@ -31,7 +31,7 @@ const D_File:desugar_visitor=(node:File,call)=>{
 const D_Enum:desugar_visitor=(node:Enum,call)=>{
     let index=0
     let cls=new Class(node.modifiers, node.name,new Map(), new ClassType(['std','ObjectInterface'],[]), node.children.map(i =>
-        new Variable(new Modifier(false, false, false), i, new NumberType(), new NumberLiteral(`${index++}`))
+        new Variable(new Modifier(false, false, false), i, node.type, new NumberLiteral(`${index++}`))
     ))
     cls.type=node.type
     return call(cls)

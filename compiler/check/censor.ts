@@ -43,6 +43,8 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
     //检查 implements 链:所有接口的函数与变量必须都在 class 中定义
     let interface_members=new Map<string,string>()
     let collect=(iface:Type)=>{
+        //implement 为 null(ObjectInterface 自身或无父接口)时停止递归,避免 null.local 崩
+        if(iface==null)return
         if(!(iface instanceof ClassType))
             scope.thr(`${iface} is not a class at line ${ast.line.join('\n')}`)
         let impl=scope.get((iface as ClassType).local.join('.'))

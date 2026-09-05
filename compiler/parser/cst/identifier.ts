@@ -9,7 +9,7 @@ const LambdaType=$.s('LambdaType',
 const GenericType=$.s('GenericType',TokenType.Identifier)
 const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
     $.r('BooleanType'),$.r('StringType'),$.r('VoidType'),$.t('(',$.r('Type'),')'),
-    $.s('ClassType',$.w('ClassTypeData',TokenType.Identifier,$.d('.')),$.c($.d('<'),$.w('GenericType',$.r('Type'),',')),$.d('>')))
+    $.s('ClassType',$.w('ClassTypeData',TokenType.Identifier,$.d('.')),$.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.d('>'))))
 const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
     $.o('TypePostfix',
         $.s('MapPostfix',$.d('{'),$.d('}')),

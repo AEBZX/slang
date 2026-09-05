@@ -5,7 +5,7 @@ export type type_checker=(ast:ASTTree,scope:Scope,call:(ast:ASTTree)=>Type)=>Typ
 export class Scope{
     parent:Scope
     global:Scope
-    chain:Map<string,string[]>
+    chain:Map<string,Set<string>>
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
     generic:Map<string,Type>
@@ -67,9 +67,9 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
             //name1的子类型中存在name2
-            if(scope.chain.has(name1)&&scope.chain.get(name1).includes(name2))return type1
+            if(scope.chain.has(name1)&&scope.chain.get(name1).has(name2))return type1
             //反之
-            if(scope.chain.has(name2)&&scope.chain.get(name2).includes(name1))return type2
+            if(scope.chain.has(name2)&&scope.chain.get(name2).has(name1))return type2
             //是否是一个类
             return scope.get(name1)===scope.get(name2)?type1:new VoidType()
         }
@@ -91,7 +91,9 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
         }
         //情况2:正常类型且都不是VoidType
         if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))return type1.constructor==type2.constructor?type1:new VoidType()
-        return type1.constructor==type2.constructor?type1:new VoidType()
+        //一边为 VoidType(代表 null 字面量):null 可与任意类型兼容,返回另一边类型
+        if(type1 instanceof VoidType)return type2
+        return type1
     }
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
