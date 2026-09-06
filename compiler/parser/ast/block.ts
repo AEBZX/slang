@@ -1,14 +1,14 @@
 import {
     ast_data,
     ast_generate, ASTTree,
-    Block,
+    Block, Cast,
     Class, ClassType,
     Enum, File,
     Function,
-    Interface,
+    Interface, LambdaExpression,
     Link, Modifier,
-    Module,
-    Type,
+    Module, Operation,
+    Type, Value,
     Variable
 } from '../../utils'
 const G_Link:ast_generate=(data,tree)=>{
@@ -23,6 +23,11 @@ const G_Module:ast_generate=(data,tree)=>{
     for(let [k,v] of (data.children.get('child_0') as ast_data).children)
         if(typeof v=='object')children.push(tree(v))
     return new Module(null,null,children)
+}
+const G_Value:ast_generate=(data,tree)=>{
+    return new Value(tree(data.children.get('child_0') as ast_data),
+        Array.from((data.children.get('child_1') as ast_data).children.values())
+            .map(i=>tree(i as ast_data)) as Block[])
 }
 function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:string){
     let first=data.children.get(key) as ast_data
@@ -68,8 +73,6 @@ const G_Enum:ast_generate=(data,tree)=>{
 const G_Function:ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
     let generic=parseGeneric(data,tree)
-    //CST: [GenericList?, Type, (ParamIdentifier), Commands]
-    //$.c 可选捕获无匹配时不占 child 槽位,故有无泛型索引整体偏移1
     let off=generic.is?1:0
     let ParamIdentifier=data.children.get(`child_${1+off}`) as ast_data
     for(let [k,v] of ParamIdentifier.children)
@@ -107,6 +110,14 @@ const G_File:ast_generate=(data,tree)=>{
             blocks.push(tree(v))
     return new File(links,blocks)
 }
+const G_Operation:ast_generate=(data,tree)=>{
+    return new Operation(data.children.get('child_0') as string,
+                        tree(data.children.get('child_1') as ast_data) as LambdaExpression)
+}
+const G_Cast:ast_generate=(data,tree)=>{
+    return new Cast(tree(data.children.get('child_0') as ast_data),
+        tree((data.children.get('child_1') as ast_data)) as LambdaExpression)
+}
 export default {
     'link':G_Link,
     'Module':G_Module,
@@ -116,5 +127,8 @@ export default {
     'Function':G_Function,
     'Variable':G_Variable,
     'Block':G_Block,
-    'File':G_File
+    'File':G_File,
+    'Operation':G_Operation,
+    'Cast':G_Cast,
+    'Value':G_Value
 }

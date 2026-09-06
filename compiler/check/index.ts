@@ -39,7 +39,6 @@ function type_expr_children(ast: ASTTree, scope: Scope) {
 function visit(ast: ASTTree, scope: Scope) {
     if (ast instanceof Expression) {
         type_of(ast, scope)
-        //LambdaExpression 的函数体也要做命令级检查
         if (ast instanceof LambdaExpression && ast.body) {
             let ls = scope.enter()
             ls.loop = false

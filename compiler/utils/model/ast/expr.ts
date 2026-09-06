@@ -64,6 +64,11 @@ export class MinusPrefix extends Prefix{}
 export class ReferencePrefix extends Prefix{}
 export class AddressPrefix extends Prefix{}
 export class NewPrefix extends Prefix{}
+export class TypePrefix extends Prefix{
+    constructor(public type:Type) {
+        super()
+    }
+}
 export class PrefixExpression extends Expression{
     constructor(public expr:Expression,public prefix:Prefix[]) {
         super()

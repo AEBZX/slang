@@ -34,6 +34,7 @@ const PostfixExpression=$.s('PostfixExpression',
 )
 const PrefixExpression=$.s('PrefixExpression',
     $.l('PrefixList',$.o('PrefixData',
+        $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')')),
         $.s('IncrementPrefix',$.d('++')),
         $.s('DecrementPrefix',$.d('--')),
         $.s('NotPrefix',$.d('!')),

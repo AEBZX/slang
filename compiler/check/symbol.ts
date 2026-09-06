@@ -1,14 +1,14 @@
 import {
     Block,
-    BlockType,
+    BlockType, Cast,
     Class,
     ClassType,
     File,
     Function,
     Interface,
     LambdaType,
-    Module,
-    Scope,
+    Module, Operation,
+    Scope, Value,
     Variable
 } from '../utils'
 export default function symbol(data:File[],scope:Scope){
@@ -78,7 +78,7 @@ export default function symbol(data:File[],scope:Scope){
             })
         }
     }
-    //链传递:implement 关系传递到 grandfather,用 Set O(1) 替代 includes O(n)
+    //链传递:implement 关系传递到 grandfather
     let chain=(father:string,child:string)=>{
         let set=scope.chain.get(father)
         if(!set) scope.chain.set(father,set=new Set())

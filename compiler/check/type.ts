@@ -13,9 +13,9 @@ import {
     NullLiteral,
     NumberLiteral, NumberType, PointFix, PostfixExpression, PrefixExpression, ReferencePrefix,
     Scope, ShiftLeftExpression, ShiftRightExpression, StringLiteral, StringType,
-    SubtractiveExpression, TernaryExpression, Type,GreaterExpression, LambdaExpression, LessExpression,
+    SubtractiveExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
     type_checker, type_merge,
-    VoidType, Variable, AddressPrefix
+    VoidType, Variable, AddressPrefix, type_is, oper_get_have, TypePrefix, cast_get
 } from '../utils'
 const S_Literal:type_checker=(ast:Literal,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     if(ast instanceof NullLiteral)return new VoidType()
@@ -62,8 +62,13 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
     label:
     for(let postfix of ast.postfix){
         if(postfix instanceof IncrementPostfix||postfix instanceof DecrementPostfix){
-            if(!(type instanceof NumberType))scope.thr(`++/-- can only be applied to number at line ${ast.line.join('\n')}`)
-            type=new NumberType()
+            let oper= postfix instanceof IncrementPostfix? '++' : '--'
+            let operation=oper_get_have(scope,oper,type instanceof FixType?
+                new FixType(type.t,[...type.fix,new PointFix()]):
+                new FixType(type,[new PointFix()]))
+            if(!(type instanceof NumberType||operation.length==0))
+                scope.thr(`++ can only be applied to number at line ${ast.line.join('\n')}`)
+            type=type instanceof NumberType?new NumberType():operation[0]
         }
         if(postfix instanceof IndexPostfix){
             if(type instanceof StringType){
@@ -73,7 +78,13 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 ast.types.push(type)
                 continue
             }
-            if(!(type instanceof FixType))scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
+            if(!(type instanceof FixType)){
+                //是否重载了[]
+                let cond=oper_get_have(scope,'[]',type,postfix.index.type)
+                if(cond.length==0)scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
+                //找到最合适的
+                type=cond[0].type
+            }
             else{
                 if(type.fix[type.fix.length-1] instanceof ArrayFix){
                     if(!(call(postfix.index) instanceof NumberType))
@@ -95,8 +106,14 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
         }
         if(postfix instanceof ArgumentsPostfix){
             if(!(type instanceof LambdaType)){
-                scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
-                type=new VoidType()
+                //是否重载()
+                let cond=oper_get_have(scope,'()',type,...postfix.args.map(i=>i.type))
+                if(cond.length==0){
+                    scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
+                    type=new VoidType()
+                }
+                if(postfix.generic.length!=0)scope.thr(`function generic count mismatch at line ${ast.line.join('\n')}`)
+                type=cond[0].type
             }else{
                 let index=0
                 for(let [k,v] of type.generic){
@@ -188,8 +205,19 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                 scope.thr(`~ can only be applied to boolean at line ${ast.line.join('\n')}`)
             type=(type instanceof BooleanType||type instanceof NumberType)?type:new NumberType()
         }
+        if(prefix instanceof TypePrefix){
+            if(cast_get(type,scope).map(i=>type_is(i,prefix.type,scope)).includes(false))
+                scope.thr(`cast failed at line ${ast.line.join('\n')}`)
+            type=prefix.type
+        }
         //*解引用:去掉一个指针
         if(prefix instanceof AddressPrefix){
+            //是否有重载
+            let cond=oper_get_have(scope,'*',type)
+            if(cond.length!=0){
+                type=cond[0].type
+                continue
+            }
             if(type instanceof FixType){
                 if(!(type.fix[type.fix.length-1] instanceof PointFix))
                     scope.thr(`* can only be applied to point type at line ${ast.line.join('\n')}`)
@@ -201,6 +229,12 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
         }
         //&取地址:加一个指针
         if(prefix instanceof ReferencePrefix){
+            //是否有重载
+            let cond=oper_get_have(scope,'&',type)
+            if(cond.length!=0){
+                type=cond[0].type
+                continue
+            }
             if(type instanceof FixType)
                 type.fix.push(new PointFix())
             else type=new FixType(type, [new PointFix()])
@@ -212,8 +246,7 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                 scope.thr(`new can only be applied to first at line ${ast.line.join('\n')}`)
             //检查ast.expr是不是postfix
             if(ast.expr instanceof PostfixExpression){
-                //找到第一个 ArgumentsPostfix (构造函数调用),可能其后有 MemberPostfix/ArgumentsPostfix 等
-                //原实现只处理 ArgumentsPostfix 在末尾,new Item(5).v 会报"() can only be applied to function"
+                //找到第一个 ArgumentsPostfix,可能其后有 MemberPostfix/ArgumentsPostfix 等
                 let args_index=-1
                 for(let i=0;i<ast.expr.postfix.length;i++)
                     if(ast.expr.postfix[i] instanceof ArgumentsPostfix){args_index=i;break}
@@ -298,7 +331,6 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
                                 type=type.returnType
                             }else
                                 scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
-                            continue
                         }
                     }
                 }
@@ -308,9 +340,34 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
     }
     return type
 }
+const BinaryMap=new Map([
+    ['LogicalAndExpression', '&&'],
+    ['LogicalOrExpression', '||'],
+    ['AdditiveExpression', '+'],
+    ['SubtractiveExpression', '-'],
+    ['MultiplicativeExpression', '*'],
+    ['DivisionExpression', '/'],
+    ['ModExpression', '%'],
+    ['ShiftLeftExpression', '<<'],
+    ['ShiftRightExpression', '>>'],
+    ['BitwiseAndExpression', '&'],
+    ['BitwiseOrExpression', '|'],
+    ['BitwiseXorExpression', '^'],
+    ['EqualityExpression', '=='],
+    ['InequalityExpression', '!='],
+    ['GreaterExpression', '>'],
+    ['LessExpression', '<'],
+    ['GreaterEqualExpression', '>='],
+    ['LessEqualExpression', '<=']
+])
 const S_BinaryExpression:type_checker=(ast:BinaryExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let left=call(ast.left)
     let right=call(ast.right)
+    let operator=BinaryMap.get(ast.constructor.name)
+    //是否有重载
+    let cond=oper_get_have(scope,operator,left,right)
+    if(cond.length!=0)
+        return cond[0].type
     //逻辑与/或:操作数类型不限,返回合并类型
     if(ast instanceof LogicalAndExpression||ast instanceof LogicalOrExpression)
         return type_merge(left,right,scope)||new VoidType()

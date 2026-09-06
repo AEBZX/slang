@@ -33,7 +33,8 @@ import {
     VoidType,
     WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
     Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
-    PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand
+    PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand, Value, BasicType, LiteralType,
+    Operation, PointFix, Cast, oper_get_have, type_is
 } from '../utils'
 //各种模块
 const C_Class:check_visitor=(ast:Class,scope,call)=>{
@@ -62,10 +63,21 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
     for(let [name,kind] of interface_members)
         if(!class_members.has(name))
             scope.thr(`class ${ast.name} must implement ${kind} ${name} at line ${ast.line.join('\n')}`)
+    for(let [k,v] of ast.generic){
+        if(scope.get_generic(k)){
+            scope.thr(`${k} is already defined at line ${ast.line.join('\n')}`)
+            scope.set_generic(k,new VoidType())
+            continue
+        }
+        scope.set_generic(k,v)
+    }
     for(let i of ast.children) {
+        //不能是模块
+        if(i instanceof Module){
+            scope.thr(`${ast.name} is class at line ${ast.line.join('\n')}`)
+            continue
+        }
         scope=scope.enter()
-        for(let [k,v] of ast.generic)
-            scope.set_generic(k,v)
         //up指向外层类(顶层指向自己),支持up.up链式向上
         let abs=scope.path?scope.path+'.'+ast.name:ast.name
         let up_local=scope.path?scope.path.split('.'):abs.split('.')
@@ -80,6 +92,64 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
         call(i,scope)
         scope=scope.leave()
     }
+}
+const C_Value:check_visitor=(ast:Value,scope,call)=>{
+    let type=ast.type
+    if(!(type instanceof LiteralType))
+        scope.thr(`${type} is not a literal type at line ${ast.line.join('\n')}`)
+    scope=scope.enter()
+    scope.set('value',type)
+    for(let i of ast.children)
+        call(i,scope)
+    scope=scope.leave()
+}
+const basic=['+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||','!','~','p*','p&']
+const C_Operation:check_visitor=(ast:Operation,scope,call)=>{
+    let type=scope.get('value')
+    let data=Array.from(ast.command.params.values())
+    //检查是否同类型有oper,command_params签名完全一致的
+    for(let i of scope.get_operation(type))
+        if(i.oper==ast.oper&&i.command.params.values()==ast.command.params.values())
+            scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
+    if(ast.command.generic.size!=0)
+        scope.thr(`${ast.command} is not a function at line ${ast.line.join('\n')}`)
+    if(ast.oper!='[]='&&ast.oper!='='&&ast.command.ret instanceof VoidType)
+        scope.thr(`${ast.command} is not a void at line ${ast.line.join('\n')}`)
+    if(basic.includes(ast.oper)){
+        //是!/~
+        if(ast.oper=='!'||ast.oper=='~'||ast.oper=='p*'||ast.oper=='p&') {
+            if (ast.command.params.size != 1 ||data[0] != type)
+                scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+            return
+        }
+        if(data.length!=2||!(data[0]==type))
+            scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    }
+    if(['[]=','='].includes(ast.oper)&&data[0]!=new FixType(type,[new PointFix()]))
+        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    if(ast.oper=='[]'&&data.length!=2||data[0]!=type)
+        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    if(['p++','p--','++p','--p'].includes(ast.oper)&&data.length!=1||data[0]!=type)
+        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    if(ast.oper=='()'&&data.length<1||data[0]!=type)
+        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    if(ast.oper==':'&&data.length!=1||data[0]!=type||ast.command.ret instanceof VoidType)
+        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
+    call(ast.command,scope)
+    scope.set_operation(type,ast)
+}
+//不冲突然后接受Type1 (Type2)=>Type1
+const C_Cast:check_visitor=(ast:Cast,scope,call)=>{
+    let type=scope.get('value')
+    for(let i of scope.get_cast(type))
+        if(i.command.params.values()==ast.command.params.values())
+            scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
+    if(ast.command.ret!=ast.t)
+        scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
+    if(ast.command.params.size!=1||Array.from(ast.command.params.values())[0]==type)
+        scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
+    call(ast.command,scope)
+    scope.set_cast(type,ast)
 }
 const C_Module:check_visitor=(ast:Module,scope,call)=>{
     for(let i of ast.children) {
@@ -127,8 +197,11 @@ const C_Variable:check_visitor=(ast:Variable,scope,call)=>{
     //成员类型存入全局符号表,供跨作用域 MemberPostfix 访问
     scope.global.sym(ast.t,ast.t)
     scope.global.sym(ast,ast.t)
-    if(ast.value)
+    if(ast.value){
         call(ast.value,scope)
+        if(!type_is(ast.t,ast.value.type,scope))
+            scope.thr(`${ast.value} is not assignable at line ${ast.line.join('\n')}`)
+    }
 }
 const C_Enum:check_visitor=(ast:Class,scope,call)=>{
     let x=[]
@@ -159,7 +232,7 @@ const C_Assign:check_visitor=(ast:Assign,scope,call)=>{
         scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
     let left=scope.get_sym(ast.data)
     let right=scope.get_sym(ast.value)
-    if(type_merge(left,right,scope) instanceof VoidType)
+    if(!type_is(left,right,scope))
         scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
 }
 const C_VarDeclaration:check_visitor=(ast:VarDeclaration,scope,call)=>{
@@ -169,13 +242,13 @@ const C_VarDeclaration:check_visitor=(ast:VarDeclaration,scope,call)=>{
     scope.sym(ast.t,ast.t)
     if(ast.value){
         call(ast.value,scope)
-        let value_type=scope.get_sym(ast.value)
-        if(type_merge(value_type,ast.t,scope) instanceof VoidType)
-            scope.thr(`${ast.name} is not assignable at line ${ast.line.join('\n')}`)
+        if(!type_is(ast.t,ast.value.type,scope))
+            scope.thr(`${ast.value} is not assignable at line ${ast.line.join('\n')}`)
     }
 }
 const C_Call:check_visitor=(ast:Call,scope,call)=>{
     call(ast.data,scope)
+    //是否重载()
     if(!(ast.data instanceof PostfixExpression))
         scope.thr(`${ast.data} is not callable at line ${ast.line.join('\n')}`)
     let ls=ast.data as PostfixExpression
@@ -188,7 +261,7 @@ const C_Return:check_visitor=(ast:Return,scope,call)=>{
         call(ast.data,scope)
         let ret_type=scope.get_sym(ret)
         let data_type=scope.get_sym(ast.data)
-        if(type_merge(data_type,ret_type,scope) instanceof VoidType)
+        if(!type_is(data_type,ret_type,scope))
             scope.thr(`return type mismatch at line ${ast.line.join('\n')}`)
     }
 }
@@ -206,7 +279,7 @@ const C_Throw:check_visitor=(ast:Throw,scope,call)=>{
     let _t:Type=scope.get('throw')
     if(!_t)
         scope.thr(`throw without catch at line ${ast.line.join('\n')}`)
-    if(type_merge(t,_t,scope) instanceof VoidType)
+    if(!type_is(t,_t,scope))
         scope.thr(`throw type mismatch at line ${ast.line.join('\n')}`)
 }
 const CommandList=['mov','add','sub','mul','div','mod','and','or','xor','not','bit_not','cmp','jmp','call','thread',
@@ -222,19 +295,19 @@ const C_VM:check_visitor=(ast:VM,scope,call)=>{
 const C_Increment:check_visitor=(ast:Increment,scope,call)=>{
     call(ast.data,scope)
     let t=scope.get_sym(ast.data)
-    if(!(t instanceof NumberType))
+    if(!(t instanceof NumberType||oper_get_have(scope,'++',new FixType(t,[new PointFix()])).length==0))
         scope.thr(`++ can only be applied to number at line ${ast.line.join('\n')}`)
 }
 const C_Decrement:check_visitor=(ast:Decrement,scope,call)=>{
     call(ast.data,scope)
     let t=scope.get_sym(ast.data)
-    if(!(t instanceof NumberType))
+    if(!(t instanceof NumberType||oper_get_have(scope,'--',new FixType(t,[new PointFix()])).length==0))
         scope.thr(`-- can only be applied to number at line ${ast.line.join('\n')}`)
 }
 const C_IfStatement:check_visitor=(ast:IfStatement,scope,call)=>{
     let t=scope.get_sym(ast.condition)
     call(ast.condition,scope)
-    if(!(t instanceof BooleanType))
+    if(!type_is(t,new BooleanType(),scope))
         scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
     call(ast.commands,scope)
     if(ast.else_)
@@ -243,7 +316,7 @@ const C_IfStatement:check_visitor=(ast:IfStatement,scope,call)=>{
 const C_WhileStatement:check_visitor=(ast:WhileStatement,scope,call)=>{
     call(ast.condition,scope)
     let t=scope.get_sym(ast.condition)
-    if(!(t instanceof BooleanType))
+    if(!type_is(t,new BooleanType(),scope))
         scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
     scope=scope.enter()
     scope.set('while',new VoidType())
@@ -257,7 +330,7 @@ const C_DoWhileStatement:check_visitor=(ast:DoWhileStatement,scope,call)=>{
     scope=scope.leave()
     call(ast.condition,scope)
     let t=scope.get_sym(ast.condition)
-    if(!(t instanceof BooleanType))
+    if(!type_is(t,new BooleanType(),scope))
         scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
 }
 const C_ForStatement:check_visitor=(ast:ForStatement,scope,call)=>{
@@ -267,7 +340,7 @@ const C_ForStatement:check_visitor=(ast:ForStatement,scope,call)=>{
         call(i,scope)
     call(ast.condition,scope)
     let t=scope.get_sym(ast.condition)
-    if(!(t instanceof BooleanType))
+    if(!type_is(t,new BooleanType(),scope))
         scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
     for(let s of ast.step)
         call(s,scope)
@@ -278,18 +351,24 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     scope=scope.enter()
     scope.set('while',new VoidType())
     call(ast.data,scope)
-    let data_type=scope.get_sym(ast.data)
     let element:Type=new VoidType()
-    //遍历 string,元素为字符
-    if(data_type instanceof StringType){
-        element=new StringType()
-    }else if(data_type instanceof FixType){
-        let last=data_type.fix[data_type.fix.length-1]
-        if(!(last instanceof ArrayFix||last instanceof MapFix))
-            scope.thr(`foreach can only be applied to array or map at line ${ast.line.join('\n')}`)
-        element=data_type.t
-    }else
-        scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
+    let g=(data_type:Type)=>{
+        //先看有没有重载:
+        if(oper_get_have(scope,':',data_type).length>0){
+            let t=oper_get_have(scope,':',data_type)[0]
+            g(t)
+        }
+        //遍历 string,元素为字符
+        if(data_type instanceof StringType){
+            element=new StringType()
+        }else if(data_type instanceof FixType){
+            let last=data_type.fix[data_type.fix.length-1]
+            if(!(last instanceof ArrayFix||last instanceof MapFix))
+                scope.thr(`foreach can only be applied to array or map at line ${ast.line.join('\n')}`)
+            element=data_type.t
+        }else
+            scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
+    }
     scope.set(ast.iden,element)
     //与 C_VarDeclaration 一致:类型节点也注册进 symbol,否则 body 里 v 解析 get_sym(element) 失败报未定义
     scope.sym(element,element)
@@ -304,7 +383,7 @@ const C_SwitchStatement:check_visitor=(ast:SwitchStatement,scope,call)=>{
     for(let c of ast.case_list){
         call(c.condition,scope)
         let case_type=scope.get_sym(c.condition)
-        if(type_merge(case_type,condition_type,scope) instanceof VoidType)
+        if(type_is(case_type,condition_type,scope))
             scope.thr(`case type mismatch at line ${ast.line.join('\n')}`)
         call(c.commands,scope)
     }
@@ -362,5 +441,8 @@ export default new Map<any,check_visitor>([
     [SwitchStatement,C_SwitchStatement],
     [TryStatement,C_TryStatement],
     [ListCommand,C_ListCommand],
-    [LambdaExpression,C_LambdaExpression]
+    [LambdaExpression,C_LambdaExpression],
+    [Cast,C_Cast],
+    [Value,C_Value],
+    [Operation,C_Operation]
 ])

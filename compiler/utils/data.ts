@@ -54,20 +54,24 @@ export let keywords=[
     //修饰符
     'public','private','async','sync','static','unstatic',
     //特殊关键字
-    '=>',
+    '=>','p*','p&','[]=','p++','p--','++p','--p',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
     '++','--','===','!==','+=','-=','*=','/=','%=','<<=','>>=','&&=','||=','&=','|=','^=',
     '<<','>>','&&','||','==','!=','>=','<=','+','-','*','/','%','&','|','^','>','<','!','=',
     //外层关键字
-    'link','module','class','enum','interface','of','implements','function','var','as',
+    'link','module','class','enum','interface','of','implements','function','var','as','operation','cast',
     //类型关键字
-    'void','boolean','number','string','[',']','{','}',
+    'void','boolean','number','string','[',']','{','}','[]','{}','()',
     //命令关键字
     'vm','break','continue','return','throw','await','try','catch','finally','foreach',
     //选择块关键字
     'if','else','switch','case','default','for','while','do',
     //其他
-    'null','true','false','(',')','{','}',',','.',':',';','?','~'
+    'null','true','false',',','.',':',';','?','~'
+]
+export let operations=[
+    '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','++','--',':','p*','p&',
+    '[]','==','=','[]=','~','()'
 ]
 export let tokens=[TokenParam.Number,TokenParam.String,...keywords,TokenParam.Identifier]

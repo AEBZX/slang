@@ -1,5 +1,5 @@
 import {ASTTree} from '../../data'
-import {Expression} from './expr'
+import {Expression, LambdaExpression} from './expr'
 import {Type} from './identifier'
 import {Command} from './command'
 export class Link extends ASTTree{
@@ -50,5 +50,20 @@ export class Variable extends Block{
 export class File extends ASTTree{
     constructor(public links:Link[],public children:Block[]) {
         super()
+    }
+}
+export class Operation extends Block{
+    constructor(public oper:string,public command:LambdaExpression) {
+        super(null,null)
+    }
+}
+export class Cast extends Block{
+    constructor(public t:Type,public command:LambdaExpression) {
+        super(null,null)
+    }
+}
+export class Value extends Block{
+    constructor(public value:Type,public children:Block[]) {
+        super(null,null)
     }
 }

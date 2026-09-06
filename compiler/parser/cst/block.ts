@@ -1,4 +1,4 @@
-import {Parser as $, TokenType} from '../../utils'
+import {Parser as $, TokenType,operations} from '../../utils'
 const GenericList=$.s('GenericList',$.d('<'),
     $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),',')
     ,$.d('>'))
@@ -19,12 +19,15 @@ const _function=$.s('Function',$.c($.r('GenericList')),
     $.r('Type'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.r('Commands'))
+const _operation=$.s('Operation',$.d('operation'),$.o('symbol',...operations),$.r('LambdaExpression'))
+const _cast=$.s('Cast',$.d('cast'),$.r('Type'),$.r('LambdaExpression'))
 const _var=$.s('Variable',$.d('var'),':',$.r('Type'),$.c($.d('='),$.r('Expression')),';')
 const block=$.s('Block',$.r('Modifiers'),TokenType.Identifier,':',
     $.o('BlockData',$.r('Module'),$.r('Class'),$.r('Interface')
         ,$.r('Enum'),$.r('Function'),$.r('Variable')))
-const blocks=$.l('blocks',$.r('Block'))
-const file=$.s('File',$.l('Links',$.r('link')),$.r('blocks'))
+const value=$.s('Value',$.d('value'),$.r('Type'),$.r('blocks'))
+const file=$.s('File',$.l('Links',$.r('link')),$.l('file',$.o('FileData',
+    $.r('Block'),$.r('Value'))))
 export default [
     ModuleName,
     link,
@@ -36,6 +39,8 @@ export default [
     _function,
     _var,
     block,
-    blocks,
-    file,GenericList
+    file,GenericList,
+    _operation,
+    _cast,
+    value
 ]

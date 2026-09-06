@@ -1,5 +1,16 @@
 import {ast_data, ast_type, ASTTree} from '../data'
-import {BasicType, BlockType, ClassType, EnumType, FixType, GenericType, NumberType, Type, VoidType} from '../model/ast'
+import {
+    BasicType,
+    BlockType, Cast,
+    ClassType,
+    EnumType,
+    FixType,
+    GenericType,
+    NumberType,
+    Operation,
+    Type, Value,
+    VoidType
+} from '../model/ast'
 export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope:Scope)=>void)=>void
 export type type_checker=(ast:ASTTree,scope:Scope,call:(ast:ASTTree)=>Type)=>Type
 export class Scope{
@@ -9,6 +20,8 @@ export class Scope{
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
     generic:Map<string,Type>
+    operation:Map<Type,Operation[]>
+    cast:Map<Type,Cast[]>
     error:string[]
     loop:boolean
     path:string
@@ -22,6 +35,8 @@ export class Scope{
         this.loop=false
         this.path=''
         this.generic=new Map()
+        this.operation=new Map()
+        this.cast=new Map()
     }
     enter(){
         let s=new Scope(this,this.global)
@@ -55,6 +70,28 @@ export class Scope{
     }
     set_generic(name:string,type:Type){
         this.generic.set(name,type)
+    }
+    get_operation(type:Type):Operation[]{
+        if(this.operation.has(type))return this.operation.get(type)
+        if(this.parent)return this.parent.get_operation(type)
+        if(this.global)return this.global.get_operation(type)
+    }
+    set_operation(type:Type,operation:Operation){
+        if(this.operation.has(type))
+            this.operation.get(type).push(operation)
+        else
+            this.operation.set(type,[operation])
+    }
+    get_cast(type:Type):Cast[]{
+        if(this.cast.has(type))return this.cast.get(type)
+        if(this.parent)return this.parent.get_cast(type)
+        if(this.global)return this.global.get_cast(type)
+    }
+    set_cast(type:Type,cast:Cast){
+        if(this.cast.has(type))
+            this.cast.get(type).push(cast)
+        else
+            this.cast.set(type,[cast])
     }
     thr(msg:string){
         this.global.error.push(msg)
@@ -107,4 +144,30 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
         return new FixType(base,[...type1.fix])
     }
     return new VoidType()
+}
+export function oper_get_have(scope:Scope,oper:string,...type:Type[]){
+    return scope.get_operation(type[0]).filter(i=>i.oper==oper)
+        //所有可以将...type放进去调用的
+        .filter(i=>!Array.from(i.command.params.values())
+            .map((j,k)=>type_is(j,type[k],scope)).includes(false))
+        .map(i=>i.command.ret)
+}
+export function cast_get(type:Type,scope:Scope){
+    return [type,...scope.get_cast(type).map(i=>i.t)]
+}
+export function type_is(type1:Type,type2:Type,scope:Scope){
+    if(type_merge(type2,type1,scope)==type1)return true
+    //operation=优先级高于cast
+    let operation=scope.get_operation(type1)
+        .filter(i=>i.oper=='=')
+        .filter(i=>
+            type_merge(Array.from(i.command.params.values())[1],type2,scope)
+            ==Array.from(i.command.params.values())[1]).length!=0
+    if(operation)return true
+    //cast强转
+    let cast=scope.get_cast(type2)
+        .filter(i=>type_merge(i.t,type1,scope)==type1)
+        .length!=0
+    if(cast)return true
+    return false
 }

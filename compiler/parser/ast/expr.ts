@@ -12,7 +12,8 @@ import {
     NullLiteral,
     NumberLiteral, Postfix, PostfixExpression, Prefix, PrefixExpression, ReferencePrefix,
     ShiftLeftExpression, ShiftRightExpression,
-    StringLiteral, SubtractiveExpression, TernaryExpression, Type,GreaterExpression, LambdaExpression, LessExpression
+    StringLiteral, SubtractiveExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
+    TypePrefix
 } from '../../utils'
 import {parseGeneric} from './block'
 const G_NumberLiteral:ast_generate=(data,tree)=>{
@@ -103,6 +104,9 @@ const G_PrefixExpression:ast_generate=(data,tree)=>{
     for(let [k,v] of (data.children.get('child_0') as ast_data).children)
         if(typeof v=='object')
             switch (v.type) {
+                case 'TypePrefix':
+                    fix.push(new TypePrefix(tree(v.children.get('child_0') as ast_data)))
+                    break
                 case 'IncrementPrefix':
                     fix.push(new IncrementPrefix())
                     break
