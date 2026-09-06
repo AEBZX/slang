@@ -5,17 +5,13 @@ import ast_parse from '../../parser/ast'
 import {
     asm_args, ast_data, BINARY, BIT_NOT, CALL, CMP, CZ, File, GC, IN, IR, IRTool, JMP,
     JZ, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET,
-    POP, PUSH, RET, RETN, STR_GET, THREAD, TZ, to
+    POP, PUSH, RET, RETN, STR_GET, THREAD, TZ
 } from '../../utils'
 import check from '../../check'
 import desugar from '../../desugar'
 import hir from '../../hir'
 import ir from '../../ir'
-import { build, kill } from '../../optimize/cfg'
-import CP from '../../optimize/cp'
-import CONSTANT from '../../optimize/constant'
-import PEEPHOLE from '../../optimize/peephole'
-import { DCE, slots as d_slots, build as d_build, global_use } from '../../optimize/dce'
+import { opt_ir } from '../../optimize'
 
 //模拟执行优化后的IR指令,验证o0/o1/o2语义等价。
 //修复回归:cp2解引用写非法传播、P_CMP分支反、DCE自反use漏判、S_CMP漏记读、
@@ -157,41 +153,10 @@ class Sim {
     }
 }
 
-//复刻 optimize/index.ts 内部逻辑,返回优化后的 IR 指令(与 optimize 源码保持同步)
+//直接委托真实优化器:此前测试侧复制 pass 逻辑,漏掉 build_cross 等同步改动,
+//常量折叠把循环体写入的槽(while 改 i)按初始化值折叠,o1/o2 循环出口读 i 错成 0
 function opt_tool(data: { pool: Map<number | string, number>, code: Map<number, any[]>, id: number }, level: number): IRTool {
-    const pool = new Map<number, number | string>()
-    for (const [k, v] of data.pool) pool.set(v, k)
-    const code = to(data.code)
-    const tool = new IRTool(data.id, code, pool)
-    const each = (c: Map<any, any>, bid: number, data: IR[]) => {
-        for (let i = 0; i < data.length; i++) {
-            const rule = c.get(data[i].constructor)
-            if (rule) rule(data[i], tool, bid, i)
-        }
-    }
-    if (level >= 1) {
-        for (const [bid, data] of tool.command) {
-            each(CONSTANT, bid, data)
-            //跳过已被 CONSTANT 折叠的指令:state 被折叠结果污染,PEEPHOLE 会误判(如 sub l==r)
-            for (let i = 0; i < data.length; i++) {
-                const rule = PEEPHOLE.get(data[i].constructor)
-                if (rule && !tool.replaced(bid, i)) rule(data[i], tool, bid, i)
-            }
-            tool.sweep()
-            d_build(data, d_slots, tool)
-            each(CP, bid, data)
-            tool.sweep()
-            d_build(data, d_slots, tool)
-            tool.guse = global_use(tool)
-            each(DCE, bid, data)
-            tool.sweep()
-        }
-    }
-    if (level >= 2) {
-        build(tool.command, tool)
-        kill(tool)
-    }
-    return tool
+    return opt_ir(data, level)
 }
 function compile(src: string) {
     const files = [ast_parse(cst_parse(lexer(src)) as ast_data) as File]

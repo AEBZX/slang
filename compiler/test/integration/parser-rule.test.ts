@@ -400,14 +400,20 @@ describe('顶层块解析 (File)', () => {
     })
 
     it('ModuleName: 单标识符', () => {
-        const result = parse_entry('ModuleName', [...BlockRules], 'foo') as ast_data
+        //ModuleName→Type→BasicType 依赖 identifier 规则,须传完整规则集
+        const result = parse_entry('ModuleName', all_rules, 'foo') as ast_data
         expect(result.type).toBe('ModuleName')
     })
 
     it('ModuleName: 多级限定名', () => {
-        const result = parse_entry('ModuleName', [...BlockRules], 'std.io.print') as ast_data
+        const result = parse_entry('ModuleName', all_rules, 'std.io.print') as ast_data
         expect(result.type).toBe('ModuleName')
-        expect(result.children.size).toBeGreaterThanOrEqual(3)
+        //ModuleName→Type→(BasicType)ClassType→ClassTypeData:路径段收在 ClassTypeData
+        const type = result.children.get('child_0') as ast_data
+        const basic = type.children.get('child_0') as ast_data
+        const data = basic.children.get('child_0') as ast_data
+        expect(data.type).toBe('ClassTypeData')
+        expect(data.children.size).toBeGreaterThanOrEqual(3)
     })
 
     it('blocks: 多行顶层定义', () => {
@@ -438,9 +444,9 @@ describe('顶层块解析 (File)', () => {
     it('Class: 可选 implements 子句命中', () => {
         const result = parse_entry('Class', all_rules, 'class implements std.io {}') as ast_data
         expect(result.type).toBe('Class')
-        // d('class') 不占 child → implements 子句是 child_0
+        // d('class') 不占 child → implements 子句是 child_0(ImplementsName 包装接口类型)
         const child = result.children.get('child_0') as ast_data
-        expect(child.type).toBe('ModuleName')
+        expect(child.type).toBe('ImplementsName')
     })
 
     it('Class: 无 implements 子句', () => {

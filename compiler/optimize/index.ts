@@ -95,22 +95,25 @@ const o2=(tool:IRTool)=>{
     kill(tool)
 }
 const optimize=[o1,o2]
-export default function (data:{pool:Map<number|string,number>,code:Map<number,asm_command[]>,id:number},level:number){
+//o0=不优化;o1=常量折叠/传播/窥孔/DCE(多轮收敛);o2=再循环 cfg 可达剪枝+变量 kill
+//此前 o1 无条件执行,level 0(CLI"关闭优化")也被优化,与优化器语义测试复刻逻辑不符
+//导出 IR 阶段供测试模拟器直接执行优化后指令,避免测试侧复制 pass 逻辑产生漂移(如漏 build_cross)
+export function opt_ir(data:{pool:Map<number|string,number>,code:Map<number,asm_command[]>,id:number},level:number):IRTool{
     let pool=new Map<number,number|string>
     for(let [k,v] of data.pool)pool.set(v,k)
-    let code=to(data.code)
-    let tool=new IRTool(data.id,code,pool)
-    //o0=不优化;o1=常量折叠/传播/窥孔/DCE(多轮收敛);o2=再循环 cfg 可达剪枝+变量 kill
-    //此前 o1 无条件执行,level 0(CLI"关闭优化")也被优化,与优化器语义测试复刻逻辑不符
+    let tool=new IRTool(data.id,to(data.code),pool)
     if(level>=1)for(let i=0;i<round;i++)o1(tool)
     if(level>=2)for(let i=0;i<round;i++){
         build(tool.command,tool)
         cfg_kill(tool)
         kill(tool)
     }
-    code=tool.command
+    return tool
+}
+export default function (data:{pool:Map<number|string,number>,code:Map<number,asm_command[]>,id:number},level:number){
+    let tool=opt_ir(data,level)
     let ret:bin[]=[]
-    for(let [k,v] of code){
+    for(let [k,v] of tool.command){
         ret.push(new BLOCK_START(['reg',k]).generate())
         for(let command of v)
             ret.push(command.generate())

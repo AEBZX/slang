@@ -71,9 +71,10 @@ const D_Call:desugar_visitor=(node:Call,call)=>{
             let index=postfix.indexOf(member)
             if(postfix[index+1] instanceof ArgumentsPostfix){
                 let args=(postfix[index+1] as ArgumentsPostfix).args
+                //ArgumentsPostfix(generic,args)两参:原把 [expr,...args] 全塞 generic 槽致 args=undefined
                 node.data=new PostfixExpression(
                     new IdentifierExpr('call'),
-                    [new ArgumentsPostfix([node.data.expr,...args])])
+                    [new ArgumentsPostfix([],[node.data.expr,...args])])
             }
         }
     }
@@ -86,7 +87,8 @@ const D_Return:desugar_visitor=(node:Return,call)=>{
 const D_Throw:desugar_visitor=(node:Throw,call)=>{
     node.data=call(node.data)
     return new ListCommand([
-        new Call(new PostfixExpression(new IdentifierExpr('throw'),[new ArgumentsPostfix([node.data])])
+        //ArgumentsPostfix(generic,args):两参签名,原只传一参致 args=undefined(hir 崩溃)
+        new Call(new PostfixExpression(new IdentifierExpr('throw'),[new ArgumentsPostfix([],[node.data])])
             ,false),
         //break强制跳出当前作用域,仅供编译器优化使用
         new Break()

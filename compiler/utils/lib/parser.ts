@@ -280,6 +280,21 @@ export default {
         let rest=data.stream.now()
         if(entry=='File'&&rest)
             throw new Error(`语法错误:未解析的 token '${rest.value}' at ${rest.line}`)
+        //空输入:非 File 片段入口若产出不含任何 token 叶子的空树,视为无法解析应抛;
+        //while/loop 规则直接作入口(如 WList/LList)允许零次匹配返 null/空节点,豁免
+        let top_rule=data.parser_rule.get(entry)
+        let allow_empty=top_rule&&(top_rule.type=='while'||top_rule.type=='loop'||top_rule.type=='choose'||top_rule.type=='or'||top_rule.type=='delete')
+        if(entry!='File'&&!allow_empty&&code.length==0&&ret&&typeof ret=='object'){
+            let has_leaf=false
+            let scan=(n:any)=>{
+                for(let v of (n.children?.values?.()??[]))
+                    if(typeof v=='string')has_leaf=true
+                    else if(typeof v=='object')scan(v)
+            }
+            scan(ret)
+            if(!has_leaf)
+                throw new Error(`无法解析空的${entry}在EOF`)
+        }
         return ret
     },
     generate

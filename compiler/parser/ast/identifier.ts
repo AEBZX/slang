@@ -21,7 +21,8 @@ const G_LambdaType:ast_generate=(data,tree)=>{
         if(typeof v=='object')
             params.set(v.children.get('child_0') as string,
                        tree(v.children.get('child_2') as ast_data))
-    return new LambdaType(params,ret,false)
+    //模型槽位 (generic,params,returnType,_await):此前 3 参调用把 params 塞 generic、ret 塞 params
+    return new LambdaType(new Map(),params,ret,false)
 }
 const G_GenericType:ast_generate=(data,tree)=>new GenericType(data.children.get('child_0') as string)
 const G_ClassType:ast_generate=(data,tree)=>{

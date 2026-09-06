@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'fs'
 import { tmpdir } from 'os'
 import * as path from 'path'
-import command from '@cli/command.ts'
+import command from '../../../cli/command.ts'
 
 //.sbin 布局:POOL_START [id(u32) type(u8) len(u32) data]* POOL_END CODE_START [opcode(u8) a b c(u32)]* CODE_END
 function parse_sbin(buf: Buffer): { pool: Map<number, number | string>, code: number[][] } {

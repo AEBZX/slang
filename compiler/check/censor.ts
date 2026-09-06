@@ -316,6 +316,11 @@ const C_Return:check_visitor=(ast:Return,scope,call)=>{
         call(ast.data,scope)
         let ret_type=scope.get_sym(ret)
         let data_type=scope.get_sym(ast.data)
+        //void 函数 return 带值:void 兼容任意类型(type_merge 把 void 当 null),须显式拒绝
+        if(ret_type instanceof VoidType){
+            scope.thr(`return type mismatch at line ${ast.line.join('\n')}`)
+            return
+        }
         if(!type_is(data_type,ret_type,scope))
             scope.thr(`return type mismatch at line ${ast.line.join('\n')}`)
     }

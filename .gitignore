@@ -31,3 +31,4 @@ package/data
 std/lib
 /script/
 /cli/dist/
+/cli/node_modules/

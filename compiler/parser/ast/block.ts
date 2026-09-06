@@ -14,8 +14,14 @@ import {
 const G_Link:ast_generate=(data,tree)=>{
     let local:string[]=[]
     let name=data.children.get('child_0') as ast_data
-    for(let [k,v] of name.children)
-        local.push(v as string)
+    //ModuleName→Type→(ClassType)→ClassTypeData:路径段是深层 string 叶子(如 std.io.print 的 std/io/print),
+    //须递归收集而非只取直接 child
+    let collect=(n:ast_data)=>{
+        for(let v of n.children.values())
+            if(typeof v=='string')local.push(v)
+            else if(typeof v=='object')collect(v)
+    }
+    collect(name)
     return new Link(local,data.children.get('child_1') as string)
 }
 const G_Module:ast_generate=(data,tree)=>{
@@ -31,6 +37,8 @@ const G_Value:ast_generate=(data,tree)=>{
 }
 function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:string){
     let first=data.children.get(key) as ast_data
+    if(first.type=='ImplementsName')
+        return {is:true,data:tree(first.children.get('child_0') as ast_data)}
     if(first.type=='ModuleName')
         return {is:true,data:tree(first.children.get('child_0') as ast_data)}
     return {is:false,data:new ClassType(['std','ObjectInterface'],[])}

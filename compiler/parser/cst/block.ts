@@ -3,16 +3,18 @@ const GenericList=$.s('GenericList',$.d('<'),
     $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),',')
     ,$.d('>'))
 const ModuleName=$.s('ModuleName',$.r('Type'))
+//implements 目标:接口类型。用 BasicType(类名+可选泛型)而非 Type——Type 会把紧随的空类体 {} 当 MapFix 后缀吃掉
+const ImplementsName=$.s('ImplementsName',$.r('BasicType'))
 const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
 const Modifier=$.l('Modifiers',$.o('Modifier',
     'public','private','unstatic','static','async','sync'
 ))
 const _module=$.s('Module',$.d('module'),$.t('{',$.r('blocks'),'}'))
 const _class=$.s('Class',$.d('class'),$.c($.r('GenericList'))
-    ,$.c($.d('implements'),$.r('ModuleName')),
+    ,$.c($.d('implements'),$.r('ImplementsName')),
     $.t('{',$.r('blocks'),'}'))
 const _interface=$.s('Interface',$.d('interface'),$.c($.r('GenericList'))
-    ,$.c($.d('implements'),$.r('ModuleName')),
+    ,$.c($.d('implements'),$.r('ImplementsName')),
     $.t('{',$.r('blocks'),'}'))
 const _enum=$.s('Enum',$.d('enum'),$.d('{'),$.w('EnumList',TokenType.Identifier,','),'}')
 const _function=$.s('Function',$.c($.r('GenericList')),
@@ -44,6 +46,7 @@ const file=$.s('File',$.l('Links',$.r('link')),$.l('file',$.o('FileData',
     $.r('Block'),$.r('Value'))))
 export default [
     ModuleName,
+    ImplementsName,
     link,
     Modifier,
     _module,

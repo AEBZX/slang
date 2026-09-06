@@ -202,9 +202,11 @@ describe('Class 转换', () => {
             'public Foo:class{}\n' +
             'public Bar:class implements std.io{}\n'
         ) as File
-        expect((ast.children[0] as Class).implement).toEqual([])
+        //无 implements 的类默认实现 std.ObjectInterface(编译器隐式);implements 是 ClassType
+        const foo = ast.children[0] as Class
+        expect((foo.implement as any).local?.join('.')).toBe('std.ObjectInterface')
         const bar = ast.children[1] as Class
-        expect(bar.implement).toEqual(['std', 'io'])
+        expect((bar.implement as any).local).toEqual(['std', 'io'])
         expect(bar.children).toEqual([])
     })
 
