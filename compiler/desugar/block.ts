@@ -1,16 +1,19 @@
 import {
     Block,
+    BlockType,
+    Cast,
     Class,
     ClassType,
     desugar_visitor,
     Enum,
     File,
+    LambdaType,
     Modifier,
     Module,
     NumberLiteral,
-    NumberType,
+    Operation,
     Variable,
-    Function, LambdaType, LambdaExpression, NullLiteral
+    Function, LambdaExpression, NullLiteral, Value, type_name
 } from '../utils'
 
 const D_Module:desugar_visitor=(node:Module,call)=>{
@@ -47,6 +50,37 @@ const D_Variable:desugar_visitor=(node:Variable,call)=>{
     node.value=node.value==null?new NullLiteral(''):call(node.value)
     return node
 }
+//value 块 → 类:value 是给字面类型(内建)扩展 operation/cast 的容器,
+//脱糖成静态容器类 _value_<类型名>,内部 operation/cast 为静态函数成员
+//(check 阶段 value 不进符号表,块 id/路径在此由 desugar 命名)
+const D_Value:desugar_visitor=(node:Value,call)=>{
+    let type=node.value
+    let name='_value_'+type_name(type)
+    //把所属字面类型传给 operation/cast,供生成完整块路径
+    for(let i of node.children)
+        (i as any)._value=type
+    let children=node.children.map(i=>call(i)) as Block[]
+    let cls=new Class(null,name,new Map(),new ClassType(['std','ObjectInterface'],[]),children)
+    cls.type=new BlockType([name])
+    return cls
+}
+//operation 符号 lambda → 静态 Variable:方法名=操作符原文(如 '+','[]'),
+//同操作符多签名=函数重载;名字不用语义映射(add/sub 会与用户方法撞名)
+const D_Operation:desugar_visitor=(node:Operation,call)=>{
+    let body=call(node.command) as LambdaExpression
+    let ret=new Variable(new Modifier(false,false,false),node.oper,
+        new LambdaType(body.generic,body.params,body.ret,false),body)
+    ret.type=new BlockType(['_value_'+type_name((node as any)._value),node.oper])
+    return ret
+}
+//cast 类型 lambda → 静态 Variable:方法名=目标类型名
+const D_Cast:desugar_visitor=(node:Cast,call)=>{
+    let body=call(node.command) as LambdaExpression
+    let ret=new Variable(new Modifier(false,false,false),type_name(node.t),
+        new LambdaType(body.generic,body.params,body.ret,false),body)
+    ret.type=new BlockType(['_value_'+type_name((node as any)._value),type_name(node.t)])
+    return ret
+}
 export default new Map<any,desugar_visitor>([
     [File,D_File],
     [Module,D_Module],
@@ -54,4 +88,7 @@ export default new Map<any,desugar_visitor>([
     [Enum,D_Enum],
     [Function,D_Function],
     [Variable,D_Variable],
+    [Value,D_Value],
+    [Operation,D_Operation],
+    [Cast,D_Cast],
 ])

@@ -15,7 +15,7 @@ import {
     Scope, ShiftLeftExpression, ShiftRightExpression, StringLiteral, StringType,
     SubtractiveExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
     type_checker, type_merge,
-    VoidType, Variable, AddressPrefix, type_is, oper_get_have, TypePrefix, cast_get
+    VoidType, Variable, AddressPrefix, type_is, oper_get_have, TypePrefix, cast_get, oper_best
 } from '../utils'
 const S_Literal:type_checker=(ast:Literal,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     if(ast instanceof NullLiteral)return new VoidType()
@@ -364,10 +364,15 @@ const S_BinaryExpression:type_checker=(ast:BinaryExpression,scope:Scope,call:(as
     let left=call(ast.left)
     let right=call(ast.right)
     let operator=BinaryMap.get(ast.constructor.name)
-    //是否有重载
-    let cond=oper_get_have(scope,operator,left,right)
-    if(cond.length!=0)
-        return cond[0].type
+    //是否有重载:决策取最具体候选;命中则记录 operation,返回其返回类型
+    let ops=operator?oper_best(scope,operator,left,right):[]
+    if(ops.length>1)
+        scope.thr(`ambiguous operation ${operator} at line ${ast.line.join('\n')}`)
+    if(ops.length!=0){
+        //标到节点供 desugar 脱糖成调用
+        (ast as any)._oper=ops[0]
+        return ops[0].command.ret
+    }
     //逻辑与/或:操作数类型不限,返回合并类型
     if(ast instanceof LogicalAndExpression||ast instanceof LogicalOrExpression)
         return type_merge(left,right,scope)||new VoidType()

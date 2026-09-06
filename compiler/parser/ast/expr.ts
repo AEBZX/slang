@@ -55,7 +55,9 @@ const G_LambdaExpression:ast_generate=(data,tree)=>{
                       tree(v.children.get('child_1') as ast_data))
     let type=tree(data.children.get(d.is?'child_2':'child_1') as ast_data)
     let command=tree(data.children.get(d.is?'child_3':'child_2') as ast_data)
-    return new LambdaExpression(param,d.data,type,command)
+    //模型槽位 (generic,params,ret,body):d.data 是泛型表,param 是参数表——此前顺序颠倒
+    //把参数表塞进 generic,导致 operation 的 generic.size 误判/泛型解析错位
+    return new LambdaExpression(d.data,param,type,command)
 }
 const G_PostfixExpression:ast_generate=(data,tree)=>{
     let fix:Postfix[]=[]
@@ -100,8 +102,14 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
 }
 const G_PrefixExpression:ast_generate=(data,tree)=>{
     let fix:Prefix[]=[]
+    let c0=data.children.get('child_0') as ast_data
+    //cast 布局:(Type)expr —— child_0 是 TypePrefix 节点,child_1 是递归 PrefixExpression
+    if(c0.type=='TypePrefix'){
+        let primary=tree(data.children.get('child_1') as ast_data)
+        return new PrefixExpression(primary,[new TypePrefix(tree(c0.children.get('child_0') as ast_data))])
+    }
     let primary=tree(data.children.get('child_1') as ast_data)
-    for(let [k,v] of (data.children.get('child_0') as ast_data).children)
+    for(let [k,v] of c0.children)
         if(typeof v=='object')
             switch (v.type) {
                 case 'TypePrefix':
@@ -132,7 +140,7 @@ const G_PrefixExpression:ast_generate=(data,tree)=>{
                     fix.push(new NewPrefix())
                     break
             }
-    if((data.children.get('child_0') as ast_data).children.size==0)
+    if(c0.children.size==0)
         return primary
     return new PrefixExpression(primary,fix)
 }

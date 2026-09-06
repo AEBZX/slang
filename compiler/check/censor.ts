@@ -34,7 +34,7 @@ import {
     WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
     Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
     PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand, Value, BasicType, LiteralType,
-    Operation, PointFix, Cast, oper_get_have, type_is
+    Operation, PointFix, Cast, oper_get_have, type_is, Scope
 } from '../utils'
 //各种模块
 const C_Class:check_visitor=(ast:Class,scope,call)=>{
@@ -94,62 +94,84 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
     }
 }
 const C_Value:check_visitor=(ast:Value,scope,call)=>{
-    let type=ast.type
+    let type=ast.value
     if(!(type instanceof LiteralType))
         scope.thr(`${type} is not a literal type at line ${ast.line.join('\n')}`)
     scope=scope.enter()
     scope.set('value',type)
+    //把字面类型标到每个 operation/cast:它们从 value 继承上下文,后续注册/决策需要
+    for(let i of ast.children)
+        (i as any)._value=type
     for(let i of ast.children)
         call(i,scope)
     scope=scope.leave()
 }
 const basic=['+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||','!','~','p*','p&']
+//参数表结构等价(不重名即可):两个 params 的 key 集相同且同位置类型兼容
+let params_equal=(a:Map<string,Type>,b:Map<string,Type>,scope:Scope)=>{
+    if(a.size!=b.size)return false
+    let av=Array.from(a.values()),bv=Array.from(b.values())
+    for(let i=0;i<av.length;i++)
+        if(type_merge(av[i],bv[i],scope) instanceof VoidType)return false
+    return true
+}
+//类型结构等价:同构且可互相 merge(引用比较对同构不同实例恒假,如 number 参数 vs value 块里的 number)
+let type_compatible=(a:Type,b:Type,scope:Scope)=>!(type_merge(a,b,scope) instanceof VoidType)
 const C_Operation:check_visitor=(ast:Operation,scope,call)=>{
-    let type=scope.get('value')
+    let type=(ast as any)._value
+    if(type==null)type=scope.get('value')
     let data=Array.from(ast.command.params.values())
     //检查是否同类型有oper,command_params签名完全一致的
     for(let i of scope.get_operation(type))
-        if(i.oper==ast.oper&&i.command.params.values()==ast.command.params.values())
+        if(i.oper==ast.oper&&params_equal(i.command.params,ast.command.params,scope))
             scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
     if(ast.command.generic.size!=0)
         scope.thr(`${ast.command} is not a function at line ${ast.line.join('\n')}`)
     if(ast.oper!='[]='&&ast.oper!='='&&ast.command.ret instanceof VoidType)
         scope.thr(`${ast.command} is not a void at line ${ast.line.join('\n')}`)
     if(basic.includes(ast.oper)){
-        //是!/~
+        //是!/~等一元前缀:p* p& 是 * & 的一元形式
         if(ast.oper=='!'||ast.oper=='~'||ast.oper=='p*'||ast.oper=='p&') {
-            if (ast.command.params.size != 1 ||data[0] != type)
+            if (ast.command.params.size != 1 ||!type_compatible(data[0],type,scope))
                 scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
             return
         }
-        if(data.length!=2||!(data[0]==type))
+        //二元:两个参数,第一参(self)为 value 类型
+        if(data.length!=2||!type_compatible(data[0],type,scope))
             scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
     }
-    if(['[]=','='].includes(ast.oper)&&data[0]!=new FixType(type,[new PointFix()]))
+    //[]= / = :第一参为 value 指针(需可写引用),第二参为赋入值
+    if(['[]=','='].includes(ast.oper)&&
+        (!type_compatible(data[0],new FixType(type,[new PointFix()]),scope)||ast.command.params.size<2))
         scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(ast.oper=='[]'&&data.length!=2||data[0]!=type)
+    //[]:索引读取,两参(self,key)
+    if(ast.oper=='[]'&&(!(data.length==2&&type_compatible(data[0],type,scope))))
         scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(['p++','p--','++p','--p'].includes(ast.oper)&&data.length!=1||data[0]!=type)
+    if(['p++','p--','++p','--p'].includes(ast.oper)&&(!(data.length==1&&type_compatible(data[0],type,scope))))
         scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(ast.oper=='()'&&data.length<1||data[0]!=type)
+    if(ast.oper=='()'&&!(data.length>=1&&type_compatible(data[0],type,scope)))
         scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(ast.oper==':'&&data.length!=1||data[0]!=type||ast.command.ret instanceof VoidType)
+    if(ast.oper==':'&&!(data.length==1&&type_compatible(data[0],type,scope)&&!(ast.command.ret instanceof VoidType)))
         scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
     call(ast.command,scope)
-    scope.set_operation(type,ast)
+    //注册到全局:value 块 check 用子 scope,leave 即丢,须写 global 供调用点查询
+    scope.global.set_operation(type,ast)
 }
-//不冲突然后接受Type1 (Type2)=>Type1
+//不冲突然后接受:value类型(源) cast 到 ast.t(目标),签名 (源)=>目标
 const C_Cast:check_visitor=(ast:Cast,scope,call)=>{
-    let type=scope.get('value')
+    let type=(ast as any)._value
+    if(type==null)type=scope.get('value')
     for(let i of scope.get_cast(type))
-        if(i.command.params.values()==ast.command.params.values())
+        if(params_equal(i.command.params,ast.command.params,scope))
             scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
-    if(ast.command.ret!=ast.t)
+    //返回类型=目标类型 ast.t
+    if(!type_compatible(ast.command.ret,ast.t,scope))
         scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
-    if(ast.command.params.size!=1||Array.from(ast.command.params.values())[0]==type)
+    //单参数,参数类型=源类型(注册在 value 类型上,由 (目标)源值 触发)
+    if(ast.command.params.size!=1||!type_compatible(Array.from(ast.command.params.values())[0],type,scope))
         scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
     call(ast.command,scope)
-    scope.set_cast(type,ast)
+    scope.global.set_cast(type,ast)
 }
 const C_Module:check_visitor=(ast:Module,scope,call)=>{
     for(let i of ast.children) {
@@ -351,9 +373,10 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     scope=scope.enter()
     scope.set('while',new VoidType())
     call(ast.data,scope)
+    let data_type=scope.get_sym(ast.data)
     let element:Type=new VoidType()
     let g=(data_type:Type)=>{
-        //先看有没有重载:
+        //先看有没有重载:':' 重载声明可迭代类型(源类型→迭代元素类型链)
         if(oper_get_have(scope,':',data_type).length>0){
             let t=oper_get_have(scope,':',data_type)[0]
             g(t)
@@ -369,6 +392,7 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
         }else
             scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
     }
+    g(data_type)
     scope.set(ast.iden,element)
     //与 C_VarDeclaration 一致:类型节点也注册进 symbol,否则 body 里 v 解析 get_sym(element) 失败报未定义
     scope.sym(element,element)
@@ -383,7 +407,7 @@ const C_SwitchStatement:check_visitor=(ast:SwitchStatement,scope,call)=>{
     for(let c of ast.case_list){
         call(c.condition,scope)
         let case_type=scope.get_sym(c.condition)
-        if(type_is(case_type,condition_type,scope))
+        if(!type_is(case_type,condition_type,scope))
             scope.thr(`case type mismatch at line ${ast.line.join('\n')}`)
         call(c.commands,scope)
     }

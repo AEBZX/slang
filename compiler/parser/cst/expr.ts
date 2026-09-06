@@ -8,7 +8,7 @@ const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('E
 const MapExpression=$.o('MapExpression',$.t('[',
     $.w('MapExpression',$.s('MapData',TokenType.Identifier,$.d(':'),$.r('Expression')),',')
     ,']'))
-const LambdaExpression=$.s('LambdaExpression',$.r('GenericList'),
+const LambdaExpression=$.s('LambdaExpression',$.c($.r('GenericList')),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'),$.r('Commands'))
 const PrimaryExpression=$.o('PrimaryExpression',
@@ -32,19 +32,24 @@ const PostfixExpression=$.s('PostfixExpression',
                 ,$.d('('),$.w('Args',$.r('Expression'),','),$.d(')')))
     )
 )
-const PrefixExpression=$.s('PrefixExpression',
-    $.l('PrefixList',$.o('PrefixData',
+const PrefixExpression=$.o('PrefixExpression',
+    //cast 前缀:(Type)expr —— 独立 or 分支优先尝试;若其后无法组成表达式则回退普通分支,
+    //避免 (x) 分组被当 cast 吞掉(TypePrefix 不在 PrefixList 内,prefix 列表只收一元/取址/new)
+    $.s('PrefixExpression',
         $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')')),
-        $.s('IncrementPrefix',$.d('++')),
-        $.s('DecrementPrefix',$.d('--')),
-        $.s('NotPrefix',$.d('!')),
-        $.s('BitNotPrefix',$.d('~')),
-        $.s('MinusPrefix',$.d('-')),
-        $.s('ReferencePrefix',$.d('&')),
-        $.s('AddressPrefix',$.d('*')),
-        $.s('NewPrefix',$.d('new'))
-    )),
-    $.r('PostfixExpression')
+        $.r('PrefixExpression')),
+    $.s('PrefixExpression',
+        $.l('PrefixList',$.o('PrefixData',
+            $.s('IncrementPrefix',$.d('++')),
+            $.s('DecrementPrefix',$.d('--')),
+            $.s('NotPrefix',$.d('!')),
+            $.s('BitNotPrefix',$.d('~')),
+            $.s('MinusPrefix',$.d('-')),
+            $.s('ReferencePrefix',$.d('&')),
+            $.s('AddressPrefix',$.d('*')),
+            $.s('NewPrefix',$.d('new'))
+        )),
+        $.r('PostfixExpression'))
 )
 const MultiplicativeExpression=$.s('MultiplicativeExpression',
     $.r('PrefixExpression'),$.l('OperList',

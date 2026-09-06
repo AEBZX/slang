@@ -25,7 +25,8 @@ const _var=$.s('Variable',$.d('var'),':',$.r('Type'),$.c($.d('='),$.r('Expressio
 const block=$.s('Block',$.r('Modifiers'),TokenType.Identifier,':',
     $.o('BlockData',$.r('Module'),$.r('Class'),$.r('Interface')
         ,$.r('Enum'),$.r('Function'),$.r('Variable')))
-const value=$.s('Value',$.d('value'),$.r('Type'),$.r('blocks'))
+const blocks=$.l('blocks',$.r('Block'))
+const value=$.s('Value',$.d('value'),$.r('BasicType'),$.t('{',$.l('vblocks',$.o('ValueData',$.r('Operation'),$.r('Cast'))),'}'))
 const file=$.s('File',$.l('Links',$.r('link')),$.l('file',$.o('FileData',
     $.r('Block'),$.r('Value'))))
 export default [
@@ -39,8 +40,9 @@ export default [
     _function,
     _var,
     block,
-    file,GenericList,
     _operation,
     _cast,
-    value
+    blocks,
+    value,
+    file,GenericList
 ]

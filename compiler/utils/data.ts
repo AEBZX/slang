@@ -53,22 +53,24 @@ export let number_radix=['x','X','b','B','o','O']
 export let keywords=[
     //修饰符
     'public','private','async','sync','static','unstatic',
-    //特殊关键字
-    '=>','p*','p&','[]=','p++','p--','++p','--p',
+    //特殊关键字(注意:重载符号 p* p& []= p++ ++p 等不能进 keywords——
+    //lexer 会把普通代码里的 []=(数组赋初值) 误切为单 token,导致解析错位;
+    //这些符号仅在 operation 关键字后由 CST 按 operations 表匹配)
+    '=>',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
     '++','--','===','!==','+=','-=','*=','/=','%=','<<=','>>=','&&=','||=','&=','|=','^=',
     '<<','>>','&&','||','==','!=','>=','<=','+','-','*','/','%','&','|','^','>','<','!','=',
     //外层关键字
-    'link','module','class','enum','interface','of','implements','function','var','as','operation','cast',
+    'link','module','class','enum','interface','of','implements','function','var','as','operation','cast','value',
     //类型关键字
-    'void','boolean','number','string','[',']','{','}','[]','{}','()',
+    'void','boolean','number','string','[',']','{','}',
     //命令关键字
     'vm','break','continue','return','throw','await','try','catch','finally','foreach',
     //选择块关键字
     'if','else','switch','case','default','for','while','do',
     //其他
-    'null','true','false',',','.',':',';','?','~'
+    'null','true','false','(',')','{','}',',','.',':',';','?','~'
 ]
 export let operations=[
     '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','++','--',':','p*','p&',

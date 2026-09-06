@@ -77,7 +77,9 @@ export default function check(files: File[]): Scope {
     const scope = new Scope(null, new Scope(null, null))
     symbol(files, scope)
     for (let file of files) {
-        file.children = file.children.filter(b => scope.global.data.get(b.name) === b)
+        //模块重复定义合并时,同名 children 只保留一份(过滤掉被合并的旧块);
+        //value 块无名,不属于常规符号表,无条件保留
+        file.children = file.children.filter(b => b.name==null||scope.global.data.get(b.name) === b)
     }
     for (let file of files) {
         //link 别名作用域是文件级:每个文件进入独立子 scope 注册自身 links,不污染其他文件

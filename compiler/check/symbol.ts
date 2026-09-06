@@ -12,9 +12,13 @@ import {
     Variable
 } from '../utils'
 export default function symbol(data:File[],scope:Scope){
+    //value 块是 literal 类型的扩展容器(operation/cast 归属),无名,不进全局符号表;
+    //其注册走 Scope.operation/cast(以类型为键),故此处直接跳过
+    let is_extension=(i:any)=>i instanceof Value||i instanceof Operation||i instanceof Cast
     //重名检测
     let _name=(d:Class|Module|Interface|File,prefix:string='')=>{
         for(let i of d.children){
+            if(is_extension(i))continue
             let abs_name=prefix?prefix+'.'+i.name:i.name
             if(scope.global.data.get(abs_name)===i)continue
             //重名只按绝对路径检测,避免不同作用域的同名成员(如 I.f 与 B.f)误判
@@ -58,6 +62,7 @@ export default function symbol(data:File[],scope:Scope){
         if('name' in d)
             name=name?name+'.'+d.name:d.name
         for(let i of d.children){
+            if(is_extension(i))continue
             if(!i.modifiers.unstatic){
                 let static_name='name' in i?(name?name+'.'+i.name:i.name):name
                 scope.global.set(static_name,i)

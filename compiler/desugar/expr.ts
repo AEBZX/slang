@@ -1,11 +1,11 @@
 import {
     ArgumentsPostfix,
-    ArrayExpression, BinaryExpression, BooleanType,
+    ArrayExpression, BinaryExpression, BooleanType, Call,
     desugar_visitor,
-    IndexPostfix, InequalityExpression,
+    IndexPostfix, InequalityExpression, MemberPostfix, IdentifierExpr,
     LambdaExpression, LogicalAndExpression, LogicalOrExpression,
     MapExpression, NullLiteral,
-    PostfixExpression, TernaryExpression
+    PostfixExpression, TernaryExpression, type_name
 } from '../utils'
 const D_LambdaExpression:desugar_visitor=(node:LambdaExpression,call)=>{
     node.body=call(node.body)
@@ -30,8 +30,17 @@ const D_PostfixExpression:desugar_visitor=(node:PostfixExpression,call)=>{
     return node
 }
 const D_BinaryExpression:desugar_visitor=(node:BinaryExpression,call)=>{
-    node.left=call(node.left)
-    node.right=call(node.right)
+    let left=call(node.left)
+    let right=call(node.right)
+    //运算符重载:check 决策命中 operation(标在 node._oper)后,把 a+b 脱糖成容器静态函数调用
+    //a+b → _value_<类型名>.+(a,b);函数名=操作符原文,多签名同名=函数重载
+    let oper=(node as any)._oper
+    if(oper){
+        let self_type=(oper as any)._value
+        let cls='_value_'+type_name(self_type)
+        return new PostfixExpression(new IdentifierExpr(cls),
+            [new MemberPostfix(oper.oper),new ArgumentsPostfix([], [left,right])])
+    }
     //缺括号:原写法 A||(B&&C&&D) 使 LogicalAndExpression 无条件包装(boolean 也被转 !=null),
     //与 LogicalOrExpression 只对非 boolean 包装的行为不对称
     if((node instanceof LogicalAndExpression||node instanceof LogicalOrExpression)&&
