@@ -38,6 +38,8 @@ export class Enum extends Block{
     }
 }
 export class Function extends Block{
+    //重载序号:同名函数第几个(0=首个)。desugar 改名 f/f2/f3 区分槽位;调用点按决策指向具体序号
+    public index:number=0
     constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public params:Map<string,Type>,public return_type:Type,public commands:Command) {
         super(modifiers,name)
     }

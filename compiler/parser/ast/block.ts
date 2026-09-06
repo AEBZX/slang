@@ -110,9 +110,13 @@ const G_File:ast_generate=(data,tree)=>{
             blocks.push(tree(v))
     return new File(links,blocks)
 }
+//组合符号(节点型)映射回操作符字符串;单字符符号直接是字符串
+const COMPOSITE:any={'BSET':'[]=','BIDX':'[]','CALL':'()','STAR':'p*','AMPR':'p&','PPRE':'++p','MPRE':'--p','PPOST':'p++','MPOST':'p--'}
 const G_Operation:ast_generate=(data,tree)=>{
-    return new Operation(data.children.get('child_0') as string,
-                        tree(data.children.get('child_1') as ast_data) as LambdaExpression)
+    let sym=data.children.get('child_0')
+    let oper=typeof sym=='string'?sym:COMPOSITE[(sym as ast_data).type]??(sym as ast_data).type
+    return new Operation(oper,
+        tree(data.children.get('child_1') as ast_data) as LambdaExpression)
 }
 const G_Cast:ast_generate=(data,tree)=>{
     return new Cast(tree(data.children.get('child_0') as ast_data),

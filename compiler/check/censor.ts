@@ -34,7 +34,7 @@ import {
     WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
     Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
     PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand, Value, BasicType, LiteralType,
-    Operation, PointFix, Cast, oper_get_have, type_is, Scope
+    Operation, PointFix, Cast, oper_get_have, type_is, Scope, oper_best, type_name
 } from '../utils'
 //各种模块
 const C_Class:check_visitor=(ast:Class,scope,call)=>{
@@ -95,8 +95,9 @@ const C_Class:check_visitor=(ast:Class,scope,call)=>{
 }
 const C_Value:check_visitor=(ast:Value,scope,call)=>{
     let type=ast.value
-    if(!(type instanceof LiteralType))
-        scope.thr(`${type} is not a literal type at line ${ast.line.join('\n')}`)
+    //value 块给某类型(内建 literal 或自定义类)扩展 operation/cast;类型须已可解析
+    if(!(type instanceof BasicType))
+        scope.thr(`${type} is not a value type at line ${ast.line.join('\n')}`)
     scope=scope.enter()
     scope.set('value',type)
     //把字面类型标到每个 operation/cast:它们从 value 继承上下文,后续注册/决策需要
@@ -249,6 +250,38 @@ function is_lvalue(expr:Expression):boolean{
 const C_Assign:check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,scope)
     call(ast.value,scope)
+    //[]= 索引写重载:a[i]=b 且 a 类型注册了 []= → 脱糖成容器调用,不查普通左值/类型
+    if(ast.data instanceof PostfixExpression){
+        let pf=ast.data.postfix
+        if(pf.length>0&&pf[pf.length-1] instanceof IndexPostfix){
+            let a_type=scope.get_sym(ast.data.expr)
+            if(a_type){
+                //[]= 的 self 形参是 value 指针(&a),决策按指针类型匹配
+                let ptr=new FixType(a_type,[new PointFix()])
+                let ops=oper_best(scope,'[]=',ptr,scope.get_sym((pf[pf.length-1] as IndexPostfix).index),scope.get_sym(ast.value))
+                if(ops.length>1)
+                    scope.thr(`ambiguous operation []= at line ${ast.line.join('\n')}`)
+                if(ops.length==1){
+                    ast.oper='[]='
+                    return
+                }
+            }
+        }
+    }
+    //裸 = 赋值重载:a=b(纯 Assign,非复合)且 a 类型注册了 = → a.=(&a,b)
+    if(ast.constructor==Assign&&!(ast.oper=='[]=')){
+        let a_type=scope.get_sym(ast.data)
+        if(a_type){
+            let ptr=new FixType(a_type,[new PointFix()])
+            let ops=oper_best(scope,'=',ptr,scope.get_sym(ast.value))
+            if(ops.length>1)
+                scope.thr(`ambiguous operation = at line ${ast.line.join('\n')}`)
+            if(ops.length==1){
+                ast.oper='='
+                return
+            }
+        }
+    }
     //赋值目标必须是可操作的左值
     if(!is_lvalue(ast.data))
         scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
@@ -375,12 +408,19 @@ const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
     call(ast.data,scope)
     let data_type=scope.get_sym(ast.data)
     let element:Type=new VoidType()
+    ast.unwrap=[]
     let g=(data_type:Type)=>{
-        //先看有没有重载:':' 重载声明可迭代类型(源类型→迭代元素类型链)
-        if(oper_get_have(scope,':',data_type).length>0){
-            let t=oper_get_have(scope,':',data_type)[0]
-            g(t)
+        //先看有没有重载:':' 重载把自定义可迭代类型脱壳成 string/[]/map 或又一层可迭代
+        //(如 operation :(m:MyList)=>number[]{...});递归直到底层容器,记录每层容器供 desugar 链式展开
+        let ops=oper_best(scope,':',data_type)
+        if(ops.length==1){
+            let ret=ops[0].command.ret
+            ast.unwrap.push('_value_'+type_name(data_type))
+            g(ret)
+            return
         }
+        if(ops.length>1)scope.thr(`ambiguous operation : at line ${ast.line.join('\n')}`)
+        ast.real_type=data_type
         //遍历 string,元素为字符
         if(data_type instanceof StringType){
             element=new StringType()

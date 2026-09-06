@@ -15,7 +15,7 @@ import {
     Scope, ShiftLeftExpression, ShiftRightExpression, StringLiteral, StringType,
     SubtractiveExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
     type_checker, type_merge,
-    VoidType, Variable, AddressPrefix, type_is, oper_get_have, TypePrefix, cast_get, oper_best
+    VoidType, Variable, AddressPrefix, type_is, oper_get_have, TypePrefix, cast_get, oper_best, overload_resolve
 } from '../utils'
 const S_Literal:type_checker=(ast:Literal,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     if(ast instanceof NullLiteral)return new VoidType()
@@ -59,16 +59,23 @@ const S_LambdaExpression:type_checker=(ast:LambdaExpression,scope:Scope,call:(as
 const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let type=call(ast.expr)
     ast.types=ast.types||[]
+    //成员函数重载:记录最近访问的"类.成员",Arguments 分支据此决策(成员名改写为 序号名)
+    let cur_member:{cls:string,name:string}=null
     label:
     for(let postfix of ast.postfix){
         if(postfix instanceof IncrementPostfix||postfix instanceof DecrementPostfix){
-            let oper= postfix instanceof IncrementPostfix? '++' : '--'
-            let operation=oper_get_have(scope,oper,type instanceof FixType?
-                new FixType(type.t,[...type.fix,new PointFix()]):
-                new FixType(type,[new PointFix()]))
-            if(!(type instanceof NumberType||operation.length==0))
+            let oper= postfix instanceof IncrementPostfix? 'p++' : 'p--'
+            let ops=oper_best(scope,oper,type)
+            if(ops.length==1){
+                ast.oper=oper
+                type=ops[0].command.ret
+                ast.types.push(type)
+                continue
+            }
+            if(ops.length>1)scope.thr(`ambiguous operation ${oper} at line ${ast.line.join('\n')}`)
+            if(!(type instanceof NumberType))
                 scope.thr(`++ can only be applied to number at line ${ast.line.join('\n')}`)
-            type=type instanceof NumberType?new NumberType():operation[0]
+            type=new NumberType()
         }
         if(postfix instanceof IndexPostfix){
             if(type instanceof StringType){
@@ -79,11 +86,16 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                 continue
             }
             if(!(type instanceof FixType)){
-                //是否重载了[]
-                let cond=oper_get_have(scope,'[]',type,postfix.index.type)
-                if(cond.length==0)scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
-                //找到最合适的
-                type=cond[0].type
+                //是否重载了[]:按实参(self 类型, 索引类型)决策最符合签名
+                let idx_type=call(postfix.index)
+                let ops=oper_best(scope,'[]',type,idx_type)
+                if(ops.length==0)scope.thr(`[] can only be applied to fix type at line ${ast.line.join('\n')}`)
+                if(ops.length>1)scope.thr(`ambiguous operation [] at line ${ast.line.join('\n')}`)
+                if(ops.length==1){
+                    ast.oper='[]'
+                    ast.types.push(ops[0].command.ret)
+                    type=ops[0].command.ret
+                }else type=new VoidType()
             }
             else{
                 if(type.fix[type.fix.length-1] instanceof ArrayFix){
@@ -105,15 +117,57 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
             }
         }
         if(postfix instanceof ArgumentsPostfix){
+            //成员函数重载:最近访问成员 cur_member 且同名多签名 → 按实参选具体成员(改成员名为 序号名)
+            if(cur_member&&!(ast.expr instanceof IdentifierExpr&&scope.get_overload(ast.expr.name).length>1)){
+                let fns=scope.get_overload(cur_member.name)
+                if(fns.length>1&&type instanceof LambdaType){
+                    let arg_types=postfix.args.map(a=>call(a))
+                    let r=overload_resolve(scope,cur_member.name,fns,arg_types)
+                    if(r.kind=='best'){
+                        let fn:any=r.fn
+                        //改成员名:desugar 据此把 .f 指向具体重载(f/f1)。call_target 存"类.序号名"
+                        ast.call_target=cur_member.cls+'.'+fn.name+(fn.index>0?fn.index:'')
+                        return fn.return_type
+                    }
+                    if(r.kind=='ambiguous'){
+                        scope.thr(`ambiguous call to ${cur_member.name} at line ${ast.line.join('\n')}`)
+                        return type.returnType
+                    }
+                }
+            }
+            //函数重载决策:目标是重载函数(同名多签名)时,按实参类型选最符合签名
+            if(ast.expr instanceof IdentifierExpr&&type instanceof LambdaType){
+                let fns=scope.get_overload(ast.expr.name)
+                //组内 >1 才需决议(首个即代表,普通调用由下方通用分支处理)
+                if(fns.length>1){
+                    let arg_types=postfix.args.map(a=>call(a))
+                    let r=overload_resolve(scope,ast.expr.name,fns,arg_types)
+                    if(r.kind=='best'){
+                        let fn:any=r.fn
+                        ast.call_target=fn.name+(fn.index>0?fn.index:'')
+                        return fn.return_type
+                    }
+                    if(r.kind=='ambiguous'){
+                        //并列最符合:实参同等地喂入多个签名且互不支配,如 (a,B) 与 (A,b) 传 a,b
+                        scope.thr(`ambiguous call to ${ast.expr.name} at line ${ast.line.join('\n')}`)
+                        return type.returnType
+                    }
+                    //kind=='none':留给通用分支报参数不匹配
+                }
+            }
             if(!(type instanceof LambdaType)){
-                //是否重载()
-                let cond=oper_get_have(scope,'()',type,...postfix.args.map(i=>i.type))
-                if(cond.length==0){
+                //是否重载():self 类型(type) + 实参列表,决策最符合签名
+                let arg_types=postfix.args.map(a=>call(a))
+                let ops=oper_best(scope,'()',type,...arg_types)
+                if(ops.length==0){
                     scope.thr(`() can only be applied to function at line ${ast.line.join('\n')}`)
                     type=new VoidType()
+                }else{
+                    if(ops.length>1)scope.thr(`ambiguous operation () at line ${ast.line.join('\n')}`)
+                    if(postfix.generic.length!=0)scope.thr(`function generic count mismatch at line ${ast.line.join('\n')}`)
+                    ast.oper='()'
+                    type=ops[0].command.ret
                 }
-                if(postfix.generic.length!=0)scope.thr(`function generic count mismatch at line ${ast.line.join('\n')}`)
-                type=cond[0].type
             }else{
                 let index=0
                 for(let [k,v] of type.generic){
@@ -157,6 +211,11 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                                 if(!in_class)
                                     scope.thr(`private member '${postfix.name}' can only be accessed inside class ${type.local.join('.')} at line ${ast.line.join('\n')}`)
                             }
+                            //函数成员:记住类名与成员名,供 Arguments 重载决策(类内 Function 同名已收进 overload)
+                            if(i instanceof Function){
+                                let cls=type.local.join('.')
+                                cur_member={cls,name:cls+'.'+i.name}
+                            }else cur_member=null
                             type = scope.get_sym(i)
                             ast.types.push(type)
                             continue label
@@ -176,8 +235,14 @@ const S_PostfixExpression:type_checker=(ast:PostfixExpression,scope:Scope,call:(
                         }
                     scope.thr(`${postfix.name} is not defined at line ${ast.line.join('\n')}`)
                 }
-                //情况2:就是简单的类
-                type=scope.get_sym(scope.get([...type.local,postfix.name].join('.')))
+                //情况2:就是简单的类/模块静态成员
+                let mb_target=[...type.local,postfix.name].join('.')
+                let mb_obj=scope.get(mb_target)
+                //函数成员:记录(类.成员)供 Arguments 重载决策(静态重载 K.f)
+                if(mb_obj instanceof Function){
+                    cur_member={cls:type.local.join('.'),name:mb_target}
+                }else cur_member=null
+                type=scope.get_sym(mb_obj)
             }
         }
         ast.types.push(type)
@@ -190,34 +255,68 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
     let index=0
     for(let prefix of ast.prefix){
         if(prefix instanceof IncrementPrefix||prefix instanceof DecrementPrefix){
+            let oper=prefix instanceof IncrementPrefix?'++p':'--p'
+            let ops=oper_best(scope,oper,type)
+            if(ops.length==1){
+                ast.oper=oper
+                type=ops[0].command.ret
+                index++
+                continue
+            }
+            if(ops.length>1)scope.thr(`ambiguous operation ${oper} at line ${ast.line.join('\n')}`)
             if(!(type instanceof NumberType))scope.thr(`++/-- can only be applied to number at line ${ast.line.join('\n')}`)
             type=new NumberType()
         }
         if(prefix instanceof MinusPrefix){
+            //一元负号:查 '-' 一元?operations 表里 '-' 是二元。一元负号无独立符号,原生 number 即可
             if(!(type instanceof NumberType))scope.thr(`- can only be applied to number at line ${ast.line.join('\n')}`)
             type=new NumberType()
         }
         //逻辑运算符可以当作!a=!(a!=null),不检查
-        if(prefix instanceof NotPrefix)
+        if(prefix instanceof NotPrefix){
+            let ops=oper_best(scope,'!',type)
+            if(ops.length==1){
+                ast.oper='!'
+                type=ops[0].command.ret
+                index++
+                continue
+            }
+            if(ops.length>1)scope.thr(`ambiguous operation ! at line ${ast.line.join('\n')}`)
             type=new BooleanType()
+        }
         if(prefix instanceof BitNotPrefix){
+            let ops=oper_best(scope,'~',type)
+            if(ops.length==1){
+                ast.oper='~'
+                type=ops[0].command.ret
+                index++
+                continue
+            }
+            if(ops.length>1)scope.thr(`ambiguous operation ~ at line ${ast.line.join('\n')}`)
             if(!(type instanceof BooleanType||type instanceof NumberType))
                 scope.thr(`~ can only be applied to boolean at line ${ast.line.join('\n')}`)
             type=(type instanceof BooleanType||type instanceof NumberType)?type:new NumberType()
         }
         if(prefix instanceof TypePrefix){
-            if(cast_get(type,scope).map(i=>type_is(i,prefix.type,scope)).includes(false))
+            //强转 (T)x:源类型 type 需能经注册的 cast 到达目标 prefix.type。
+            //cast_get(type)=[type, 注册在 type 上的各 cast 目标];任一目标可赋给期望类型即可。
+            //命中则标记,desugar 脱糖成对 _value_<源>.<目标类型名>(x) 的调用。
+            if(!cast_get(type,scope).some(i=>type_is(i,prefix.type,scope)))
                 scope.thr(`cast failed at line ${ast.line.join('\n')}`)
+            ast.oper='cast'
             type=prefix.type
         }
-        //*解引用:去掉一个指针
+        //*解引用:去掉一个指针(p* 一元;注意 addressPrefix 节点代表 * 前缀)
         if(prefix instanceof AddressPrefix){
-            //是否有重载
-            let cond=oper_get_have(scope,'*',type)
-            if(cond.length!=0){
-                type=cond[0].type
+            //是否有重载:p* 是 * 的一元重载符号
+            let ops=oper_best(scope,'p*',type)
+            if(ops.length==1){
+                ast.oper='p*'
+                type=ops[0].command.ret
+                index++
                 continue
             }
+            if(ops.length>1)scope.thr(`ambiguous operation p* at line ${ast.line.join('\n')}`)
             if(type instanceof FixType){
                 if(!(type.fix[type.fix.length-1] instanceof PointFix))
                     scope.thr(`* can only be applied to point type at line ${ast.line.join('\n')}`)
@@ -227,14 +326,16 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
             }else
                 scope.thr(`* can only be applied to point type at line ${ast.line.join('\n')}`)
         }
-        //&取地址:加一个指针
+        //&取地址:加一个指针(p& 一元)
         if(prefix instanceof ReferencePrefix){
-            //是否有重载
-            let cond=oper_get_have(scope,'&',type)
-            if(cond.length!=0){
-                type=cond[0].type
+            let ops=oper_best(scope,'p&',type)
+            if(ops.length==1){
+                ast.oper='p&'
+                type=ops[0].command.ret
+                index++
                 continue
             }
+            if(ops.length>1)scope.thr(`ambiguous operation p& at line ${ast.line.join('\n')}`)
             if(type instanceof FixType)
                 type.fix.push(new PointFix())
             else type=new FixType(type, [new PointFix()])
@@ -340,37 +441,39 @@ const S_PrefixExpression:type_checker=(ast:PrefixExpression,scope:Scope,call:(as
     }
     return type
 }
-const BinaryMap=new Map([
-    ['LogicalAndExpression', '&&'],
-    ['LogicalOrExpression', '||'],
-    ['AdditiveExpression', '+'],
-    ['SubtractiveExpression', '-'],
-    ['MultiplicativeExpression', '*'],
-    ['DivisionExpression', '/'],
-    ['ModExpression', '%'],
-    ['ShiftLeftExpression', '<<'],
-    ['ShiftRightExpression', '>>'],
-    ['BitwiseAndExpression', '&'],
-    ['BitwiseOrExpression', '|'],
-    ['BitwiseXorExpression', '^'],
-    ['EqualityExpression', '=='],
-    ['InequalityExpression', '!='],
-    ['GreaterExpression', '>'],
-    ['LessExpression', '<'],
-    ['GreaterEqualExpression', '>='],
-    ['LessEqualExpression', '<=']
-])
+//运算符→符号:用 instanceof 判定而非 constructor.name——
+//bundler(rolldown)可能给类名加 $1 后缀,constructor.name 与字符串表失配(CLI 编译因此查不到重载)
+let binary_operator=(ast:BinaryExpression):string|null=>{
+    if(ast instanceof LogicalAndExpression)return '&&'
+    if(ast instanceof LogicalOrExpression)return '||'
+    if(ast instanceof AdditiveExpression)return '+'
+    if(ast instanceof SubtractiveExpression)return '-'
+    if(ast instanceof MultiplicativeExpression)return '*'
+    if(ast instanceof DivisionExpression)return '/'
+    if(ast instanceof ModExpression)return '%'
+    if(ast instanceof ShiftLeftExpression)return '<<'
+    if(ast instanceof ShiftRightExpression)return '>>'
+    if(ast instanceof BitwiseAndExpression)return '&'
+    if(ast instanceof BitwiseOrExpression)return '|'
+    if(ast instanceof BitwiseXorExpression)return '^'
+    if(ast instanceof EqualityExpression)return '=='
+    if(ast instanceof InequalityExpression)return '!='
+    if(ast instanceof GreaterExpression)return '>'
+    if(ast instanceof LessExpression)return '<'
+    if(ast instanceof GreaterEqualExpression)return '>='
+    if(ast instanceof LessEqualExpression)return '<='
+    return null
+}
 const S_BinaryExpression:type_checker=(ast:BinaryExpression,scope:Scope,call:(ast:ASTTree)=>Type)=>{
     let left=call(ast.left)
     let right=call(ast.right)
-    let operator=BinaryMap.get(ast.constructor.name)
-    //是否有重载:决策取最具体候选;命中则记录 operation,返回其返回类型
+    let operator=binary_operator(ast)
+    //是否有重载:决策取最具体候选;命中则记录到节点供 desugar 脱糖成调用
     let ops=operator?oper_best(scope,operator,left,right):[]
     if(ops.length>1)
         scope.thr(`ambiguous operation ${operator} at line ${ast.line.join('\n')}`)
     if(ops.length!=0){
-        //标到节点供 desugar 脱糖成调用
-        (ast as any)._oper=ops[0]
+        ast.oper=ops[0].oper
         return ops[0].command.ret
     }
     //逻辑与/或:操作数类型不限,返回合并类型

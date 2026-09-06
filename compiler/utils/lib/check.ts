@@ -11,6 +11,7 @@ import {
     Type, Value,
     VoidType
 } from '../model/ast'
+import {Function} from '../model/ast/block'
 export type check_visitor=(ast:ASTTree,scope:Scope,call:(ast:ASTTree,scope:Scope)=>void)=>void
 //类型结构相等:值类型的结构比较(注册键与查询键未必同引用)
 export function type_same(a:Type,b:Type):boolean{
@@ -49,6 +50,8 @@ export class Scope{
     generic:Map<string,Type>
     operation:Map<Type,Operation[]>
     cast:Map<Type,Cast[]>
+    //函数重载:绝对路径 → 同名不同签名的函数列表(每个函数自身是唯一的 AST 节点)
+    overload:Map<string,Function[]>
     error:string[]
     loop:boolean
     path:string
@@ -64,6 +67,23 @@ export class Scope{
         this.generic=new Map()
         this.operation=new Map()
         this.cast=new Map()
+        this.overload=new Map()
+    }
+    //同名函数收集:绝对路径 → 函数组。data 表仍注册一个代表(BlockType),具体签名存 overload
+    set_overload(name:string,fn:any){
+        let list=this.overload.get(name)
+        if(!list){list=[];this.overload.set(name,list)}
+        //若同一函数重复入组(symbol._name 与 _static 都收集)则跳过
+        if(list.includes(fn))return
+        //重载序号:组内已有数量(0 基)。首个保留原名,后续 f2/f3…
+        fn.index=list.length
+        list.push(fn)
+    }
+    get_overload(name:string):any[]{
+        if(this.overload.has(name))return this.overload.get(name)
+        if(this.parent)return this.parent.get_overload(name)
+        if(this.global&&this.global!=this)return this.global.get_overload(name)
+        return []
     }
     enter(){
         let s=new Scope(this,this.global)
@@ -136,17 +156,22 @@ export class Scope{
     }
 }
 export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
+    //chain 只注册在 symbol 入口的根 scope,子 scope 的 chain 是空表——需沿 parent 取根链
+    let root=scope
+    while(root.parent)root=root.parent
+    let chain=root.chain
     if(type1 instanceof BasicType&&type2 instanceof BasicType){
         //情况1:两个Class
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
             //name1的子类型中存在name2
-            if(scope.chain.has(name1)&&scope.chain.get(name1).has(name2))return type1
+            if(chain.has(name1)&&chain.get(name1).has(name2))return type1
             //反之
-            if(scope.chain.has(name2)&&scope.chain.get(name2).has(name1))return type2
-            //是否是一个类
-            return scope.get(name1)===scope.get(name2)?type1:new VoidType()
+            if(chain.has(name2)&&chain.get(name2).has(name1))return type2
+            //是否是一个类(类注册在 global,须沿 global 链查)
+            let s=root.global&&root.global!=root?root.global:root
+            return s.get(name1)===s.get(name2)?type1:new VoidType()
         }
         if(type1 instanceof EnumType||type2 instanceof EnumType){
             let e=type1 instanceof EnumType?type1:type2 as EnumType
@@ -190,20 +215,7 @@ export function oper_get_have(scope:Scope,oper:string,...type:Type[]){
             .map((j,k)=>type_is(j,type[k],scope)).includes(false))
         .map(i=>i.command.ret)
 }
-//子类型判断:type 是否兼容 target(即 type 可赋给 target)。
-//基础类型同构;类用 implements 链:type 是 target 的实现/子类时 type 更具体
-let type_sub=(type:Type,target:Type,scope:Scope)=>{
-    if(type==null||target==null)return false
-    if(type instanceof ClassType&&target instanceof ClassType){
-        let tn=type.local.join('.'),an=target.local.join('.')
-        if(tn==an)return true
-        //target 在 chain 里作为 father,type 作为 child
-        if(scope.chain.has(an)&&scope.chain.get(an).has(tn))return true
-        return false
-    }
-    //非类:同构或 merge 非 Void 视为兼容
-    return !(type_merge(type,target,scope) instanceof VoidType)
-}
+//子类型判断与最符合决策(type_sub/pick_best/overload_best 见文件底部统一实现)
 //operation 决策:所有参数都能被实参喂入的候选中,选"最具体"(参数是他人参数的子类/同构)。
 //歧义(两个不可比的候选中无唯一最优)由调用方自行报错——这里把可能候选都返回,
 //调用方按需取:候选1个即确定;多个时比较歧义。
@@ -252,4 +264,57 @@ export function type_is(type1:Type,type2:Type,scope:Scope){
         .length!=0
     if(cast)return true
     return false
+}
+//子类型判断:type 兼容 target(同构或实现链上 type 是 target 的子类)
+function type_sub(type:Type,target:Type,scope:Scope):boolean{
+    if(type==null||target==null)return false
+    if(type instanceof ClassType&&target instanceof ClassType){
+        let tn=type.local.join('.'),an=target.local.join('.')
+        if(tn==an)return true
+        let root=scope
+        while(root.parent)root=root.parent
+        if(root.chain.has(an)&&root.chain.get(an).has(tn))return true
+        return false
+    }
+    return !(type_merge(type,target,scope) instanceof VoidType)
+}
+//签名最符合决策(函数重载/operation 共用):param_sets 是各候选的形参类型表,
+//arg_types 是实参类型。返回唯一最优的索引;歧义(两个并列最符合)返回 -1;无匹配返回 null。
+export function pick_best(scope:Scope,param_sets:Type[][],arg_types:Type[]):number{
+    //先过滤:参数个数一致且每参都能被实参喂入(形参兼容实参)
+    let fit:number[]=[]
+    for(let k=0;k<param_sets.length;k++){
+        let ps=param_sets[k]
+        if(ps.length!=arg_types.length)continue
+        let ok=true
+        for(let i=0;i<ps.length;i++)
+            if(!type_is(ps[i],arg_types[i],scope)){ok=false;break}
+        if(ok)fit.push(k)
+    }
+    if(fit.length==0)return null
+    if(fit.length==1)return fit[0]
+    //剔除被更具体候选支配的:若存在另一候选 j 使 j 每参都是 k 的子类/同构且至少一处严格子类
+    let worse=new Set<number>()
+    for(let a of fit)for(let b of fit){
+        if(a==b)continue
+        let pa=param_sets[a],pb=param_sets[b]
+        let b_specific=true,a_strict=false
+        for(let i=0;i<pa.length;i++){
+            if(!type_sub(pb[i],pa[i],scope)){b_specific=false;break}
+            if(!type_sub(pa[i],pb[i],scope))a_strict=true
+        }
+        if(b_specific&&a_strict)worse.add(a)
+    }
+    let best=fit.filter(i=>!worse.has(i))
+    if(best.length==1)return best[0]
+    return -1   //并列歧义
+}
+//重载决议结果:best=唯一最优;ambiguous=并列最符合(需报错);none=无签名匹配
+export function overload_resolve(scope:Scope,name:string,fns:any[],arg_types:Type[]):
+    {kind:'best',fn:any}|{kind:'ambiguous'}|{kind:'none'}{
+    let sets=fns.map((f:any)=>Array.from(f.params.values()))
+    let idx=pick_best(scope,sets,arg_types)
+    if(idx==-1)return {kind:'ambiguous'}
+    if(idx==null)return {kind:'none'}
+    return {kind:'best',fn:fns[idx]}
 }

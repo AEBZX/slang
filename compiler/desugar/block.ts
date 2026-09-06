@@ -40,7 +40,9 @@ const D_Enum:desugar_visitor=(node:Enum,call)=>{
     return call(cls)
 }
 const D_Function:desugar_visitor=(node:Function,call)=>{
-    let ret=new Variable(node.modifiers, node.name,
+    //函数重载:同名第 index 个(index>0)改为 原名+序号,避免与代表函数槽位冲突
+    let name=node.index>0?node.name+node.index:node.name
+    let ret=new Variable(node.modifiers, name,
         new LambdaType(new Map(),node.params, node.return_type,node.modifiers._async),
         new LambdaExpression(new Map(),node.params, node.return_type, node.commands))
     ret.type=node.type

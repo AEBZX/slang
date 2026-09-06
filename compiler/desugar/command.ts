@@ -10,12 +10,36 @@ import {
     Increment,
     IndexPostfix, InequalityExpression,
     LambdaExpression, LambdaType, ListCommand, MemberPostfix, ModAssign, ModExpression, MulAssign, MultiplicativeExpression,
-    NullLiteral, NumberLiteral, NumberType, PostfixExpression, Return,
+    NullLiteral, NumberLiteral, NumberType, PostfixExpression, PrefixExpression, ReferencePrefix, Return, type_name,
     ShiftLeftExpression, ShiftRightExpression, StringType,
     SubAssign,
     SubtractiveExpression, SwitchStatement, Throw, TryStatement, VarDeclaration, VoidType, WhileStatement,Command
 } from '../utils'
 const D_Assign:desugar_visitor=(node:Assign,call)=>{
+    //[]= 索引写重载:a[i]=b → _value_<a类型>.[]=(&a, i, b)
+    if((node as any).oper=='[]='){
+        let data=node.data as PostfixExpression
+        let self_type=(data.expr as any).type
+        let cls='_value_'+type_name(self_type)
+        let idx=data.postfix.find(p=>p instanceof IndexPostfix) as IndexPostfix
+        let self=call(data.expr)
+        //&a:取地址作为第一参([]= 形参是指针)
+        let addr=new PrefixExpression(self,[new ReferencePrefix()])
+        let i=call(idx.index)
+        let v=call(node.value)
+        return new Call(new PostfixExpression(new IdentifierExpr(cls),
+            [new MemberPostfix('[]='),new ArgumentsPostfix([], [addr,i,v])]),false)
+    }
+    //裸 = 赋值重载:a=b → _value_<a类型>.=(&a, b)
+    if((node as any).oper=='='){
+        let self_type=(node.data as any).type
+        let cls='_value_'+type_name(self_type)
+        let self=call(node.data)
+        let addr=new PrefixExpression(self,[new ReferencePrefix()])
+        let v=call(node.value)
+        return new Call(new PostfixExpression(new IdentifierExpr(cls),
+            [new MemberPostfix('='),new ArgumentsPostfix([], [addr,v])]),false)
+    }
     node.data=call(node.data)
     node.value=call(node.value)
     if(node instanceof AAssign)return node
@@ -128,31 +152,44 @@ const D_ForStatement:desugar_visitor=(node:ForStatement,call)=>{
     ]))
 }
 const D_ForeachStatement:desugar_visitor=(node:ForeachStatement,call)=>{
-    //字符串遍历:元素为字符;字符串是 StringType 而非 FixType
-    if(node.data.type instanceof StringType)
+    //':' 重载展开:data → 逐层调用 _value_X.:(…) 得到真实可遍历容器 real
+    let real=node.data
+    if(node.unwrap.length>0){
+        for(let cls of node.unwrap)
+            real=new PostfixExpression(new IdentifierExpr(cls),
+                [new MemberPostfix(':'),new ArgumentsPostfix([], [real])])
+    }
+    real=call(real)
+    let data_expr=real
+    let is_string=(node.real_type as any) instanceof StringType
+    //字符串遍历:元素为字符
+    if(is_string)
         return call(new ListCommand([
-            new VarDeclaration(node.iden,new StringType(),node.data),
+            new VarDeclaration(node.iden,new StringType(),data_expr),
             new ForStatement(
                 [new VarDeclaration('foreach',new NumberType(),new NumberLiteral('0'))],
-                new InequalityExpression(new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))]),
+                new InequalityExpression(new PostfixExpression(data_expr,[new IndexPostfix(new IdentifierExpr('foreach'))]),
                     new NullLiteral('')),
                 [new Increment(new IdentifierExpr('foreach'))],
                 new ListCommand([
                     new Assign(new IdentifierExpr(node.iden),
-                        new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))])),
+                        new PostfixExpression(data_expr,[new IndexPostfix(new IdentifierExpr('foreach'))])),
                     node.commands
                 ]))
         ]))
-    let type=node.data.type as FixType
+    //':' 展开后 real 是底层容器,遍历元素类型从 real_type(FixType/string)取;
+    //无展开时 node.data 本身即容器
+    let container_type=(node.real_type as any)||node.data.type
+    let type=container_type as FixType
     type.fix.pop()
     type=new FixType(type.t,type.fix)
     //必须 call:desugar 的 visitor 对返回值不再遍历,此前返回裸 ListCommand 内 ForStatement 未 desugar,
     //HIR 无 H_For 直接忽略,foreach 循环整体丢失(IR 只有块0)
     return call(new ListCommand([
-        new VarDeclaration(node.iden,type,node.data),
+        new VarDeclaration(node.iden,type,data_expr),
         new ForStatement(
             [new VarDeclaration('foreach',new NumberType(),new NumberLiteral('0'))],
-            new InequalityExpression(new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('foreach'))]),
+            new InequalityExpression(new PostfixExpression(data_expr,[new IndexPostfix(new IdentifierExpr('foreach'))]),
                 new NullLiteral('')),
             [new Increment(new IdentifierExpr('foreach'))],
             new ListCommand([

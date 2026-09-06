@@ -24,6 +24,9 @@ import type {Type} from './model/ast'
 export class ASTTree{
     type:Type
     line:string[]
+    //oper:运算符重载/强转命中标记——check 阶段命中 operation/cast 时写入,
+    //desugar 据此把该表达式脱糖成容器静态函数调用。各节点按自身语义解读。
+    public oper:string=null
 }
 export class HIRTree{}
 export type ast_generate=(data:ast_data,tree:(data:ast_data)=>ASTTree)=>ASTTree

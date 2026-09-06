@@ -4,6 +4,7 @@ import {
     File,
     ForStatement,
     ForeachStatement,
+    Function,
     Scope,
     Type,
     VoidType,LambdaExpression
@@ -78,8 +79,10 @@ export default function check(files: File[]): Scope {
     symbol(files, scope)
     for (let file of files) {
         //模块重复定义合并时,同名 children 只保留一份(过滤掉被合并的旧块);
-        //value 块无名,不属于常规符号表,无条件保留
-        file.children = file.children.filter(b => b.name==null||scope.global.data.get(b.name) === b)
+        //value 块无名、重载函数组内成员(同名不同签名)不属于符号表代表,均须保留
+        file.children = file.children.filter(b => b.name==null
+            ||scope.global.data.get(b.name) === b
+            ||(b instanceof Function&&scope.global.get_overload(b.name).includes(b)))
     }
     for (let file of files) {
         //link 别名作用域是文件级:每个文件进入独立子 scope 注册自身 links,不污染其他文件

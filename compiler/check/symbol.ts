@@ -37,6 +37,20 @@ export default function symbol(data:File[],scope:Scope){
                     let block_type=new BlockType(abs_name.split('.'))
                     scope.global.sym(i,block_type)
                     i.type=block_type
+                }else if(block instanceof Function&&i instanceof Function){
+                    //函数重载:同名不同签名 → 收集进 overload 表,data 保留首个为代表
+                    //(签名相同才是真重名,由 C_Function 在 check 层按参数判定;序号由 set_overload 编)
+                    let idx=scope.global.get_overload(abs_name).length
+                    scope.global.set_overload(abs_name,i)
+                    //每个重载成员需唯一绝对路径/类型:首个沿用原名,后续用 原名+序号(f,f1)
+                    //否则 type 都是 K.f → hir 按 type.local 注册槽,撞成同一槽(HUNG 根因)
+                    let uniq=i.name+(idx>0?idx:'')
+                    i.index=idx
+                    let uniq_abs=prefix?prefix+'.'+uniq:uniq
+                    scope.global.set(uniq_abs,i)
+                    let block_type=new BlockType(uniq_abs.split('.'))
+                    scope.global.sym(i,block_type)
+                    i.type=block_type
                 }else
                     scope.thr(`${i.name} is defined at line ${block.line.join('\n')}`)
                 continue
@@ -47,6 +61,9 @@ export default function symbol(data:File[],scope:Scope){
             let block_type=new BlockType(abs_name.split('.'))
             scope.global.sym(i,block_type)
             i.type=block_type
+            //函数(含首个)都进重载组:同名后续由 exists 分支并入;单函数组仅代表,普通调用走代表
+            if(i instanceof Function)
+                scope.global.set_overload(abs_name,i)
         }
         for(let j of d.children.filter(v=>v instanceof Class||
         v instanceof Interface||v instanceof Module||v instanceof File)) {
@@ -65,10 +82,17 @@ export default function symbol(data:File[],scope:Scope){
             if(is_extension(i))continue
             if(!i.modifiers.unstatic){
                 let static_name='name' in i?(name?name+'.'+i.name:i.name):name
-                scope.global.set(static_name,i)
-                let block_type=new BlockType(static_name.split('.'))
-                scope.global.sym(i,block_type)
-                i.type=block_type
+                //函数重载:已注册同名 static 时收集而非覆盖
+                //(type 由 _name 已设为唯一路径 K.f1,勿重置为 K.f 否则撞槽)
+                let old=scope.global.data.get(static_name)
+                if(old&&old!==i&&old instanceof Function&&i instanceof Function){
+                    scope.global.set_overload(static_name,i)
+                }else{
+                    scope.global.set(static_name,i)
+                    let block_type=new BlockType(static_name.split('.'))
+                    scope.global.sym(i,block_type)
+                    i.type=block_type
+                }
             }
             if(i instanceof Class||i instanceof Interface||i instanceof File)
                 _static(i,name)

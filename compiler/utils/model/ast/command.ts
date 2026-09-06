@@ -78,6 +78,11 @@ export class ForStatement extends BlockCommand{
     }
 }
 export class ForeachStatement extends BlockCommand{
+    //unwrap:foreach 的 ':' 重载展开链——依次要调的容器类名(如 [_value_MyIter]),
+    //把 data 逐层脱壳成底层可遍历容器后再索引遍历。无重载时为空。
+    public unwrap:string[]=[]
+    //real_type:':' 链末端真实可遍历容器类型(StringType/FixType),desugar 据此决定遍历形态
+    public real_type:Type=null
     constructor(public iden:string,public data:Expression,public commands:Command) {
         super()
     }
