@@ -32,6 +32,34 @@ bool wait_for(const auto& pred, const int ms)
 }
 }   // namespace
 
+TEST_CASE("gui: utf8 to wide conversion", "[gui]")
+{
+    //不依赖显示环境/GUI 后端的纯逻辑测试(Windows 后端用它转换标题与 HTML)
+    REQUIRE(gui::utf8_to_wide("abc") == std::wstring(L"abc"));
+    const std::wstring zh = gui::utf8_to_wide("中文标题");
+    REQUIRE(zh.size() == 4);
+    REQUIRE(static_cast<unsigned>(zh[0]) == 0x4E2Du);
+    REQUIRE(static_cast<unsigned>(zh[3]) == 0x9898u);
+    //补充平面:Windows(wchar_t=2字节)需要代理对,Unix 直接一个码位
+    const std::wstring emoji = gui::utf8_to_wide("\xF0\x9F\x9A\x80");   //U+1F680 🚀
+#ifdef _WIN32
+    REQUIRE(emoji.size() == 2);
+    REQUIRE(static_cast<unsigned>(emoji[0]) == 0xD83Du);
+    REQUIRE(static_cast<unsigned>(emoji[1]) == 0xDE80u);
+#else
+    REQUIRE(emoji.size() == 1);
+    REQUIRE(static_cast<unsigned>(emoji[0]) == 0x1F680u);
+#endif
+    //非法字节 → U+FFFD,不能吞掉后续内容
+    const std::wstring bad = gui::utf8_to_wide("a\xFF" "b");
+    REQUIRE(bad.size() == 3);
+    REQUIRE(bad[0] == L'a');
+    REQUIRE(static_cast<unsigned>(bad[1]) == 0xFFFDu);
+    REQUIRE(bad[2] == L'b');
+    //截断的多字节序列也要安全(不越界)
+    REQUIRE(gui::utf8_to_wide("\xE4\xB8").size() == 1);
+}
+
 TEST_CASE("gui: webview window opens and renders html", "[gui]")
 {
     if (!gui_test_enabled())

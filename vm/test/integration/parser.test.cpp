@@ -31,13 +31,19 @@ std::string tmp_path(const char* name)
 {
     return (fs::temp_directory_path() / name).string();
 }
+//entry 从 args[3] 开始收集程序参数,args[3] 必须是 nullptr(args[0..2] 保留给 程序名/run/sbin 路径)
+Manage call_entry(const std::string& path)
+{
+    const char* argv[] = {"vm", "run", "x", nullptr};
+    return entry(path, argv);
+}
 }
 
 TEST_CASE("parser: valid sbin parses without error", "[parser]")
 {
     const std::string path = tmp_path("slang_parser_ok.sbin");
     writeFile(path, build_sbin().data(), build_sbin().size());
-    REQUIRE_NOTHROW(entry(path));
+    REQUIRE_NOTHROW(call_entry(path));
     fs::remove(path);
 }
 
@@ -47,7 +53,7 @@ TEST_CASE("parser: bad magic throws", "[parser]")
     std::vector<char> b = build_sbin();
     std::memcpy(b.data(), "XXX_START", 9);
     writeFile(path, b.data(), b.size());
-    REQUIRE_THROWS(entry(path));
+    REQUIRE_THROWS(call_entry(path));
     fs::remove(path);
 }
 
@@ -57,13 +63,13 @@ TEST_CASE("parser: truncated file throws", "[parser]")
     std::vector<char> b = build_sbin();
     b.resize(b.size() - 7);   //截断 CODE_END 前
     writeFile(path, b.data(), b.size());
-    REQUIRE_THROWS(entry(path));
+    REQUIRE_THROWS(call_entry(path));
     fs::remove(path);
 }
 
 TEST_CASE("parser: missing file throws", "[parser]")
 {
-    REQUIRE_THROWS(entry(tmp_path("slang_parser_no_such.sbin")));
+    REQUIRE_THROWS(call_entry(tmp_path("slang_parser_no_such.sbin")));
 }
 
 TEST_CASE("parser: instruction outside block throws", "[parser]")
@@ -78,7 +84,7 @@ TEST_CASE("parser: instruction outside block throws", "[parser]")
     u8(84); u32(1); u32(1); u32(0);   //指令在 block_start 之前
     str("CODE_END");
     writeFile(path, b.data(), b.size());
-    REQUIRE_THROWS(entry(path));
+    REQUIRE_THROWS(call_entry(path));
     fs::remove(path);
 }
 
@@ -94,6 +100,6 @@ TEST_CASE("parser: block not closed throws", "[parser]")
     u8(156); u32(0); u32(0); u32(0);   //block_start 后无 block_end
     str("CODE_END");
     writeFile(path, b.data(), b.size());
-    REQUIRE_THROWS(entry(path));
+    REQUIRE_THROWS(call_entry(path));
     fs::remove(path);
 }

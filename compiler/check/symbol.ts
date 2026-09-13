@@ -1,177 +1,286 @@
+//round:符号表构建和相关检查
 import {
-    Block,
-    BlockType, Cast,
-    Class,
-    ClassType,
-    File,
     Function,
+    Link,
+    File,
+    Module,
+    BlockType,
+    Class,
     Interface,
-    LambdaType,
-    Module, Operation,
-    Scope, Value,
-    Variable
+    Enum,
+    Value,
+    ClassType,
+    Operation,
+    Cast,
+    Variable, VarDeclaration, VoidType, ListCommand, Assign, Call, Throw, Return, Increment, Decrement, IfStatement,
+    WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
+    LambdaType
 } from '../utils'
-export default function symbol(data:File[],scope:Scope){
-    //value 块是 literal 类型的扩展容器(operation/cast 归属),无名,不进全局符号表;
-    //其注册走 Scope.operation/cast(以类型为键),故此处直接跳过
-    let is_extension=(i:any)=>i instanceof Value||i instanceof Operation||i instanceof Cast
-    //重名检测
-    let _name=(d:Class|Module|Interface|File,prefix:string='')=>{
-        for(let i of d.children){
-            if(is_extension(i))continue
-            let abs_name=prefix?prefix+'.'+i.name:i.name
-            if(scope.global.data.get(abs_name)===i)continue
-            //重名只按绝对路径检测,避免不同作用域的同名成员(如 I.f 与 B.f)误判
-            let exists=scope.global.data.get(abs_name)
-            if(exists){
-                let block=exists
-                //合并当作一个检查
-                if(block instanceof Module&&i instanceof Module){
-                    let m1=block.modifiers,m2=i.modifiers
-                    if(m1.unstatic!=m2.unstatic||m1._async!=m2._async||m1._private!=m2._private)
-                        scope.thr(`${block.name} and ${i.name} modifier not equal at line ${block.line.join('\n')}`)
-                    for(let v of block.children)
-                        if(!i.children.includes(v))
-                            i.children.push(v)
-                    scope.global.set(abs_name,i)
-                    let block_type=new BlockType(abs_name.split('.'))
-                    scope.global.sym(i,block_type)
-                    i.type=block_type
-                }else if(block instanceof Function&&i instanceof Function){
-                    //函数重载:同名不同签名 → 收集进 overload 表,data 保留首个为代表
-                    //(签名相同才是真重名,由 C_Function 在 check 层按参数判定;序号由 set_overload 编)
-                    let idx=scope.global.get_overload(abs_name).length
-                    scope.global.set_overload(abs_name,i)
-                    //每个重载成员需唯一绝对路径/类型:首个沿用原名,后续用 原名+序号(f,f1)
-                    //否则 type 都是 K.f → hir 按 type.local 注册槽,撞成同一槽(HUNG 根因)
-                    let uniq=i.name+(idx>0?idx:'')
-                    i.index=idx
-                    let uniq_abs=prefix?prefix+'.'+uniq:uniq
-                    scope.global.set(uniq_abs,i)
-                    let block_type=new BlockType(uniq_abs.split('.'))
-                    scope.global.sym(i,block_type)
-                    i.type=block_type
-                }else
-                    scope.thr(`${i.name} is defined at line ${block.line.join('\n')}`)
-                continue
-            }
-            //绝对路径注册到全局,相对名注册到当前作用域
-            scope.global.set(abs_name,i)
-            scope.set(i.name,i)
-            let block_type=new BlockType(abs_name.split('.'))
-            scope.global.sym(i,block_type)
-            i.type=block_type
-            //函数(含首个)都进重载组:同名后续由 exists 分支并入;单函数组仅代表,普通调用走代表
-            if(i instanceof Function)
-                scope.global.set_overload(abs_name,i)
-        }
-        for(let j of d.children.filter(v=>v instanceof Class||
-        v instanceof Interface||v instanceof Module||v instanceof File)) {
-            let abs_name=prefix?prefix+'.'+j.name:j.name
-            scope=scope.enter()
-            scope.path=abs_name
-            _name(j,abs_name)
-            scope=scope.leave()
-        }
-    }
-    //扫描所有static
-    let _static=(d:Class|Module|Interface|File,name:string)=>{
-        if('name' in d)
-            name=name?name+'.'+d.name:d.name
-        for(let i of d.children){
-            if(is_extension(i))continue
-            if(!i.modifiers.unstatic){
-                let static_name='name' in i?(name?name+'.'+i.name:i.name):name
-                //函数重载:已注册同名 static 时收集而非覆盖
-                //(type 由 _name 已设为唯一路径 K.f1,勿重置为 K.f 否则撞槽)
-                let old=scope.global.data.get(static_name)
-                if(old&&old!==i&&old instanceof Function&&i instanceof Function){
-                    scope.global.set_overload(static_name,i)
-                }else{
-                    scope.global.set(static_name,i)
-                    let block_type=new BlockType(static_name.split('.'))
-                    scope.global.sym(i,block_type)
-                    i.type=block_type
-                }
-            }
-            if(i instanceof Class||i instanceof Interface||i instanceof File)
-                _static(i,name)
-        }
-    }
-    //link处理:只校验目标模块存在
-    let link=()=>{
-        for(let i of data){
-            i.links.forEach(v=>{
-                if(!scope.get(v.module.join('.')))
-                    scope.thr(`${v.module.join('.')} not found at line ${i.line.join('\n')}`)
-            })
-        }
-    }
-    //链传递:implement 关系传递到 grandfather
-    let chain=(father:string,child:string)=>{
-        let set=scope.chain.get(father)
-        if(!set) scope.chain.set(father,set=new Set())
-        if(set.has(child)) return
-        set.add(child)
-        //找所有包含 child 的 grandfather
-        for(const [k,v] of scope.chain){
-            if(k!==father && v.has(child)){
-                chain(k,child)
-            }
-        }
-    }
-    //预操作
-    let _pre=(d:Class|Interface)=>{
-        if(d.implement==null)return
-        if(!(d.implement instanceof ClassType))
-            scope.thr(`${d.name} implement ${d.implement} not found at line ${d.line.join('\n')}`)
-        if((<ClassType>d.implement).local.length==0)return
-        if(!scope.get((<ClassType>d.implement).local.join('.'))){
-            if((<ClassType>d.implement).local.join('.')=='std.ObjectInterface')return
-            scope.thr(`${d.name} implement ${d.implement} not found at line ${d.line.join('\n')}`)
-            return
-        }
-        let impl=scope.get((<ClassType>d.implement).local.join('.'))
-        if(!(impl instanceof Interface)){
-            scope.thr(`${d.name} implement ${d.implement} is not interface at line ${d.line.join('\n')}`)
-            return
-        }
-        chain((<ClassType>d.implement).local.join('.'),d.name)
-    }
-    //全局注册
-    let _ft=(d:File|Class|Interface|Module)=>{
-        for(let i of d.children) {
-            if (i instanceof Function)
-                scope.global.sym(i, new LambdaType(i.generic,i.params, i.return_type, false))
-            if (i instanceof Class || i instanceof Interface || i instanceof Module || i instanceof File)
-                _ft(i)
-        }
-    }
-    let _vt=(d:File|Class|Interface|Module)=>{
-        for(let i of d.children) {
-            if(i instanceof Variable)
-                scope.global.sym(i, i.t)
-            if(i instanceof Class || i instanceof Interface || i instanceof Module || i instanceof File)
-                _vt(i)
-        }
-    }
-    let ls=(d:Class|Interface|File|Module)=>{
-        for(let i of d.children)
-            if(i instanceof Class||i instanceof Interface)
-                _pre(i)
-        for(let i of d.children)
-            if(i instanceof Class||i instanceof Interface||i instanceof File||i instanceof Module)
-                ls(i)
-    }
-    for(let i of data)
-        _name(i)
-    link()
-    for(let i of data)
-        _static(i,'')
-    for(let i of data)
-        _ft(i)
-    for(let i of data)
-        _vt(i)
-    for(let i of data)
-        ls(i)
+import {name, slang_check_visitor} from './tool'
+import {isolatedDeclaration} from "rolldown/experimental";
+//round1:Build不做任何检查,搭建全局static符号表
+const Build_File:slang_check_visitor=(ast:File, scope, call)=>{
+    for(let i of ast.children)
+        call(i,1)
 }
+const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
+    let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    scope.path=name
+    if(scope.get(name)!=null){
+        let module=scope.get(name) as Module
+        module.children=[...module.children,...ast.children]
+        scope.set(name,module)
+    }
+    scope.set(name,ast)
+    scope=scope.enter()
+    for(let i of ast.children)
+        call(i,1)
+    scope=scope.leave()
+}
+const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,call)=>{
+    let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+
+    scope.global.set(name,ast)
+    scope=scope.enter()
+    if(ast instanceof Class||ast instanceof Interface)
+        scope.operation_cast_oper=new ClassType(name.split('.'),Array.from(ast.generic.values()))
+    for(let i of ast.children)
+        call(i,1)
+    scope=scope.leave()
+}
+const Build_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
+    let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    scope.global.set(name,ast)
+}
+const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
+    scope=scope.enter()
+    scope.operation_cast_oper=ast.value
+    for(let i of ast.children)
+        call(i,1)
+    scope=scope.leave()
+}
+const Build_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
+    scope.global.set_operation(scope.operation_cast_oper,ast)
+}
+const Build_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
+    scope.global.set_cast(scope.operation_cast_oper,ast)
+}
+const Build_Function:slang_check_visitor=(ast:Function, scope, call)=>{
+    let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    scope.path=name
+    if(!ast.modifiers.unstatic&&!ast.modifiers._private){
+        scope.global.set(name,ast)
+        scope.global.set_overload(name,ast)
+    }
+}
+const Build_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
+    let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    if(!ast.modifiers.unstatic&&!ast.modifiers._private)
+        scope.global.set(name,ast)
+}
+export const Round1=new Map<any,slang_check_visitor>([
+    [File,Build_File],
+    [Module,Build_Module],
+    [Class,Build_ClassOrInterface],
+    [Interface,Build_ClassOrInterface],
+    [Enum,Build_Enum],
+    [Value,Build_Value],
+    [Operation,Build_Operation],
+    [Cast,Build_Cast],
+    [Function,Build_Function],
+    [Variable,Build_Variable]
+])
+//round2:Verify检查重名,不存在名称等
+const Verify_File:slang_check_visitor=(ast:File,scope,call)=>{
+    scope=scope.enter()
+    //links检查
+    for(let i of ast.links){
+        if(!scope.global.get(i.module.join('.')))
+            scope.thr(`link的模块${i.module.join('.')}不存在,在行${i.line.join('\n')}`)
+        scope.set(i.as,scope.global.get(i.module.join('.')))
+    }
+    for(let i of ast.children)
+        call(i,2)
+    scope=scope.leave()
+}
+const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
+    scope=scope.enter()
+    scope.set(ast.name,ast)
+    for(let i of ast.children)
+        call(i,2)
+    scope=scope.leave()
+}
+const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
+    if(name(ast.name,scope,ast))
+        scope.thr(`类/接口${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    //implement检查
+    if(ast.implement instanceof ClassType){
+        call(ast.implement,2)
+        let implement=scope.global.get(ast.implement.local.join('.'))
+        if(!(implement instanceof Interface))
+            scope.thr(`implement的类型${ast.implement.local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+    }
+    //generic implement且是否是Interface的是否存在
+    for(let i of ast.generic.values()){
+        call(i,2)
+        if(!(i instanceof ClassType))
+            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
+        if(!scope.get((<ClassType>i).local.join('.')))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
+        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        let implement=scope.global.get((<ClassType>i).local.join('.'))
+        if(!(implement instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+    }
+    scope=scope.enter()
+    for(let i of ast.children)
+        call(i,2)
+    scope=scope.leave()
+}
+const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
+    if(name(ast.name,scope,ast)){
+        let fn=scope.global.get(ast.name)
+        if(!(fn instanceof Function))
+            scope.thr(`函数${ast.name}不能重名,在行${ast.line.join('\n')}`)
+        scope.set_overload(ast.name,ast)
+    }
+    scope.set(ast.name,ast)
+    scope=scope.enter()
+    for(let [name,i] of ast.params){
+        call(i,2)
+        scope.set(name,new VarDeclaration(name,i,new VoidType()))
+    }
+    call(ast.return_type,2)
+    call(ast.commands,2)
+    scope=scope.leave()
+}
+const Verify_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
+    if(name(ast.name,scope,ast))
+        scope.thr(`变量${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    scope.set(ast.name,ast)
+    call(ast.t,2)
+    call(ast.value,2)
+}
+const Verify_Value:slang_check_visitor=(ast:Value,scope,call)=>{
+    ast.children.forEach(i=>call(i,2))
+}
+const Verify_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
+    call(ast.command,2)
+}
+const Verify_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
+    call(ast.t,2)
+    call(ast.command,2)
+}
+const Verify_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
+    scope=scope.enter()
+    ast.commands.forEach(i=>call(i,2))
+    scope=scope.leave()
+}
+const Verify_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
+    call(ast.data,2)
+    call(ast.value,2)
+}
+const Verify_VarDeclaration:slang_check_visitor=(ast:VarDeclaration,scope,call)=>{
+    scope.set(ast.name,ast)
+    call(ast.t,2)
+    call(ast.value,2)
+}
+const Verify_ReturnOrThrowOrCallOrIncrementOrDecrement:slang_check_visitor=(ast:Call|Throw|Return|Increment|Decrement,scope,call)=>{
+    call(ast.data,2)
+}
+const Verify_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
+    call(ast.condition,2)
+    call(ast.commands,2)
+    call(ast.else_,2)
+}
+const Verify_WhileOrDoWhile:slang_check_visitor=(ast:WhileStatement|DoWhileStatement,scope,call)=>{
+    call(ast.condition,2)
+    call(ast.commands,2)
+}
+const Verify_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
+    call(ast.condition,2)
+    ast.case_list.forEach(i=>{
+        call(i.condition,2)
+        call(i.commands,2)
+    })
+    call(ast.default_,2)
+}
+const Verify_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
+    call(ast.commands,2)
+    call(ast.catch_.type,2)
+    scope.set(ast.catch_.iden,new VarDeclaration(ast.catch_.iden,ast.catch_.type,null))
+    call(ast.catch_.command,2)
+}
+const Verify_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
+    scope=scope.enter()
+    ast.init.forEach(i=>call(i,2))
+    call(ast.condition,2)
+    call(ast.commands,2)
+    ast.step.forEach(i=>call(i,2))
+    scope=scope.leave()
+}
+const Verify_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
+    scope=scope.enter()
+    call(ast.data,2)
+    scope.set(ast.iden,new VarDeclaration(ast.iden,null,null))
+    call(ast.commands,2)
+    scope=scope.leave()
+}
+const Verify_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
+    if(!scope.get(ast.local.join('.')))
+        scope.thr(`${ast.local.join('.')}不存在,在行${ast.line.join('\n')}`)
+    if(!(scope.get(ast.local.join('.')) instanceof Interface||scope.get(ast.local.join('.')) instanceof Class))
+        scope.thr(`类/接口${ast.local.join('.')}不是Class或Interface,在行${ast.line.join('\n')}`)
+    let data:Interface|Class=scope.get(ast.local.join('.')) as Interface|Class
+    if(ast.generic.length!=data.generic.size)
+        scope.thr(`泛型声明不匹配,在行${ast.line.join('\n')}`)
+}
+const Verify_LambdaType:slang_check_visitor=(ast:LambdaType,scope,call)=>{
+    if(new Set(ast.generic.keys()).size!=ast.generic.size)
+        scope.thr(`泛型重复声明,在行${ast.line.join('\n')}`)
+    for(let i of ast.generic.values()){
+        call(i,2)
+        if(!(i instanceof ClassType))
+            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
+        if(!scope.get((<ClassType>i).local.join('.')))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
+        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        let implement=scope.global.get((<ClassType>i).local.join('.'))
+        if(!(implement instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+    }
+    if(new Set(ast.params.keys()).size!=ast.params.size)
+        scope.thr(`参数重复声明,在行${ast.line.join('\n')}`)
+    for(let i of ast.params.values())
+        call(i,2)
+    call(ast.returnType,2)
+}
+export const Round2=new Map<any,slang_check_visitor>([
+    [File,Verify_File],
+    [Module,Verify_Module],
+    [Class,Verify_ClassOrInterface],
+    [Interface,Verify_ClassOrInterface],
+    [Enum,Verify_Value],
+    [Value,Verify_Value],
+    [Operation,Verify_Operation],
+    [Cast,Verify_Cast],
+    [Function,Verify_Function],
+    [Variable,Verify_Variable],
+    [ListCommand,Verify_ListCommand],
+    [Assign,Verify_Assign],
+    [VarDeclaration,Verify_VarDeclaration],
+    [Call,Verify_ReturnOrThrowOrCallOrIncrementOrDecrement],
+    [Throw,Verify_ReturnOrThrowOrCallOrIncrementOrDecrement],
+    [Return,Verify_ReturnOrThrowOrCallOrIncrementOrDecrement],
+    [Increment,Verify_ReturnOrThrowOrCallOrIncrementOrDecrement],
+    [Decrement,Verify_ReturnOrThrowOrCallOrIncrementOrDecrement],
+    [IfStatement,Verify_If],
+    [WhileStatement,Verify_WhileOrDoWhile],
+    [DoWhileStatement,Verify_WhileOrDoWhile],
+    [SwitchStatement,Verify_Switch],
+    [TryStatement,Verify_Try],
+    [ForStatement,Verify_For],
+    [ForeachStatement,Verify_Foreach]
+])

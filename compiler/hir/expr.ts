@@ -7,7 +7,7 @@ import {
     GreaterExpression, HAddressExpr, HArgumentsExpr, HArrayExpr,
     HBinaryExpr, HBitNotExpr,
     HBooleanLiteral, HExpr, HIdentifierExpr, HIndexExpr,
-    hir_visitor, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNotExpr, HNullLiteral,
+    slang_hir_visitor, HLambdaExpr, HMapExpr, HMemberExpr, HMinusExpr, HNotExpr, HNullLiteral,
     HNumberLiteral, HPostDecrementExpr, HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr, HReferenceExpr,
     HStringLiteral, HTernaryExpr, ClassType, IdentifierExpr, HNewExpr,
     IncrementPostfix, IncrementPrefix, IndexPostfix,
@@ -21,20 +21,20 @@ import {
     Postfix, PostfixExpression, PrefixExpression, ReferencePrefix, ShiftLeftExpression, ShiftRightExpression,
     StringLiteral, StringType, SubtractiveExpression, TernaryExpression, HScope
 } from '../utils'
-const H_NumberLiteral:hir_visitor=(node:NumberLiteral,scope,call)=>new HNumberLiteral(parseFloat(node.value))
-const H_StringLiteral:hir_visitor=(node:StringLiteral,scope,call)=>new HStringLiteral(node.value)
-const H_BooleanLiteral:hir_visitor=(node:BooleanLiteral,scope,call)=>new HBooleanLiteral(node.value=='true')
-const H_NullLiteral:hir_visitor=(node:NullLiteral,scope,call)=>new HNullLiteral()
-const H_IdentifierExpr:hir_visitor=(node:IdentifierExpr,scope,call)=>{
+const H_NumberLiteral:slang_hir_visitor=(node:NumberLiteral, scope, call)=>new HNumberLiteral(parseFloat(node.value))
+const H_StringLiteral:slang_hir_visitor=(node:StringLiteral, scope, call)=>new HStringLiteral(node.value)
+const H_BooleanLiteral:slang_hir_visitor=(node:BooleanLiteral, scope, call)=>new HBooleanLiteral(node.value=='true')
+const H_NullLiteral:slang_hir_visitor=(node:NullLiteral, scope, call)=>new HNullLiteral()
+const H_IdentifierExpr:slang_hir_visitor=(node:IdentifierExpr, scope, call)=>{
     let name=scope.get(node.name)
     //link别名走lnk表,普通变量无lnk则保留自身id
     let linked=name!=null?scope.lnk_get(name):null
     if(linked!=null)name=linked
     return new HIdentifierExpr(name)
 }
-const H_ArrayExpr:hir_visitor=(node:ArrayExpression,scope,call)=>new HArrayExpr(node.elements.map(i=>call(i,scope)))
-const H_MapExpr:hir_visitor=(node:MapExpression,scope,call)=>new HMapExpr(new Map(Array.from(node.elements.entries()).map(i=>[i[0],call(i[1],scope)])))
-const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>{
+const H_ArrayExpr:slang_hir_visitor=(node:ArrayExpression, scope, call)=>new HArrayExpr(node.elements.map(i=>call(i,scope)))
+const H_MapExpr:slang_hir_visitor=(node:MapExpression, scope, call)=>new HMapExpr(new Map(Array.from(node.elements.entries()).map(i=>[i[0],call(i[1],scope)])))
+const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression, scope, call)=>{
     scope=scope.enter()
     let params=Array.from(node.params.entries()).map(i=>{
         //this参数复用类作用域已分配的this_id,保持成员内this与类实例一致
@@ -46,7 +46,7 @@ const H_LambdaExpr:hir_visitor=(node:LambdaExpression,scope,call)=>{
     scope=scope.leave()
     return new HLambdaExpr(params,cmd)
 }
-const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
+const H_PostfixExpr:slang_hir_visitor=(node:PostfixExpression, scope, call)=>{
     let _primary=node.expr
     //如果primary是identifier,那么尽量的匹配足够多的Member作为一整个Identifier
     //实例成员(x.f)不折叠,保留Member走成员访问;模块路径(A.B)折叠
@@ -109,7 +109,7 @@ const H_PostfixExpr:hir_visitor=(node:PostfixExpression,scope,call)=>{
     }
     return primary
 }
-const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
+const H_PrefixExpr:slang_hir_visitor=(node:PrefixExpression, scope, call)=>{
     let primary=call(node.expr,scope)
     for(let i of node.prefix){
         if(i instanceof IncrementPrefix)
@@ -147,7 +147,7 @@ const H_PrefixExpr:hir_visitor=(node:PrefixExpression,scope,call)=>{
     }
     return primary
 }
-const H_BinaryExpr:hir_visitor=(node:BinaryExpression,scope,call)=>{
+const H_BinaryExpr:slang_hir_visitor=(node:BinaryExpression, scope, call)=>{
     switch (node.constructor) {
         case AdditiveExpression:
             return new HBinaryExpr(call(node.left,scope),'+',call(node.right,scope))
@@ -187,10 +187,10 @@ const H_BinaryExpr:hir_visitor=(node:BinaryExpression,scope,call)=>{
             return new HBinaryExpr(call(node.left,scope),'&&',call(node.right,scope))
     }
 }
-const H_TernaryExpr:hir_visitor=(node:TernaryExpression,scope,call)=>{
+const H_TernaryExpr:slang_hir_visitor=(node:TernaryExpression, scope, call)=>{
     return new HTernaryExpr(call(node.condition,scope),call(node.trueExpr,scope),call(node.falseExpr,scope))
 }
-export default new Map<any,hir_visitor>([
+export default new Map<any,slang_hir_visitor>([
     [NullLiteral,H_NullLiteral],
     [IdentifierExpr,H_IdentifierExpr],
     [ArrayExpression,H_ArrayExpr],

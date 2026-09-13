@@ -1,3 +1,5 @@
+import {PeepholeTree} from './lib/tool'
+
 export enum TokenType {
     Identifier,
     Number,
@@ -13,7 +15,7 @@ export type pre_token=[boolean,string,TokenType]
 export type ast_data={
     type:string,
     line:string[],
-    children:Map<string,ast_data|string>
+    children:Map<number,ast_data|string>
 }
 export type ast_type={
     type:string
@@ -21,15 +23,16 @@ export type ast_type={
     child:ast_type[]
 }
 import type {Type} from './model/ast'
-export class ASTTree{
+export class ASTTree extends PeepholeTree{
     type:Type
     line:string[]
     //oper:运算符重载/强转命中标记——check 阶段命中 operation/cast 时写入,
     //desugar 据此把该表达式脱糖成容器静态函数调用。各节点按自身语义解读。
     public oper:string=null
 }
-export class HIRTree{}
-export type ast_generate=(data:ast_data,tree:(data:ast_data)=>ASTTree)=>ASTTree
+export class HIRTree extends PeepholeTree{}
+export type ast_generate=(data:ast_data,tree:(data:ast_data)=>PeepholeTree)=>PeepholeTree
+export type slang_ast_generate=(data:ast_data,tree:(data:ast_data)=>ASTTree)=>ASTTree
 export type ast_rule={
     type:string,
     name:string,

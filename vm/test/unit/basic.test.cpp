@@ -194,14 +194,22 @@ TEST_CASE("basic: retn pops to function frame", "[runtime]")
     REQUIRE(m.rt.blockStack.size() == 1);
 }
 
-TEST_CASE("basic: delete frees constant", "[runtime]")
+TEST_CASE("basic: load retains constant, delete+gc only frees when unreferenced", "[runtime]")
 {
+    //契约(修复引用计数后):load 会把池 id 存进槽并保留一次引用,
+    //因此一次 delete 不足以回收"仍被槽引用"的常量;引用归零后 gc 才真正回收。
+    //(旧契约是 load 不保留、一次 delete 即回收 —— 那会让"两个槽共享同一常量"时被误删,
+    // 导致后续读该槽得到空值/0,属于静默数据损坏。)
     Mini m;
-    const int id = m.link_num(5.0);
-    cmd(84)(&m.rt, 1, id, 0);          //var[1]=id
-    cmd(167)(&m.rt, 1, 0, 0);          //DELETE: delete_(var[1])
+    const int id = m.link_num(5.0);                   //refCount=1
+    cmd(84)(&m.rt, 1, id, 0);                         //var[1]=id → retain → 2
+    cmd(167)(&m.rt, 1, 0, 0);                         //DELETE: 释放一次 → 1
     m.pool.data.gc();
-    REQUIRE(m.link_num(5.0) != id);
+    REQUIRE(m.pool.data.get(id).num == 5.0);          //仍被 var[1] 引用 → 不回收
+    cmd(167)(&m.rt, 1, 0, 0);                         //再释放一次 → 0 → 进 gcList
+    m.pool.data.gc();
+    REQUIRE(m.pool.data.get(id).str.empty());         //已回收:get 返回默认 Const
+    REQUIRE(m.link_num(5.0) != id);                   //重新分配新 id
 }
 
 TEST_CASE("math: add/mul/bit ops", "[runtime]")

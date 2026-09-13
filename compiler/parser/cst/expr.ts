@@ -1,4 +1,5 @@
-import {Parser as $, TokenType} from '../../utils'
+import {TokenType} from '../../utils'
+import {$} from '../../utils/lib/parser'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
 const BooleanLiteral=$.s('BooleanLiteral',$.o('Boolean','true','false'))

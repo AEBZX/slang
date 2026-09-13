@@ -4,7 +4,7 @@ import {
     CALL,
     CMP,
     CZ, IN,
-    IR,
+    IRTree,
     IRTool,
     JMP,
     JZ,
@@ -18,7 +18,7 @@ import {
     ud_table
 } from '../utils'
 const barrier_list=['thread','jmp','call','tz','jz','cz','out','offset_set']
-export function build(block:IR[],slots:Map<any,slot>,tool:IRTool){
+export function build(block:IRTree[], slots:Map<any,slot>, tool:IRTool){
     let ud:ud_table={
         def: new Map(),
         use: new Map(),

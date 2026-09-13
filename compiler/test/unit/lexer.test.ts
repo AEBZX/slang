@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lexer, Lexer } from '../../utils/lexer'
+import { lexer, Lexer } from '../../utils/lib/lexer.ts'
 import { TokenType } from '../../utils/data'
 
 describe('Lexer', () => {

@@ -1,4 +1,5 @@
 import {ast_data, ast_generate, ast_rule, ast_rule_param, ASTTree, token, TokenType} from '../data'
+import PeepholeTool, {PeepholeTree} from './tool'
 
 class ParserStream{
     public pos:number
@@ -76,7 +77,153 @@ function now_line(stream:ParserStream):string{
     let now=stream.now()
     return now?now.line:'EOF'
 }
+function parse_seg(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    let ls,ret:ast_data={type:data.name,children:new Map(),line:[]},line:Set<string>=new Set()
+    for(let i of data.data){
+        ls=parse(stream,i,ref)
+        if(ls!=null){
+            if(typeof ls=='string'){
+                ret.children.set(child_num,ls)
+                line.add(stream.code[stream.pos-1].line)
+            }
+            if(typeof ls=='object'){
+                ret.children.set(child_num,ls)
+                for(let j of (ls as ast_data).line)line.add(j)
+            }
+            child_num++
+        }
+    }
+    ret.line=[...line]
+    return ret
+}
+function parse_delete(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    try{
+        return parse(stream,{...data,type:'seg'},ref) as ast_data
+    }catch (e){
+        return null
+    }
+}
+function parse_child(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    let ls,ret:ast_data={type:data.name,children:new Map(),line:[]}
+    //同上,传副本
+    ls=parse(stream,{...data,type:'seg'},ref)
+    for(let [name,i] of (ls as ast_data).children)
+        if(i!=null&&typeof i=='object')
+            ret=i
+    return ret
+}
+function parse_or(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    let ls,ret:ast_data={type:data.name,children:new Map(),line:[]}
+    let ok=false
+    for(let i of data.data){
+        let saved=stream.pos
+        try{
+            ls=parse(stream,i,ref)
+            if(ls!=null){
+                ok=true
+                ret=ls
+                break
+            }
+        }catch (e) {
+            stream.pos=saved
+        }
+    }
+    let a=[]
+    for(let i of data.data)a.push(typeof i=='string'?i:typeof i=='object'?i.name:TokenType[i])
+    if(!ok)throw new Error(`无法找到${a.join(' ')}中的任意一条规则在${now_line(stream)}`)
+    return ret
+}
+function parse_choose(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data {
+    let ls:ast_data
+    let saved = stream.pos
+    try {
+        for (let i of data.data)
+            ls =<ast_data> parse(stream, i, ref)
+        if (ls != null) return ls
+    } catch (e) {
+    }
+    stream.pos = saved
+    return null
+}
+function parse_call(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    return parse(stream,ref.get(data.name),ref) as ast_data
+}
+function parse_while(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
+    let ret:ast_data={type:data.name,children:new Map(),line:[]}
+    let line:Set<string>=new Set()
+    let ls
+    let param_num=0
+    let saved=stream.pos
+    try{
+        let child=parse(stream,data.data[0],ref)
+        ret.children.set(param_num,child)
+        if(typeof child=='string')
+            line.add(stream.code[stream.pos-1].line)
+        if(typeof child=='object')
+            for(let j of (child as ast_data).line)line.add(j)
+        param_num++
+    }catch (e) {
+        stream.pos=saved
+    }
+    //零次匹配视为循环0次
+    if(param_num==0)return{
+        type:data.name,
+        children:new Map(),
+        line:[...line]
+    }
+    while(true){
+        saved=stream.pos
+        try{
+            ls=parse(stream,data.data[1],ref)
+            let child=parse(stream,data.data[0],ref)
+            ret.children.set(param_num,child)
+            if(typeof child=='string')
+                line.add(stream.code[stream.pos-1].line)
+            if(typeof child=='object')
+                for(let j of (child as ast_data).line)line.add(j)
+            param_num++
+        }catch (e) {
+            stream.pos=saved
+            break
+        }
+    }
+    ret.line=[...line]
+    return ret
+}
+function parse_loop(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data {
+    let ret:ast_data={type:data.name,children:new Map(),line:[]}
+    let line:Set<string>=new Set()
+    let param_num=0
+    while(true){
+        let saved=stream.pos
+        try{
+            let child=parse(stream,data.data[0],ref)
+            ret.children.set(param_num,child)
+            if(typeof child=='string')
+                line.add(stream.code[stream.pos-1].line)
+            if(typeof child=='object')
+                for(let j of (child as ast_data).line)line.add(j)
+        }catch (e){
+            stream.pos=saved
+            break
+        }
+        param_num++
+    }
+    ret.line=[...line]
+    return ret
+}
+const parse_table=new Map<string,any>([
+    ['seg',parse_seg],
+    ['delete',parse_delete],
+    ['child',parse_child],
+    ['or',parse_or],
+    ['choose',parse_choose],
+    ['call',parse_call],
+    ['while',parse_while],
+    ['loop',parse_loop]
+])
 function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>):ast_data|string{
+    let child_num=0
     switch (typeof data){
         case 'string':{
             let now=stream.now()
@@ -87,143 +234,8 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
             }
             throw new Error(`无法找到${data}在${now_line(stream)}`)
         }
-        case 'object':{
-            let ret:ast_data|string={
-                type:data.name,
-                children:new Map(),
-                line:[]
-            }
-            let line=new Set<string>()
-            let ls:ast_data|string,child_num=0
-            switch (data.type){
-                case 'seg':{
-                    for(let i of data.data){
-                        ls=parse(stream,i,ref)
-                        if(ls!=null){
-                            if(typeof ls=='string'){
-                                ret.children.set(`child_${child_num}`,ls)
-                                line.add(stream.code[stream.pos-1].line)
-                            }
-                            if(typeof ls=='object'){
-                                ret.children.set(`child_${child_num}`,ls)
-                                for(let j of (ls as ast_data).line)line.add(j)
-                            }
-                            child_num++
-                        }
-                    }
-                    ret.line=[...line]
-                    break
-                }
-                case 'delete':{
-                    //不改写共享规则对象,传副本避免递归解析时的状态污染
-                    try{
-                        parse(stream,{...data,type:'seg'},ref)
-                    }finally{
-                        ret=null
-                    }
-                    break
-                }
-                case 'child':{
-                    //同上,传副本
-                    ls=parse(stream,{...data,type:'seg'},ref)
-                    for(let [name,i] of (ls as ast_data).children){
-                        if(i!=null&&typeof i=='object')
-                            ret=i
-                    }
-                    break
-                }
-                case 'or':{
-                    let ok=false
-                    for(let i of data.data){
-                        let saved=stream.pos
-                        try{
-                            ls=parse(stream,i,ref)
-                            if(ls!=null){
-                                ok=true
-                                ret=ls
-                                break
-                            }
-                        }catch (e) {
-                            stream.pos=saved
-                        }
-                    }
-                    let a=[]
-                    for(let i of data.data)a.push(typeof i=='string'?i:typeof i=='object'?i.name:TokenType[i])
-                    if(!ok)throw new Error(`无法找到${a.join(' ')}中的任意一条规则在${now_line(stream)}`)
-                    break
-                }
-                case 'choose':{
-                    let saved=stream.pos
-                    try{
-                        for(let i of data.data)
-                            ls=parse(stream,i,ref)
-                        if(ls!=null)return ls
-                    }catch (e) {}
-                    stream.pos=saved
-                    return null
-                }
-                case 'call':{
-                    ret=parse(stream,ref.get(data.name),ref)
-                    break
-                }
-                case 'while':{
-                    let param_num=0
-                    let saved=stream.pos
-                    try{
-                        let child=parse(stream,data.data[0],ref)
-                        ret.children.set(`param_${param_num}`,child)
-                        if(typeof child=='string')
-                            line.add(stream.code[stream.pos-1].line)
-                        if(typeof child=='object')
-                            for(let j of (child as ast_data).line)line.add(j)
-                        param_num++
-                    }catch (e) {
-                        stream.pos=saved
-                    }
-                    //0次匹配视为未命中,交由上层决定是否接受
-                    if(param_num==0)return null
-                    while(true){
-                        saved=stream.pos
-                        try{
-                            ls=parse(stream,data.data[1],ref)
-                            let child=parse(stream,data.data[0],ref)
-                            ret.children.set(`param_${param_num}`,child)
-                            if(typeof child=='string')
-                                line.add(stream.code[stream.pos-1].line)
-                            if(typeof child=='object')
-                                for(let j of (child as ast_data).line)line.add(j)
-                            param_num++
-                        }catch (e) {
-                            stream.pos=saved
-                            break
-                        }
-                    }
-                    ret.line=[...line]
-                    break
-                }
-                case 'loop':{
-                    let param_num=0
-                    while(true){
-                        let saved=stream.pos
-                        try{
-                            let child=parse(stream,data.data[0],ref)
-                            ret.children.set(`param_${param_num}`,child)
-                            if(typeof child=='string')
-                                line.add(stream.code[stream.pos-1].line)
-                            if(typeof child=='object')
-                                for(let j of (child as ast_data).line)line.add(j)
-                        }catch (e){
-                            stream.pos=saved
-                            break
-                        }
-                        param_num++
-                    }
-                    ret.line=[...line]
-                    break
-                }
-            }
-            return ret
-        }
+        case 'object':
+            return parse_table.get(data.type)(data,child_num,ref,stream)
         default:{
             let now=stream.now()
             if(now&&now.type==data){
@@ -235,32 +247,47 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
         }
     }
 }
-class Parser{
-    parser_rule:Map<string,ast_rule>
-    stream:ParserStream
-    constructor(code:token[]){
-        this.stream=new ParserStream(code)
-        this.parser_rule=new Map<string,ast_rule>()
+export default class Parser extends PeepholeTool{
+    ref:Map<string,ast_generate>
+    _default:ast_generate
+    parse:ast_rule[]
+    constructor() {
+        super('parser')
     }
-    register(rule:ast_rule){
-        this.parser_rule.set(rule.name,rule)
+    use(rule:Map<string,ast_generate>|ast_generate|ast_rule[]|ast_rule){
+        if(rule instanceof Map)
+            for(let [k,v] of rule)
+                this.ref.set(k,v)
+        else if(Array.isArray(rule))
+                this.parse.push(...rule)
+        else if('data' in rule){
+            rule.name='entry'
+            this.parse.push(rule)
+        }else this._default=rule
+        return this
     }
-    parse(name:string):ast_data|string{
-        return parse(this.stream,this.parser_rule.get(name),this.parser_rule)
+    private call(name:string){
+        if(!this.ref.has(name))
+            return this._default
+        return this.ref.get(name)
+    }
+    private generate(data:ast_data):PeepholeTree{
+        return this.call(data.type)(data,this.generate)
+    }
+    _run(code:token[]){
+        let entry='entry'
+        if(!this.parse.some(r=>r.name==entry))
+            throw new Error('入口规则不存在')
+        let cst=parse(new ParserStream(code),this.parse.find(r=>r.name==entry),
+            new Map(this.parse.map(r=>[r.name,r])))
+        if(typeof cst=='string')throw new Error('解析出的头为字符串而非AST对象,请检查您的编译器插件')
+        return this.generate(cst)
+    }
+    run(code:token[][]):PeepholeTree[]{
+        return code.map(this._run)
     }
 }
-function generate(entry:ast_data,reg:{[key:string]:ast_generate}){
-    let g=(data:ast_data):ASTTree=>{
-        if(data.type in reg){
-            let ret=reg[data.type](data,g)
-            if(ret&&typeof ret=='object')
-                ret.line=[...data.line]
-            return ret
-        }
-    }
-    return g(entry)
-}
-export default {
+export const $={
     s:seg_rule,
     d:delete_rule,
     t:child_rule,
@@ -268,34 +295,5 @@ export default {
     c:choose_rule,
     r:call_rule,
     w:while_rule,
-    l:loop_rule,
-    run:(entry:string,rule:ast_rule[],code:token[])=>{
-        let data=new Parser(code)
-        for(let i of rule)
-            data.register(i)
-        let ret=data.parse(entry)
-        //File 解析完必须到 EOF(仅完整程序入口):blocks 的 loop 会吞掉顶层块解析失败
-        //(如函数体语法错误),导致整个函数静默丢失且 check 0 errors,产出空程序;剩余 token 即语法错误
-        //片段入口(Expression/Commands 等测试用)允许剩余
-        let rest=data.stream.now()
-        if(entry=='File'&&rest)
-            throw new Error(`语法错误:未解析的 token '${rest.value}' at ${rest.line}`)
-        //空输入:非 File 片段入口若产出不含任何 token 叶子的空树,视为无法解析应抛;
-        //while/loop 规则直接作入口(如 WList/LList)允许零次匹配返 null/空节点,豁免
-        let top_rule=data.parser_rule.get(entry)
-        let allow_empty=top_rule&&(top_rule.type=='while'||top_rule.type=='loop'||top_rule.type=='choose'||top_rule.type=='or'||top_rule.type=='delete')
-        if(entry!='File'&&!allow_empty&&code.length==0&&ret&&typeof ret=='object'){
-            let has_leaf=false
-            let scan=(n:any)=>{
-                for(let v of (n.children?.values?.()??[]))
-                    if(typeof v=='string')has_leaf=true
-                    else if(typeof v=='object')scan(v)
-            }
-            scan(ret)
-            if(!has_leaf)
-                throw new Error(`无法解析空的${entry}在EOF`)
-        }
-        return ret
-    },
-    generate
+    l:loop_rule
 }

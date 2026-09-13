@@ -1,4 +1,5 @@
 import {asm_args, asm_command, bin} from '../data'
+import {PeepholeTree} from '../lib/tool'
 export const BinMap=new Map([
     ['mov',0],
     ['add',4],
@@ -63,8 +64,9 @@ export const ParamOffset=new Map<string,number>([
     ['valuevaluevalue',7]
 ])
 export const Null=0
-export class IR{
+export class IRTree extends PeepholeTree{
     constructor(public id:string) {
+        super()
     }
     static isNumber(data:asm_args){
         return data[0]=='reg'
@@ -85,7 +87,7 @@ export class IR{
         return BinMap.get(this.id)
     }
 }
-export class MOV extends IR{
+export class MOV extends IRTree{
     constructor(public left:asm_args,public right:asm_args) {
         super('mov')
     }
@@ -93,7 +95,7 @@ export class MOV extends IR{
         return [super.generate_two(this.left,this.right),this.left[1],this.right[1],Null]
     }
 }
-export class LOAD extends IR{
+export class LOAD extends IRTree{
     constructor(public reg:asm_args,public data:asm_args) {
         super('load')
     }
@@ -101,7 +103,7 @@ export class LOAD extends IR{
         return [super.generate_two(this.reg,this.data),this.reg[1],this.data[1],Null]
     }
 }
-export class BINARY extends IR{
+export class BINARY extends IRTree{
     constructor(id:string,public result:asm_args,public left:asm_args,public right:asm_args) {
         super(id)
     }
@@ -109,7 +111,7 @@ export class BINARY extends IR{
         return [super.generate_two(this.left,this.right),this.result[1],this.left[1],this.right[1]]
     }
 }
-export class NOT extends IR{
+export class NOT extends IRTree{
     constructor(public data:asm_args) {
         super('not')
     }
@@ -117,7 +119,7 @@ export class NOT extends IR{
         return [super.generate_zero(),this.data[1],Null,Null]
     }
 }
-export class BIT_NOT extends IR{
+export class BIT_NOT extends IRTree{
     constructor(public data:asm_args) {
         super('bit_not')
     }
@@ -125,7 +127,7 @@ export class BIT_NOT extends IR{
         return [super.generate_zero(),this.data[1],Null,Null]
     }
 }
-export class CMP extends IR{
+export class CMP extends IRTree{
     constructor(public left:asm_args,public right:asm_args,public oper:asm_args) {
         super('cmp')
     }
@@ -133,7 +135,7 @@ export class CMP extends IR{
         return [super.generate_three(this.left,this.right,this.oper),this.left[1],this.right[1],this.oper[1]]
     }
 }
-export class JZ extends IR{
+export class JZ extends IRTree{
     constructor(public target:asm_args,public cond:asm_args) {
         super('jz')
     }
@@ -141,7 +143,7 @@ export class JZ extends IR{
         return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],Null]
     }
 }
-export class CZ extends IR{
+export class CZ extends IRTree{
     //is_func_call:0=块调用(if/while,压块帧),1=函数调用;retn 靠它弹到函数帧
     constructor(public target:asm_args,public cond:asm_args,public is_func_call:asm_args) {
         super('cz')
@@ -150,7 +152,7 @@ export class CZ extends IR{
         return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],this.is_func_call[1]]
     }
 }
-export class TZ extends IR{
+export class TZ extends IRTree{
     constructor(public target:asm_args,public cond:asm_args) {
         super('tz')
     }
@@ -158,7 +160,7 @@ export class TZ extends IR{
         return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],Null]
     }
 }
-export class JMP extends IR{
+export class JMP extends IRTree{
     constructor(public target:asm_args) {
         super('jmp')
     }
@@ -166,7 +168,7 @@ export class JMP extends IR{
         return [super.generate_one(this.target),this.target[1],Null,Null]
     }
 }
-export class CALL extends IR{
+export class CALL extends IRTree{
     //is_func_call:1=函数调用(压函数帧),0=块调用;retn 靠它弹到函数帧
     constructor(public target:asm_args,public is_func_call:asm_args) {
         super('call')
@@ -175,7 +177,7 @@ export class CALL extends IR{
         return [super.generate_one(this.target),this.target[1],this.is_func_call[1],Null]
     }
 }
-export class THREAD extends IR{
+export class THREAD extends IRTree{
     constructor(public target:asm_args) {
         super('thread')
     }
@@ -183,7 +185,7 @@ export class THREAD extends IR{
         return [super.generate_one(this.target),this.target[1],Null,Null]
     }
 }
-export class RET extends IR{
+export class RET extends IRTree{
     constructor() {
         super('ret')
     }
@@ -191,7 +193,7 @@ export class RET extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-export class RETN extends IR{
+export class RETN extends IRTree{
     constructor() {
         super('retn')
     }
@@ -199,7 +201,7 @@ export class RETN extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-export class PUSH extends IR{
+export class PUSH extends IRTree{
     constructor(public target:asm_args) {
         super('push')
     }
@@ -207,7 +209,7 @@ export class PUSH extends IR{
         return [super.generate_zero(),this.target[1],Null,Null]
     }
 }
-export class POP extends IR{
+export class POP extends IRTree{
     constructor(public target:asm_args) {
         super('pop')
     }
@@ -215,7 +217,7 @@ export class POP extends IR{
         return [super.generate_zero(),this.target[1],Null,Null]
     }
 }
-export class OFFSET_SET extends IR{
+export class OFFSET_SET extends IRTree{
     constructor(public target:asm_args,public offset:asm_args,public value:asm_args) {
         super('offset_set')
     }
@@ -223,7 +225,7 @@ export class OFFSET_SET extends IR{
         return [super.generate_three(this.target,this.offset,this.value),this.target[1],this.offset[1],this.value[1]]
     }
 }
-export class OFFSET_GET extends IR{
+export class OFFSET_GET extends IRTree{
     constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
         super('offset_get')
     }
@@ -231,7 +233,7 @@ export class OFFSET_GET extends IR{
         return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]
     }
 }
-export class OFFSET_ADDR extends IR{
+export class OFFSET_ADDR extends IRTree{
     constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
         super('offset_addr')
     }
@@ -245,7 +247,7 @@ export class STR_GET extends OFFSET_GET{
         this.id='str_get'
     }
 }
-export class IN extends IR{
+export class IN extends IRTree{
     constructor(public oper:asm_args,public data:asm_args) {
         super('in')
     }
@@ -253,7 +255,7 @@ export class IN extends IR{
         return [super.generate_two(this.oper,this.data),this.oper[1],this.data[1],Null]
     }
 }
-export class OUT extends IR{
+export class OUT extends IRTree{
     constructor(public oper:asm_args,public target:asm_args) {
         super('out')
     }
@@ -261,7 +263,7 @@ export class OUT extends IR{
         return [super.generate_two(this.oper,this.target),this.oper[1],this.target[1],Null]
     }
 }
-export class GC extends IR{
+export class GC extends IRTree{
     constructor() {
         super('gc')
     }
@@ -269,7 +271,7 @@ export class GC extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-export class DELETE extends IR{
+export class DELETE extends IRTree{
     constructor(public data:asm_args) {
         super('delete')
     }
@@ -277,7 +279,7 @@ export class DELETE extends IR{
         return [super.generate_one(this.data),this.data[1],Null,Null]
     }
 }
-export class BLOCK_START extends IR{
+export class BLOCK_START extends IRTree{
     constructor(public name:asm_args) {
         super('block_start')
     }
@@ -285,7 +287,7 @@ export class BLOCK_START extends IR{
         return [super.generate_zero(),this.name[1],Null,Null]
     }
 }
-export class BLOCK_END extends IR{
+export class BLOCK_END extends IRTree{
     constructor() {
         super('block_end')
     }
@@ -293,7 +295,7 @@ export class BLOCK_END extends IR{
         return [super.generate_zero(),Null,Null,Null]
     }
 }
-export class PARAM_SET extends IR{
+export class PARAM_SET extends IRTree{
     constructor(public param:asm_args,public value:asm_args) {
         super('param_set')
     }
@@ -301,7 +303,7 @@ export class PARAM_SET extends IR{
         return [super.generate_two(this.param,this.value),this.param[1],this.value[1],Null]
     }
 }
-export class PARAM_LOAD extends IR{
+export class PARAM_LOAD extends IRTree{
     constructor(public data:asm_args,public param:asm_args) {
         super('param_load')
     }

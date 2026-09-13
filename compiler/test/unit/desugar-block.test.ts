@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lexer } from '../../utils/lexer'
+import { lexer } from '../../utils/lib/lexer.ts'
 import cst_parse from '../../parser/cst'
 import ast_parse from '../../parser/ast'
 import { ast_data, ClassType, File } from '../../utils'

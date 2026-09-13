@@ -1,517 +1,205 @@
+//round0:无需符号表等的静态检查
 import {
-    Assign,
     BooleanType,
     Break,
-    Call,
-    check_visitor,
-    Class,
-    ClassType,
-    Continue,
-    Decrement,
-    DoWhileStatement,
+    Cast,
+    Class, ClassType, Continue, DoWhileStatement,
     Enum,
-    FixType,
-    ForStatement,
-    ForeachStatement,
-    Function,
-    IfStatement,
-    Increment,
-    Interface,
-    LambdaType,
-    Module,
-    NumberType,
-    Return,
-    StringType,
-    SwitchStatement,
-    Throw,
-    TryStatement,
-    type_merge,
-    Type,
+    File, ForeachStatement, ForStatement,
+    Function, IfStatement,
+    Interface, LambdaExpression, Link,
+    ListCommand, LiteralType,
+    Module, NumberType,
+    Operation, StringType, SwitchStatement, Throw, TryStatement,
+    Value,
     Variable,
-    VarDeclaration,
-    VM,
-    VoidType,
-    WhileStatement, PostfixExpression, ArgumentsPostfix, ArrayFix, MapFix,
-    Expression, IdentifierExpr, MemberPostfix, IndexPostfix,
-    PrefixExpression, AddressPrefix, GenericType, LambdaExpression, ListCommand, Value, BasicType, LiteralType,
-    Operation, PointFix, Cast, oper_get_have, type_is, Scope, oper_best, type_name
+    VoidType, WhileStatement
 } from '../utils'
-//各种模块
-const C_Class:check_visitor=(ast:Class,scope,call)=>{
-    for(let i of ast.children)
-        if(i instanceof Module)
-            scope.thr(`${ast.name} is class at line ${ast.line.join('\n')}`)
-    //检查 implements 链:所有接口的函数与变量必须都在 class 中定义
-    let interface_members=new Map<string,string>()
-    let collect=(iface:Type)=>{
-        //implement 为 null(ObjectInterface 自身或无父接口)时停止递归,避免 null.local 崩
-        if(iface==null)return
-        if(!(iface instanceof ClassType))
-            scope.thr(`${iface} is not a class at line ${ast.line.join('\n')}`)
-        let impl=scope.get((iface as ClassType).local.join('.'))
-        if(impl instanceof Interface){
-            for(let i of impl.children){
-                if(i instanceof Function)interface_members.set(i.name,'function')
-                if(i instanceof Variable)interface_members.set(i.name,'variable')
-            }
-            //接口的父接口
-            collect(impl.implement)
-        }
+import {Default_Modifier, fill_modifier, slang_check_visitor} from './tool'
+const Check_File:slang_check_visitor=(ast:File,scope,call)=>{
+    let lnk_name=ast.links.map(i=>i.as)
+    if(new Set(...lnk_name).size!=lnk_name.length)
+        scope.thr(`link的别名不能重复,在行${ast.line.join('\n')}`)
+    ast.children.forEach(i=>{
+        if(!(i instanceof Module||i instanceof Value))
+            scope.thr(`文件顶层只能是link/module/value,在行${i.line.join('\n')}`)
+        call(i,0)
+    })
+}
+const Check_Value:slang_check_visitor=(ast:Value,scope,call)=>{
+    //自身必须静态
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers.unstatic)
+        scope.thr(`值定义不能是非static的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._private)
+        scope.thr(`值定义不能是私有的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._async)
+        scope.thr(`值定义不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers=Default_Modifier.get(ast)
+    //必须是number,string,boolean等literal
+    if(!(ast.value instanceof LiteralType))
+        scope.thr(`值定义必须是number/string/boolean,在行${ast.line.join('\n')}`)
+    //内部必须是operation,cast
+    ast.children.forEach(i=>{
+        if(!(i instanceof Operation||i instanceof Cast))
+            scope.thr(`值定义内部只能是operation/cast,在行${i.line.join('\n')}`)
+        call(i,0)
+    })
+}
+const Check_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers.unstatic)
+        scope.thr(`运算符重载不能是非static的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._private)
+        scope.thr(`运算符重载不能是私有的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._async)
+        scope.thr(`运算符重载不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers=Default_Modifier.get(ast)
+    if(ast.command.ret instanceof VoidType)
+        scope.thr(`运算符重载不能返回void,在行${ast.line.join('\n')}`)
+    call(ast.command,0)
+}
+const Check_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers.unstatic)
+        scope.thr(`类型转换不能是非static的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._private)
+        scope.thr(`类型转换不能是私有的,在行${ast.line.join('\n')}`)
+    if(ast.modifiers._async)
+        scope.thr(`类型转换不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers=Default_Modifier.get(ast)
+    call(ast.command,0)
+}
+const Check_Module:slang_check_visitor=(ast:Module,scope,call)=>{
+    //自身必须静态
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers._async)
+        scope.thr(`模块不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers=Default_Modifier.get(ast)
+    ast.children.forEach(i=>{
+        if(i instanceof Operation||i instanceof Cast||i instanceof Value)
+            scope.thr(`模块内部不能是operation/cast/value,在行${i.line.join('\n')}`)
+        if(fill_modifier(i).unstatic)
+            scope.thr(`模块内部不能是非static的,在行${i.line.join('\n')}`)
+        if(fill_modifier(i)._private)
+            scope.thr(`模块内部不能是私有的,在行${i.line.join('\n')}`)
+        call(i,0)
+    })
+}
+const Check_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers._async){
+        scope.thr(`枚举不能是异步的,在行${ast.line.join('\n')}`)
+        ast.modifiers._async=false
     }
-    collect(ast.implement)
-    let class_members=new Set(ast.children.map(i=>i.name))
-    for(let [name,kind] of interface_members)
-        if(!class_members.has(name))
-            scope.thr(`class ${ast.name} must implement ${kind} ${name} at line ${ast.line.join('\n')}`)
-    for(let [k,v] of ast.generic){
-        if(scope.get_generic(k)){
-            scope.thr(`${k} is already defined at line ${ast.line.join('\n')}`)
-            scope.set_generic(k,new VoidType())
-            continue
-        }
-        scope.set_generic(k,v)
-    }
-    for(let i of ast.children) {
-        //不能是模块
-        if(i instanceof Module){
-            scope.thr(`${ast.name} is class at line ${ast.line.join('\n')}`)
-            continue
-        }
-        scope=scope.enter()
-        //up指向外层类(顶层指向自己),支持up.up链式向上
-        let abs=scope.path?scope.path+'.'+ast.name:ast.name
-        let up_local=scope.path?scope.path.split('.'):abs.split('.')
-        let up_type=new ClassType(up_local,[])
-        scope.set('up',up_type)
-        scope.sym(up_type,up_type)
-        //this指向当前类实例
-        let this_type=new ClassType(abs.split('.'),[])
-        scope.set('this',this_type)
-        scope.sym(this_type,this_type)
-        scope.path=abs
-        call(i,scope)
-        scope=scope.leave()
-    }
+    //不重名即可
+    if(new Set(...ast.children).size!=ast.children.length)
+        scope.thr(`枚举成员不能重复,在行${ast.line.join('\n')}`)
 }
-const C_Value:check_visitor=(ast:Value,scope,call)=>{
-    let type=ast.value
-    //value 块给某类型(内建 literal 或自定义类)扩展 operation/cast;类型须已可解析
-    if(!(type instanceof BasicType))
-        scope.thr(`${type} is not a value type at line ${ast.line.join('\n')}`)
-    scope=scope.enter()
-    scope.set('value',type)
-    //把字面类型标到每个 operation/cast:它们从 value 继承上下文,后续注册/决策需要
-    for(let i of ast.children)
-        (i as any)._value=type
-    for(let i of ast.children)
-        call(i,scope)
-    scope=scope.leave()
+const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers._async)
+        scope.thr(`类/接口不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers=Default_Modifier.get(ast)
+    //implement必须是ClassType
+    if(ast.implement!=null&&!(ast.implement instanceof ClassType))
+        scope.thr(`类的/接口implement必须是ClassType,在行${ast.line.join('\n')}`)
+    let generic_name=Array.from(ast.generic.keys())
+    if(new Set(...generic_name).size!=generic_name.length)
+        scope.thr(`类/接口中泛型的定义不能重复,在行${ast.line.join('\n')}`)
+    //generic implement必须是ClassType
+    for(let i of ast.generic.values())
+        if(!(i instanceof ClassType))
+            scope.thr(`类/接口中泛型的implement必须是ClassType,在行${ast.line.join('\n')}`)
+    ast.children.forEach(i=>{
+        if(!(i instanceof Operation||i instanceof Cast||i instanceof Variable||i instanceof Function))
+            scope.thr(`类/接口内部只能是operation/cast/value/function,在行${i.line.join('\n')}`)
+        if(ast instanceof Class&&i instanceof Function&&i.commands==null)
+            scope.thr(`类内部的function必须实现,在行${i.line.join('\n')}`)
+        if(ast instanceof Interface&&i instanceof Function&&i.commands!=null)
+            scope.thr(`接口内部的function不可以实现,在行${i.line.join('\n')}`)
+        call(i,0)
+    })
 }
-const basic=['+','-','*','/','&','|','^','<<','>>','==','!=','<','>','<=','>=','&&','||','!','~','p*','p&']
-//参数表结构等价(不重名即可):两个 params 的 key 集相同且同位置类型兼容
-let params_equal=(a:Map<string,Type>,b:Map<string,Type>,scope:Scope)=>{
-    if(a.size!=b.size)return false
-    let av=Array.from(a.values()),bv=Array.from(b.values())
-    for(let i=0;i<av.length;i++)
-        if(type_merge(av[i],bv[i],scope) instanceof VoidType)return false
-    return true
+const Check_Function:slang_check_visitor=(ast:Function,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    let generic_name=Array.from(ast.generic.keys())
+    if(new Set(...generic_name).size!=generic_name.length)
+        scope.thr(`函数中泛型的定义不能重复,在行${ast.line.join('\n')}`)
+    let param_name=Array.from(ast.params.keys())
+    if(new Set(...param_name).size!=param_name.length)
+        scope.thr(`函数中参数的定义不能重复,在行${ast.line.join('\n')}`)
+    call(ast.commands,0)
 }
-//类型结构等价:同构且可互相 merge(引用比较对同构不同实例恒假,如 number 参数 vs value 块里的 number)
-let type_compatible=(a:Type,b:Type,scope:Scope)=>!(type_merge(a,b,scope) instanceof VoidType)
-const C_Operation:check_visitor=(ast:Operation,scope,call)=>{
-    let type=(ast as any)._value
-    if(type==null)type=scope.get('value')
-    let data=Array.from(ast.command.params.values())
-    //检查是否同类型有oper,command_params签名完全一致的
-    for(let i of scope.get_operation(type))
-        if(i.oper==ast.oper&&params_equal(i.command.params,ast.command.params,scope))
-            scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
-    if(ast.command.generic.size!=0)
-        scope.thr(`${ast.command} is not a function at line ${ast.line.join('\n')}`)
-    if(ast.oper!='[]='&&ast.oper!='='&&ast.command.ret instanceof VoidType)
-        scope.thr(`${ast.command} is not a void at line ${ast.line.join('\n')}`)
-    if(basic.includes(ast.oper)){
-        //是!/~等一元前缀:p* p& 是 * & 的一元形式
-        if(ast.oper=='!'||ast.oper=='~'||ast.oper=='p*'||ast.oper=='p&') {
-            if (ast.command.params.size != 1 ||!type_compatible(data[0],type,scope))
-                scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-            return
-        }
-        //二元:两个参数,第一参(self)为 value 类型
-        if(data.length!=2||!type_compatible(data[0],type,scope))
-            scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    }
-    //[]= / = :第一参为 value 指针(需可写引用),第二参为赋入值
-    if(['[]=','='].includes(ast.oper)&&
-        (!type_compatible(data[0],new FixType(type,[new PointFix()]),scope)||ast.command.params.size<2))
-        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    //[]:索引读取,两参(self,key)
-    if(ast.oper=='[]'&&(!(data.length==2&&type_compatible(data[0],type,scope))))
-        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(['p++','p--','++p','--p'].includes(ast.oper)&&(!(data.length==1&&type_compatible(data[0],type,scope))))
-        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(ast.oper=='()'&&!(data.length>=1&&type_compatible(data[0],type,scope)))
-        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    if(ast.oper==':'&&!(data.length==1&&type_compatible(data[0],type,scope)&&!(ast.command.ret instanceof VoidType)))
-        scope.thr(`${ast.command} is not a operation at line ${ast.line.join('\n')}`)
-    call(ast.command,scope)
-    //注册到全局:value 块 check 用子 scope,leave 即丢,须写 global 供调用点查询
-    scope.global.set_operation(type,ast)
+const Check_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers._async)
+        scope.thr(`变量不能是异步的,在行${ast.line.join('\n')}`)
+    ast.modifiers._async=false
+    call(ast.value,0)
 }
-//不冲突然后接受:value类型(源) cast 到 ast.t(目标),签名 (源)=>目标
-const C_Cast:check_visitor=(ast:Cast,scope,call)=>{
-    let type=(ast as any)._value
-    if(type==null)type=scope.get('value')
-    for(let i of scope.get_cast(type))
-        if(params_equal(i.command.params,ast.command.params,scope))
-            scope.thr(`${ast.command} is already defined at line ${ast.line.join('\n')}`)
-    //返回类型=目标类型 ast.t
-    if(!type_compatible(ast.command.ret,ast.t,scope))
-        scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
-    //单参数,参数类型=源类型(注册在 value 类型上,由 (目标)源值 触发)
-    if(ast.command.params.size!=1||!type_compatible(Array.from(ast.command.params.values())[0],type,scope))
-        scope.thr(`${ast.command} is not a cast at line ${ast.line.join('\n')}`)
-    call(ast.command,scope)
-    scope.global.set_cast(type,ast)
+const Check_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
+    ast.commands.forEach(i=>call(i,0))
 }
-const C_Module:check_visitor=(ast:Module,scope,call)=>{
-    for(let i of ast.children) {
-        scope=scope.enter()
-        scope.path=scope.path?scope.path+'.'+ast.name:ast.name
-        call(i,scope)
-        scope=scope.leave()
-    }
+const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|ForeachStatement|ForStatement,scope,call)=>{
+    scope.loop=true
+    call(ast.commands,0)
+    scope.loop=false
+    if(ast instanceof WhileStatement||ast instanceof DoWhileStatement)
+        call(ast.condition,0)
+    if(ast instanceof ForeachStatement)
+        call(ast.data,0)
 }
-const C_Function:check_visitor=(ast:Function,scope,call)=>{
-    scope=scope.enter()
-    for(let [k,v] of ast.generic)
-        scope.set_generic(k,v)
-    //阻断外层循环/捕获/switch,break/continue/throw 不能跳出函数
-    scope.data.set('while',null as any)
-    scope.data.set('switch',null as any)
-    scope.data.set('throw',null as any)
-    for(let [k,v] of ast.params){
-        scope.set(k,v)
-        scope.sym(v,v)
-    }
-    //作为返回值,用户绝对不可能命名出关键字
-    scope.set('return',ast.return_type)
-    scope.sym(ast.return_type,ast.return_type)
-    //函数本身可作为值/成员调用(存入全局符号表,供跨作用域成员访问)
-    scope.global.sym(ast,new LambdaType(ast.generic,ast.params,ast.return_type,false))
-    call(ast.commands,scope)
-    scope=scope.leave()
+const Check_BreakContinue:slang_check_visitor=(ast:Break|Continue, scope, call)=>{
+    if(!scope.loop)
+        scope.thr(`break/continue只能在循环中使用,在行${ast.line.join('\n')}`)
 }
-const C_Interface:check_visitor=(ast:Class,scope,call)=>{
-    for(let i of ast.children)
-        if(!(i instanceof Function||i instanceof Variable))
-            scope.thr(`${ast.name} is interface at line ${ast.line.join('\n')}`)
-    for(let i of ast.children){
-        scope=scope.enter()
-        for(let [k,v] of ast.generic)
-            scope.set_generic(k,v)
-        scope.path=scope.path?scope.path+'.'+ast.name:ast.name
-        call(i,scope)
-        scope=scope.leave()
-    }
+const Check_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
+    scope.throw=true
+    call(ast.commands,0)
+    scope.throw=false
+    call(ast.catch_.command,0)
+    call(ast.finally_,0)
 }
-const C_Variable:check_visitor=(ast:Variable,scope,call)=>{
-    scope.set(ast.name,ast.t)
-    //成员类型存入全局符号表,供跨作用域 MemberPostfix 访问
-    scope.global.sym(ast.t,ast.t)
-    scope.global.sym(ast,ast.t)
-    if(ast.value){
-        call(ast.value,scope)
-        if(!type_is(ast.t,ast.value.type,scope))
-            scope.thr(`${ast.value} is not assignable at line ${ast.line.join('\n')}`)
-    }
+const Check_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
+    if(!scope.throw)
+        scope.thr(`throw只能在try中使用,在行${ast.line.join('\n')}`)
+    call(ast.data,0)
 }
-const C_Enum:check_visitor=(ast:Class,scope,call)=>{
-    let x=[]
-    for(let i of ast.children){
-        if(x.includes(i))
-            scope.thr(`${ast.name} is enum at line ${ast.line.join('\n')}`)
-        x.push(i)
-    }
+const Check_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
+    call(ast.condition,0)
+    call(ast.commands,0)
+    call(ast.else_,0)
 }
-//各种命令
-//左值判断:赋值目标必须是变量/成员/索引/解引用,不能是函数返回,字面量,算术结果等
-function is_lvalue(expr:Expression):boolean{
-    if(expr instanceof IdentifierExpr)return true
-    if(expr instanceof PostfixExpression){
-        let last=expr.postfix[expr.postfix.length-1]
-        return last instanceof MemberPostfix||last instanceof IndexPostfix
-    }
-    //解引用链(*p, **p)可赋值,其他前缀(取地址/取负/取反等)不可
-    if(expr instanceof PrefixExpression)
-        return expr.prefix.length>0&&expr.prefix.every(p=>p instanceof AddressPrefix)
-    return false
+const Check_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
+    let generic_name=Array.from(ast.generic.keys())
+    if(new Set(...generic_name).size!=generic_name.length)
+        scope.thr(`lambda中泛型的定义不能重复,在行${ast.line.join('\n')}`)
+    let param_name=Array.from(ast.params.keys())
+    if(new Set(...param_name).size!=param_name.length)
+        scope.thr(`lambda中参数的定义不能重复,在行${ast.line.join('\n')}`)
+    call(ast.body,0)
 }
-const C_Assign:check_visitor=(ast:Assign,scope,call)=>{
-    call(ast.data,scope)
-    call(ast.value,scope)
-    //[]= 索引写重载:a[i]=b 且 a 类型注册了 []= → 脱糖成容器调用,不查普通左值/类型
-    if(ast.data instanceof PostfixExpression){
-        let pf=ast.data.postfix
-        if(pf.length>0&&pf[pf.length-1] instanceof IndexPostfix){
-            let a_type=scope.get_sym(ast.data.expr)
-            if(a_type){
-                //[]= 的 self 形参是 value 指针(&a),决策按指针类型匹配
-                let ptr=new FixType(a_type,[new PointFix()])
-                let ops=oper_best(scope,'[]=',ptr,scope.get_sym((pf[pf.length-1] as IndexPostfix).index),scope.get_sym(ast.value))
-                if(ops.length>1)
-                    scope.thr(`ambiguous operation []= at line ${ast.line.join('\n')}`)
-                if(ops.length==1){
-                    ast.oper='[]='
-                    return
-                }
-            }
-        }
-    }
-    //裸 = 赋值重载:a=b(纯 Assign,非复合)且 a 类型注册了 = → a.=(&a,b)
-    if(ast.constructor==Assign&&!(ast.oper=='[]=')){
-        let a_type=scope.get_sym(ast.data)
-        if(a_type){
-            let ptr=new FixType(a_type,[new PointFix()])
-            let ops=oper_best(scope,'=',ptr,scope.get_sym(ast.value))
-            if(ops.length>1)
-                scope.thr(`ambiguous operation = at line ${ast.line.join('\n')}`)
-            if(ops.length==1){
-                ast.oper='='
-                return
-            }
-        }
-    }
-    //赋值目标必须是可操作的左值
-    if(!is_lvalue(ast.data))
-        scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
-    let left=scope.get_sym(ast.data)
-    let right=scope.get_sym(ast.value)
-    if(!type_is(left,right,scope))
-        scope.thr(`${ast.data} is not assignable at line ${ast.line.join('\n')}`)
-}
-const C_VarDeclaration:check_visitor=(ast:VarDeclaration,scope,call)=>{
-    if(scope.get(ast.name))
-        scope.thr(`${ast.name} is already defined at line ${ast.line.join('\n')}`)
-    scope.set(ast.name,ast.t)
-    scope.sym(ast.t,ast.t)
-    if(ast.value){
-        call(ast.value,scope)
-        if(!type_is(ast.t,ast.value.type,scope))
-            scope.thr(`${ast.value} is not assignable at line ${ast.line.join('\n')}`)
-    }
-}
-const C_Call:check_visitor=(ast:Call,scope,call)=>{
-    call(ast.data,scope)
-    //是否重载()
-    if(!(ast.data instanceof PostfixExpression))
-        scope.thr(`${ast.data} is not callable at line ${ast.line.join('\n')}`)
-    let ls=ast.data as PostfixExpression
-    if(!(ls.postfix[ls.postfix.length-1] instanceof ArgumentsPostfix))
-        scope.thr(`${ast.data} is not callable at line ${ast.line.join('\n')}`)
-}
-const C_Return:check_visitor=(ast:Return,scope,call)=>{
-    let ret=scope.get('return')
-    if(ret&&ast.data){
-        call(ast.data,scope)
-        let ret_type=scope.get_sym(ret)
-        let data_type=scope.get_sym(ast.data)
-        //void 函数 return 带值:void 兼容任意类型(type_merge 把 void 当 null),须显式拒绝
-        if(ret_type instanceof VoidType){
-            scope.thr(`return type mismatch at line ${ast.line.join('\n')}`)
-            return
-        }
-        if(!type_is(data_type,ret_type,scope))
-            scope.thr(`return type mismatch at line ${ast.line.join('\n')}`)
-    }
-}
-const C_Break:check_visitor=(ast:Break,scope,call)=>{
-    if(!scope.get('while')&&!scope.get('switch'))
-        scope.thr(`break outside loop or switch at line ${ast.line.join('\n')}`)
-}
-const C_Continue:check_visitor=(ast:Continue,scope,call)=>{
-    if(!scope.get('while'))
-        scope.thr(`continue outside loop at line ${ast.line.join('\n')}`)
-}
-const C_Throw:check_visitor=(ast:Throw,scope,call)=>{
-    call(ast.data,scope)
-    let t=scope.get_sym(ast.data)
-    let _t:Type=scope.get('throw')
-    if(!_t)
-        scope.thr(`throw without catch at line ${ast.line.join('\n')}`)
-    if(!type_is(t,_t,scope))
-        scope.thr(`throw type mismatch at line ${ast.line.join('\n')}`)
-}
-const CommandList=['mov','add','sub','mul','div','mod','and','or','xor','not','bit_not','cmp','jmp','call','thread',
-'offset_set','offset_get','offset_addr','ret','retn','cz','push','pop','in','out','gc','load']
-const C_VM:check_visitor=(ast:VM,scope,call)=>{
-    let data=ast.data.split('.').filter(i=>i.startsWith('%'))
-    for(let i of data)
-        if(!scope.get(i.substring(1)))
-            scope.thr(`${i} is not defined at line ${ast.line.join('\n')}`)
-    if(!CommandList.includes(ast.data.split(' ')[0]))
-        scope.thr(`${ast.data} is not a valid VM command at line ${ast.line.join('\n')}`)
-}
-const C_Increment:check_visitor=(ast:Increment,scope,call)=>{
-    call(ast.data,scope)
-    let t=scope.get_sym(ast.data)
-    if(!(t instanceof NumberType||oper_get_have(scope,'++',new FixType(t,[new PointFix()])).length==0))
-        scope.thr(`++ can only be applied to number at line ${ast.line.join('\n')}`)
-}
-const C_Decrement:check_visitor=(ast:Decrement,scope,call)=>{
-    call(ast.data,scope)
-    let t=scope.get_sym(ast.data)
-    if(!(t instanceof NumberType||oper_get_have(scope,'--',new FixType(t,[new PointFix()])).length==0))
-        scope.thr(`-- can only be applied to number at line ${ast.line.join('\n')}`)
-}
-const C_IfStatement:check_visitor=(ast:IfStatement,scope,call)=>{
-    let t=scope.get_sym(ast.condition)
-    call(ast.condition,scope)
-    if(!type_is(t,new BooleanType(),scope))
-        scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
-    call(ast.commands,scope)
-    if(ast.else_)
-        call(ast.else_,scope)
-}
-const C_WhileStatement:check_visitor=(ast:WhileStatement,scope,call)=>{
-    call(ast.condition,scope)
-    let t=scope.get_sym(ast.condition)
-    if(!type_is(t,new BooleanType(),scope))
-        scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
-    scope=scope.enter()
-    scope.set('while',new VoidType())
-    call(ast.commands,scope)
-    scope=scope.leave()
-}
-const C_DoWhileStatement:check_visitor=(ast:DoWhileStatement,scope,call)=>{
-    scope=scope.enter()
-    scope.set('while',new VoidType())
-    call(ast.commands,scope)
-    scope=scope.leave()
-    call(ast.condition,scope)
-    let t=scope.get_sym(ast.condition)
-    if(!type_is(t,new BooleanType(),scope))
-        scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
-}
-const C_ForStatement:check_visitor=(ast:ForStatement,scope,call)=>{
-    scope=scope.enter()
-    scope.set('while',new VoidType())
-    for(let i of ast.init)
-        call(i,scope)
-    call(ast.condition,scope)
-    let t=scope.get_sym(ast.condition)
-    if(!type_is(t,new BooleanType(),scope))
-        scope.thr(`condition is not boolean at line ${ast.line.join('\n')}`)
-    for(let s of ast.step)
-        call(s,scope)
-    call(ast.commands,scope)
-    scope=scope.leave()
-}
-const C_ForeachStatement:check_visitor=(ast:ForeachStatement,scope,call)=>{
-    scope=scope.enter()
-    scope.set('while',new VoidType())
-    call(ast.data,scope)
-    let data_type=scope.get_sym(ast.data)
-    let element:Type=new VoidType()
-    ast.unwrap=[]
-    let g=(data_type:Type)=>{
-        //先看有没有重载:':' 重载把自定义可迭代类型脱壳成 string/[]/map 或又一层可迭代
-        //(如 operation :(m:MyList)=>number[]{...});递归直到底层容器,记录每层容器供 desugar 链式展开
-        let ops=oper_best(scope,':',data_type)
-        if(ops.length==1){
-            let ret=ops[0].command.ret
-            ast.unwrap.push('_value_'+type_name(data_type))
-            g(ret)
-            return
-        }
-        if(ops.length>1)scope.thr(`ambiguous operation : at line ${ast.line.join('\n')}`)
-        ast.real_type=data_type
-        //遍历 string,元素为字符
-        if(data_type instanceof StringType){
-            element=new StringType()
-        }else if(data_type instanceof FixType){
-            let last=data_type.fix[data_type.fix.length-1]
-            if(!(last instanceof ArrayFix||last instanceof MapFix))
-                scope.thr(`foreach can only be applied to array or map at line ${ast.line.join('\n')}`)
-            element=data_type.t
-        }else
-            scope.thr(`foreach can only be applied to string, array or map at line ${ast.line.join('\n')}`)
-    }
-    g(data_type)
-    scope.set(ast.iden,element)
-    //与 C_VarDeclaration 一致:类型节点也注册进 symbol,否则 body 里 v 解析 get_sym(element) 失败报未定义
-    scope.sym(element,element)
-    call(ast.commands,scope)
-    scope=scope.leave()
-}
-const C_SwitchStatement:check_visitor=(ast:SwitchStatement,scope,call)=>{
-    scope=scope.enter()
-    scope.set('switch',new VoidType())
-    call(ast.condition,scope)
-    let condition_type=scope.get_sym(ast.condition)
-    for(let c of ast.case_list){
-        call(c.condition,scope)
-        let case_type=scope.get_sym(c.condition)
-        if(!type_is(case_type,condition_type,scope))
-            scope.thr(`case type mismatch at line ${ast.line.join('\n')}`)
-        call(c.commands,scope)
-    }
-    if(ast.default_)
-        call(ast.default_,scope)
-    scope=scope.leave()
-}
-const C_TryStatement:check_visitor=(ast:TryStatement,scope,call)=>{
-    scope=scope.enter()
-    scope.set('throw',ast.catch_.type)
-    call(ast.commands,scope)
-    scope=scope.leave()
-    scope=scope.enter()
-    scope.set(ast.catch_.iden,ast.catch_.type)
-    call(ast.catch_.command,scope)
-    scope=scope.leave()
-    if(ast.finally_)
-        call(ast.finally_,scope)
-}
-const C_ListCommand:check_visitor=(ast:ListCommand,scope,call)=>{
-    for(let i of ast.commands)
-        call(i,scope)
-}
-const C_LambdaExpression:check_visitor=(ast:LambdaExpression,scope,call)=>{
-    scope=scope.enter()
-    for(let [k,v] of ast.generic)
-        scope.set(k,v)
-    for(let [k,v] of ast.params)
-        scope.set(k,v)
-    scope.set('return',ast.ret)
-    call(ast.body,scope)
-}
-export default new Map<any,check_visitor>([
-    [Class,C_Class],
-    [Module,C_Module],
-    [Function,C_Function],
-    [Interface,C_Interface],
-    [Variable,C_Variable],
-    [Enum,C_Enum],
-    [Assign,C_Assign],
-    [VarDeclaration,C_VarDeclaration],
-    [Call,C_Call],
-    [Return,C_Return],
-    [Break,C_Break],
-    [Continue,C_Continue],
-    [Throw,C_Throw],
-    [VM,C_VM],
-    [Increment,C_Increment],
-    [Decrement,C_Decrement],
-    [IfStatement,C_IfStatement],
-    [WhileStatement,C_WhileStatement],
-    [DoWhileStatement,C_DoWhileStatement],
-    [ForStatement,C_ForStatement],
-    [ForeachStatement,C_ForeachStatement],
-    [SwitchStatement,C_SwitchStatement],
-    [TryStatement,C_TryStatement],
-    [ListCommand,C_ListCommand],
-    [LambdaExpression,C_LambdaExpression],
-    [Cast,C_Cast],
-    [Value,C_Value],
-    [Operation,C_Operation]
+export const Round0=new Map<any,slang_check_visitor>([
+    [File, Check_File],
+    [Value, Check_Value],
+    [Operation, Check_Operation],
+    [Cast, Check_Cast],
+    [Module, Check_Module],
+    [Enum, Check_Enum],
+    [Class, Check_ClassOrInterface],
+    [Interface, Check_ClassOrInterface],
+    [Function, Check_Function],
+    [Variable, Check_Variable],
+    [ListCommand, Check_ListCommand],
+    [WhileStatement, Check_Loop],
+    [DoWhileStatement, Check_Loop],
+    [ForeachStatement, Check_Loop],
+    [ForStatement, Check_Loop],
+    [Break, Check_BreakContinue],
+    [Continue, Check_BreakContinue],
+    [TryStatement, Check_Try],
+    [Throw, Check_Throw],
+    [IfStatement, Check_If],
+    [LambdaExpression, Check_Lambda]
 ])

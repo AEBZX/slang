@@ -6,7 +6,7 @@
     "types": ["node"],
     "moduleResolution": "bundler",
     "noEmit": true,
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,

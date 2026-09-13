@@ -2,11 +2,11 @@
 //向外禁止:param_set 0 收到地址(return &VAR)、&VAR 写入块外槽/内存、thread 传地址、跨块value读
 //向内允许:call/cz 传地址(进入子作用域/调用函数,生命周期仍在块内)
 import {
-    asm_args, BINARY, BIT_NOT, CALL, CMP, CZ, DELETE, IN, IR, IRTool, JMP, JZ, LOAD, MOV, NOT,
+    asm_args, BINARY, BIT_NOT, CALL, CMP, CZ, DELETE, IN, IRTree, IRTool, JMP, JZ, LOAD, MOV, NOT,
     OFFSET_ADDR, OFFSET_GET, OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET, POP, PUSH, RET, RETN, TZ
 } from '../utils'
 //读取槽:value形式操作数 + 就地操作的reg槽(NOT/BIT_NOT)
-function reads(i:IR):number[]{
+function reads(i:IRTree):number[]{
     let ret:number[]=[]
     let v=(a:asm_args)=>{if(a&&a[0]=='value')ret.push(a[1])}
     if(i instanceof MOV){v(i.left);v(i.right)}

@@ -1,11 +1,11 @@
-#include "runtime.h"
+﻿#include "runtime.h"
 #define MOV_F(fa, fb) \
 void mov_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n;(void)c; \
     v(d,dst(d,fa,a),src(d,fb,b)); } \
 void MOV_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
-    t->pool->oper({{valueCond(a),valueCond(b)},mov_f##fa##fb}); }
+    t->pool->oper(a,b,0,2,mov_f##fa##fb); }
 MOV_F(0,0) MOV_F(0,1) MOV_F(1,0) MOV_F(1,1)
 //LOAD:var[A]=池id(reg源=池id原样存槽,value源=var读)——编译器 load 发射的是池 id,必须特例,否则 reg 反查错位
 #define LOAD_F(fa, fb) \
@@ -14,7 +14,7 @@ void load_f##fa##fb(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,i
     v(d,dst(d,fa,a),key(d,fb,b)); } \
 void LOAD_F##fa##fb(Runtime* t,int a,int b,int c){ \
     (void)c; \
-    t->pool->oper({{valueCond(a),valueCond(b)},load_f##fa##fb}); }
+    t->pool->oper(a,b,0,2,load_f##fa##fb); }
 LOAD_F(0,0) LOAD_F(0,1) LOAD_F(1,0) LOAD_F(1,1)
 #define CMP_F(fa, fb, fc) \
 void cmp_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
@@ -35,14 +35,18 @@ void cmp_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int 
         if(!Lc.type&&!Rc.type){ \
             int s=Lc.str.compare(Rc.str); \
             r=(C==0)?(s==0):(C==1)?(s!=0):(C==2)?(s>0):(C==3)?(s<0):(C==4)?(s>=0):(s<=0); \
-        }else{ \
+        }else if(Lc.type&&Rc.type){ \
             double ln=Lc.num, rn=Rc.num; \
             r=(C==0)?(ln==rn):(C==1)?(ln!=rn):(C==2)?(ln>rn):(C==3)?(ln<rn):(C==4)?(ln>=rn):(ln<=rn); \
+        }else{ \
+            /*类型不同(字符串 vs 数字):不可比。此前落到数值分支按 num=0 比较, \
+              导致任意字符串都"等于 0",越界/缺失值的判空因此全部失效*/ \
+            r=(C==0)?0:(C==1)?1:0; \
         } \
     } \
     v(d,A,d->data.link((double)r)); } \
 void CMP_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},cmp_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,cmp_f##fa##fb##fc); }
 CMP_F(0,0,0) CMP_F(0,0,1) CMP_F(0,1,0) CMP_F(0,1,1)
 CMP_F(1,0,0) CMP_F(1,0,1) CMP_F(1,1,0) CMP_F(1,1,1)
 //OFFSET 对象槽操作数用 key 语义:reg→x原样,value→var[x](自引用句柄,编译器map/数组发射对齐)
@@ -56,7 +60,7 @@ void offset_set_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int
     else { vid=d->alloc(); o(d,A,B,vid); } \
     v(d,vid,src(d,fc,c)); } \
 void OFFSET_SET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_set_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,offset_set_f##fa##fb##fc); }
 OFFSET_SET_F(0,0,0) OFFSET_SET_F(0,0,1) OFFSET_SET_F(0,1,0) OFFSET_SET_F(0,1,1)
 OFFSET_SET_F(1,0,0) OFFSET_SET_F(1,0,1) OFFSET_SET_F(1,1,0) OFFSET_SET_F(1,1,1)
 
@@ -75,7 +79,7 @@ void offset_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int
     else \
         v(d,A,VarPool::unsafeReadVar(d,vid)); } \
 void OFFSET_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_get_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,offset_get_f##fa##fb##fc); }
 OFFSET_GET_F(0,0,0) OFFSET_GET_F(0,0,1) OFFSET_GET_F(0,1,0) OFFSET_GET_F(0,1,1)
 OFFSET_GET_F(1,0,0) OFFSET_GET_F(1,0,1) OFFSET_GET_F(1,1,0) OFFSET_GET_F(1,1,1)
 //STR_GET a b c:var[A]=字符串[var[B]][var[C]] 的单字符子串
@@ -92,20 +96,25 @@ void str_get_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,
     else \
         v(d,A,d->data.link(std::string("\0",1))); } \
 void STR_GET_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},str_get_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,str_get_f##fa##fb##fc); }
 STR_GET_F(0,0,0) STR_GET_F(0,0,1) STR_GET_F(0,1,0) STR_GET_F(0,1,1)
 STR_GET_F(1,0,0) STR_GET_F(1,0,1) STR_GET_F(1,1,0) STR_GET_F(1,1,1)
 
 //OFFSET_ADDR a b c:var[A]=offset[B][C] 的 var_id(地址=槽号,不 link 成池id)
 //编译器取地址后 mov value 解引用写 var[var[A]];link(vid) 会把槽号当池id,写入错槽
+//关键:键不存在时必须像 OFFSET_SET 一样分配新槽并登记,否则地址=0(哨兵),
+//索引/成员赋值会写进槽 0 —— 表现为"给容器写新键/新元素静默失效"
 #define OFFSET_ADDR_F(fa, fb, fc) \
 void offset_addr_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
-    (void)o;(void)n; \
+    (void)n; \
     int A=key(d,fa,a); \
-    int vid=VarPool::unsafeReadOffset(d,key(d,fb,b),key(d,fc,c)); \
+    int B=key(d,fb,b), C=key(d,fc,c); \
+    int vid; \
+    if (d->hasOffset(B,C)) vid=VarPool::unsafeReadOffset(d,B,C); \
+    else { vid=d->alloc(); o(d,B,C,vid); } \
     v(d,A,vid); } \
 void OFFSET_ADDR_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},offset_addr_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,offset_addr_f##fa##fb##fc); }
 OFFSET_ADDR_F(0,0,0) OFFSET_ADDR_F(0,0,1) OFFSET_ADDR_F(0,1,0) OFFSET_ADDR_F(0,1,1)
 OFFSET_ADDR_F(1,0,0) OFFSET_ADDR_F(1,0,1) OFFSET_ADDR_F(1,1,0) OFFSET_ADDR_F(1,1,1)
 inline void push_frame(Runtime* t,const int target,const int frame_type)
@@ -353,3 +362,4 @@ std::unordered_map<int,CommandRun> basic()
         {167,DELETE_R},{168,DELETE_V},
     };
 }
+

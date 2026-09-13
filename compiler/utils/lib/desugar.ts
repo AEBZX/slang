@@ -1,25 +1,27 @@
 import {ast_data, ASTTree} from '../data'
-
-export type desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
-
-export class DesugarVisitor{
-    visit:Map<any,desugar_visitor>
+import PeepholeTool, {PeepholeTree} from './tool'
+export type desugar_visitor=(node:PeepholeTree,call:(node:PeepholeTree)=>PeepholeTree)=>PeepholeTree
+export default class Desugar extends PeepholeTool{
+    ref:Map<any,desugar_visitor>
+    _default:desugar_visitor
     constructor(){
-        this.visit=new Map()
+        super('desugar')
     }
-    visitor(ast:ASTTree,visit:Map<any,desugar_visitor>){
-        this.visit=visit
-        let g=(ast:ASTTree):ASTTree=>{
-            for(let [k,v] of this.visit)
-                if(ast instanceof k)
-                    return v(ast,g)
-            //无匹配的节点原样保留,避免丢失整棵子树
-            return ast
+    use(data:Map<any,desugar_visitor>|desugar_visitor):Desugar{
+        if(data instanceof Map)
+            for(let [k,v] of data)
+                this.ref.set(k,v)
+        else
+            this._default=data
+        return this
+    }
+    run(node:PeepholeTree[]):PeepholeTree[]{
+        let generate=(node:PeepholeTree):PeepholeTree=>{
+            for(let [k,v] of this.ref)
+                if(node instanceof k)
+                    return v(node,generate)
+            return this._default(node,generate)
         }
-        return g(ast)
+        return node.map(generate)
     }
-}
-
-export default function desugar(tree:ASTTree,visit:Map<any,desugar_visitor>){
-    return new DesugarVisitor().visitor(tree,visit)
 }

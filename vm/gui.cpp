@@ -32,8 +32,50 @@
 #include <WebKit/WebKit.h>
 #endif
 
-//===== 共享骨架:一个专用 GUI 线程 + 命令队列,窗口生命周期全部在 GUI 线程 =====
 namespace {
+//===== UTF-8 → 宽字符(跨平台,可单测;Windows 后端依赖它)=====
+//此前 Windows 后端用 std::wstring(title.begin(),title.end()) 逐字节放大:
+//ASCII 没问题,但中文标题/HTML 全部乱码(项目本身就是中文的,这条必须修)
+std::wstring utf8_to_wide_impl(const std::string& s)
+{
+    std::wstring out;
+    out.reserve(s.size());
+    size_t i=0;
+    while (i<s.size())
+    {
+        const unsigned char c=static_cast<unsigned char>(s[i]);
+        unsigned cp=0;
+        int extra=0;
+        if (c<0x80) { cp=c; extra=0; }
+        else if ((c&0xE0)==0xC0) { cp=c&0x1Fu; extra=1; }
+        else if ((c&0xF0)==0xE0) { cp=c&0x0Fu; extra=2; }
+        else if ((c&0xF8)==0xF0) { cp=c&0x07u; extra=3; }
+        else { out.push_back(static_cast<wchar_t>(0xFFFD)); i++; continue; }
+        i++;
+        bool bad=false;
+        for (int k=0;k<extra;k++)
+        {
+            if (i>=s.size()||(static_cast<unsigned char>(s[i])&0xC0)!=0x80) { bad=true; break; }
+            cp=(cp<<6)|(static_cast<unsigned char>(s[i])&0x3Fu);
+            i++;
+        }
+        if (bad||cp>0x10FFFF) { out.push_back(static_cast<wchar_t>(0xFFFD)); continue; }
+        if (sizeof(wchar_t)==2)   //Windows:UTF-16,补充平面需要代理对
+        {
+            if (cp<=0xFFFF) out.push_back(static_cast<wchar_t>(cp));
+            else
+            {
+                cp-=0x10000;
+                out.push_back(static_cast<wchar_t>(0xD800+(cp>>10)));
+                out.push_back(static_cast<wchar_t>(0xDC00+(cp&0x3FF)));
+            }
+        }
+        else out.push_back(static_cast<wchar_t>(cp));
+    }
+    return out;
+}
+
+//===== 共享骨架:一个专用 GUI 线程 + 命令队列,窗口生命周期全部在 GUI 线程 =====
 struct Job
 {
     std::string title;
@@ -110,9 +152,13 @@ void gui_thread_main()
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
-void ensure_thread()
+//启动 GUI 线程并把命令一起入队(**同一个锁内**):
+//此前是"先 ensure_thread() 再单独入队",线程可能在这两步之间看到"无窗口无任务"而退出,
+//于是命令永远留在队列里、窗口打不开(关闭上一个窗口后再立刻开新窗口时最容易踩到)
+void push_cmd(Cmd c)
 {
     std::lock_guard<std::mutex> lock(g_mtx);
+    g_cmds.push(std::move(c));
     if (g_started) return;
     g_started = true;
     g_thread = std::thread(gui_thread_main);
@@ -141,6 +187,21 @@ CreateEnvFn load_create_env()
     static CreateEnvFn fn = reinterpret_cast<CreateEnvFn>(
         GetProcAddress(mod, "CreateCoreWebView2EnvironmentWithOptions"));
     return fn;
+}
+//WebView2 **运行时**是否已安装:只有 Loader.dll 时窗口能建出来但永远白屏,
+//available() 必须把它也测掉,否则调用方(和 GUI 测试)会以为可用
+bool runtime_installed()
+{
+    static HMODULE mod = LoadLibraryW(L"WebView2Loader.dll");
+    if (!mod) return false;
+    using VersionFn = HRESULT(__stdcall*)(PCWSTR, LPWSTR*);
+    static VersionFn fn = reinterpret_cast<VersionFn>(
+        GetProcAddress(mod, "GetAvailableCoreWebView2BrowserVersionString"));
+    if (!fn) return false;
+    LPWSTR version = nullptr;
+    const bool ok = SUCCEEDED(fn(nullptr, &version)) && version != nullptr;
+    if (version) CoTaskMemFree(version);
+    return ok;
 }
 class ControllerHandler;
 //WebView2 异步回调:所有权交给运行时(refcount 1 起,Invoke 后由运行时释放)
@@ -241,12 +302,22 @@ void register_class()
     RegisterClassExW(&wc);
     done = true;
 }
-bool backend_available() { return load_create_env() != nullptr; }
-bool backend_init() { register_class(); return true; }
+bool backend_available() { return load_create_env() != nullptr && runtime_installed(); }
+bool backend_init()
+{
+    //WebView2 要求调用线程先初始化 COM(官方示例在 wWinMain 里做):
+    //不初始化时 CreateCoreWebView2EnvironmentWithOptions 直接失败 → 白窗口
+    const HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    //RPC_E_CHANGED_MODE:本线程已是别的套间模型,仍可继续用
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return false;
+    register_class();
+    return true;
+}
 void* backend_create(const std::string& title, const std::string& html)
 {
-    const std::wstring wt(title.begin(), title.end());
-    const std::wstring wh(html.begin(), html.end());
+    //必须按 UTF-8 解码:逐字节放大中文会乱码
+    const std::wstring wt = utf8_to_wide_impl(title);
+    const std::wstring wh = utf8_to_wide_impl(html);
     HWND hwnd = CreateWindowExW(0, L"SlangWebviewWnd", wt.c_str(),
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 960, 640,
         nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -398,15 +469,11 @@ namespace gui {
 bool show(const std::string& title, const std::string& html)
 {
     if (!available()) return false;
-    ensure_thread();
     Cmd c;
     c.kind = Cmd::OPEN;
     c.job.title = title;
     c.job.html = html;
-    {
-        std::lock_guard<std::mutex> lock(g_mtx);
-        g_cmds.push(std::move(c));
-    }
+    push_cmd(std::move(c));
     return true;
 }
 bool available()
@@ -422,11 +489,14 @@ void close_all()
 {
     Cmd c;
     c.kind = Cmd::CLOSE_ALL;
-    std::lock_guard<std::mutex> lock(g_mtx);
-    g_cmds.push(std::move(c));
+    push_cmd(std::move(c));
 }
 int loaded_count()
 {
     return g_loaded.load();
+}
+std::wstring utf8_to_wide(const std::string& s)
+{
+    return utf8_to_wide_impl(s);
 }
 }   // namespace gui

@@ -1,5 +1,5 @@
-import {BlockType, Class, File, HClass, hir_visitor, HModule, HScope, HVariable, Module, Variable} from '../utils'
-export const H_Module:hir_visitor=(node:Module,scope,call)=>{
+import {BlockType, Class, File, HClass, slang_hir_visitor, HModule, HScope, HVariable, Module, Variable} from '../utils'
+export const H_Module:slang_hir_visitor=(node:Module, scope, call)=>{
     //复用 pre 预注册的 id(pre 按文件序先分配全部块 id,跨文件/前向引用才能解析)
     let id=scope.get((node.type as BlockType).local.join('.'))!=null
         ?scope.get((node.type as BlockType).local.join('.')):scope.id()
@@ -9,7 +9,7 @@ export const H_Module:hir_visitor=(node:Module,scope,call)=>{
     scope=scope.leave()
     return new HModule(id,children)
 }
-export const H_Class:hir_visitor=(node:Class,scope,call)=>{
+export const H_Class:slang_hir_visitor=(node:Class, scope, call)=>{
     let id=scope.get((node.type as BlockType).local.join('.'))!=null
         ?scope.get((node.type as BlockType).local.join('.')):scope.id()
     scope.set((node.type as BlockType).local.join('.'),id)
@@ -40,7 +40,7 @@ export const H_Class:hir_visitor=(node:Class,scope,call)=>{
             constructor_id=(children[i] as unknown as HVariable).name
     return new HClass(id,children,constructor_id,this_id)
 }
-export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
+export const H_Variable:slang_hir_visitor=(node:Variable, scope, call)=>{
     //优先用绝对路径槽(跨模块唯一):模块静态字段同名(如 file.type 与 system.type)时,
     //pre 的裸名全局注册互相覆盖,scope.get(node.name) 会拿到别的模块的槽,
     //vm '%type' 与 std.file.type 分叉成两个槽/错误端口
@@ -53,7 +53,7 @@ export const H_Variable:hir_visitor=(node:Variable,scope,call)=>{
     if(entry)scope.global.entry=true
     return new HVariable(id,call(node.value,scope),node.modifiers.unstatic,entry)
 }
-export default new Map<any,hir_visitor>([
+export default new Map<any,slang_hir_visitor>([
     [Module,H_Module],
     [Class,H_Class],
     [Variable,H_Variable],

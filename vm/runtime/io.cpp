@@ -3,8 +3,11 @@
 static int field(Runtime* t, const int obj, const char* key)
 {
     const int k = t->pool->data.link(std::string(key));
+    //字段不存在返回 0:此前不判 vid==0 就 unsafeReadVar(0),会读到槽 0(寄存器文件)的垃圾值,
+    //让 mode/kind/type 等判定随机成立
+    if (!t->pool->hasOffset(obj, k)) return 0;
     const int vid = VarPool::unsafeReadOffset(t->pool, obj, k);
-    return VarPool::unsafeReadVar(t->pool, vid);
+    return vid == 0 ? 0 : VarPool::unsafeReadVar(t->pool, vid);
 }
 static std::string field_str(Runtime* t, const int obj, const char* key)
 {

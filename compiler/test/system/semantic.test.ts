@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { lexer } from '../../utils/lexer'
+import { lexer } from '../../utils/lib/lexer.ts'
 import cst_parse from '../../parser/cst'
 import ast_parse from '../../parser/ast'
 import {
-    asm_args, ast_data, BINARY, BIT_NOT, CALL, CMP, CZ, File, GC, IN, IR, IRTool, JMP,
+    asm_args, ast_data, BINARY, BIT_NOT, CALL, CMP, CZ, File, GC, IN, IRTree, IRTool, JMP,
     JZ, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET,
     POP, PUSH, RET, RETN, STR_GET, THREAD, TZ
 } from '../../utils'
@@ -39,7 +39,7 @@ class Sim {
     calls: { b: number, i: number, func: boolean, loop?: boolean }[] = []
     private addr_id = -1
     private steps = 0
-    constructor(private blocks: Map<number, IR[]>, private consts: Map<number, any>, entryParam: any[] = []) {
+    constructor(private blocks: Map<number, IRTree[]>, private consts: Map<number, any>, entryParam: any[] = []) {
         this.param = [...entryParam]
     }
     resolve(a: asm_args) { return a[0] == 'reg' ? a[1] : this.slots.get(a[1]) }

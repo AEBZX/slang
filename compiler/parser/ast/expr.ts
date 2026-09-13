@@ -3,7 +3,7 @@ import {
     ArgumentsPostfix,
     ArrayExpression,
     ast_data,
-    ast_generate, BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
+    slang_ast_generate, BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
     BooleanLiteral, DecrementPostfix, DecrementPrefix, DivisionExpression, EqualityExpression, Expression,
     GreaterEqualExpression,
     IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, InequalityExpression, LessEqualExpression,
@@ -16,53 +16,53 @@ import {
     TypePrefix
 } from '../../utils'
 import {parseGeneric} from './block'
-const G_NumberLiteral:ast_generate=(data,tree)=>{
-    return new NumberLiteral(data.children.get('child_0') as string)
+const G_NumberLiteral:slang_ast_generate=(data,tree)=>{
+    return new NumberLiteral(data.children.get(0) as string)
 }
-const G_StringLiteral:ast_generate=(data,tree)=>{
-    return new StringLiteral(data.children.get('child_0') as string)
+const G_StringLiteral:slang_ast_generate=(data,tree)=>{
+    return new StringLiteral(data.children.get(0) as string)
 }
-const G_NullLiteral:ast_generate=(data,tree)=>{
+const G_NullLiteral:slang_ast_generate=(data,tree)=>{
     return new NullLiteral(null)
 }
-const G_BooleanLiteral:ast_generate=(data,tree)=>{
-    return new BooleanLiteral(data.children.get('child_0') as string)
+const G_BooleanLiteral:slang_ast_generate=(data,tree)=>{
+    return new BooleanLiteral(data.children.get(0) as string)
 }
-const G_Identifier:ast_generate=(data,tree)=>{
-    return new IdentifierExpr(data.children.get('child_0') as string)
+const G_Identifier:slang_ast_generate=(data,tree)=>{
+    return new IdentifierExpr(data.children.get(0) as string)
 }
-const G_ArrayExpression:ast_generate=(data,tree)=>{
+const G_ArrayExpression:slang_ast_generate=(data,tree)=>{
     let children=[]
     for(let [k,v] of data.children)
         if(typeof v=='object')children.push(tree(v))
     return new ArrayExpression(children)
 }
-const G_MapExpression:ast_generate=(data,tree)=>{
+const G_MapExpression:slang_ast_generate=(data,tree)=>{
     let children=new Map<string,Expression>
     for(let [k,v] of data.children)
         if(typeof v=='object')
-            children.set(v.children.get('child_0') as string,
-                         tree(v.children.get('child_1') as ast_data))
+            children.set(v.children.get(0) as string,
+                         tree(v.children.get(1) as ast_data))
     return new MapExpression(children)
 }
-const G_LambdaExpression:ast_generate=(data,tree)=>{
+const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
     let d=parseGeneric(data,tree)
-    const ParamIdentifier=data.children.get(d.is?'child_1':'child_0') as ast_data
+    const ParamIdentifier=data.children.get(d.is?1:0) as ast_data
     let param=new Map<string,Type>
     for(let [k,v] of ParamIdentifier.children)
         if(typeof v=='object')
-            param.set(v.children.get('child_0') as string,
-                      tree(v.children.get('child_1') as ast_data))
-    let type=tree(data.children.get(d.is?'child_2':'child_1') as ast_data)
-    let command=tree(data.children.get(d.is?'child_3':'child_2') as ast_data)
+            param.set(v.children.get(0) as string,
+                      tree(v.children.get(1) as ast_data))
+    let type=tree(data.children.get(d.is?2:1) as ast_data)
+    let command=tree(data.children.get(d.is?3:2) as ast_data)
     //模型槽位 (generic,params,ret,body):d.data 是泛型表,param 是参数表——此前顺序颠倒
     //把参数表塞进 generic,导致 operation 的 generic.size 误判/泛型解析错位
     return new LambdaExpression(d.data,param,type,command)
 }
-const G_PostfixExpression:ast_generate=(data,tree)=>{
+const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
     let fix:Postfix[]=[]
-    let primary=tree(data.children.get('child_0') as ast_data)
-    let FixList=data.children.get('child_1') as ast_data
+    let primary=tree(data.children.get(0) as ast_data)
+    let FixList=data.children.get(1) as ast_data
     for(let [k,v] of FixList.children)
         if(typeof v=='object')
             switch (v.type) {
@@ -73,18 +73,18 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
                     fix.push(new DecrementPostfix())
                     break
                 case 'MemberPostfix':
-                    fix.push(new MemberPostfix(v.children.get('child_0') as string))
+                    fix.push(new MemberPostfix(v.children.get(0) as string))
                     break
                 case 'IndexPostfix':
-                    fix.push(new IndexPostfix(tree(v.children.get('child_0') as ast_data)))
+                    fix.push(new IndexPostfix(tree(v.children.get(0) as ast_data)))
                     break
                 case 'ArgumentsPostfix':{
                     let param=[]
                     let type=[]
-                    let args='child_0'
-                    let first=v.children.get('child_0')
+                    let args=0
+                    let first=v.children.get(0)
                     if(first&&(first as ast_data).type=='GenericData'){
-                        args='child_1'
+                        args=1
                         for(let [k,_v] of (first as ast_data).children)
                             type.push(tree(_v as ast_data))
                     }
@@ -100,20 +100,20 @@ const G_PostfixExpression:ast_generate=(data,tree)=>{
         return primary
     return new PostfixExpression(primary,fix)
 }
-const G_PrefixExpression:ast_generate=(data,tree)=>{
+const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
     let fix:Prefix[]=[]
-    let c0=data.children.get('child_0') as ast_data
+    let c0=data.children.get(0) as ast_data
     //cast 布局:(Type)expr —— child_0 是 TypePrefix 节点,child_1 是递归 PrefixExpression
     if(c0.type=='TypePrefix'){
-        let primary=tree(data.children.get('child_1') as ast_data)
-        return new PrefixExpression(primary,[new TypePrefix(tree(c0.children.get('child_0') as ast_data))])
+        let primary=tree(data.children.get(1) as ast_data)
+        return new PrefixExpression(primary,[new TypePrefix(tree(c0.children.get(0) as ast_data))])
     }
-    let primary=tree(data.children.get('child_1') as ast_data)
+    let primary=tree(data.children.get(1) as ast_data)
     for(let [k,v] of c0.children)
         if(typeof v=='object')
             switch (v.type) {
                 case 'TypePrefix':
-                    fix.push(new TypePrefix(tree(v.children.get('child_0') as ast_data)))
+                    fix.push(new TypePrefix(tree(v.children.get(0) as ast_data)))
                     break
                 case 'IncrementPrefix':
                     fix.push(new IncrementPrefix())
@@ -144,7 +144,7 @@ const G_PrefixExpression:ast_generate=(data,tree)=>{
         return primary
     return new PrefixExpression(primary,fix)
 }
-const G_BinaryExpression:ast_generate=(data,tree)=>{
+const G_BinaryExpression:slang_ast_generate=(data,tree)=>{
     const g=(left:Expression,right:Expression,type:string)=>{
         switch (type) {
             case 'Additive':
@@ -185,41 +185,41 @@ const G_BinaryExpression:ast_generate=(data,tree)=>{
                 return new InequalityExpression(left,right)
         }
     }
-    let ret=tree(data.children.get('child_0') as ast_data)
-    let right=data.children.get('child_1') as ast_data
+    let ret=tree(data.children.get(0) as ast_data)
+    let right=data.children.get(1) as ast_data
     for(let [k,v] of right.children)
         if(typeof v=='object')
-            ret=g(ret,tree(v.children.get('child_1') as ast_data),(v.children.get('child_0') as ast_data).type as string)
+            ret=g(ret,tree(v.children.get(1) as ast_data),(v.children.get(0) as ast_data).type as string)
     return ret
 }
-const G_TernaryExpression:ast_generate=(data,tree)=>{
+const G_TernaryExpression:slang_ast_generate=(data,tree)=>{
     return new TernaryExpression(
-        tree(data.children.get('child_0') as ast_data),
-        tree(data.children.get('child_1') as ast_data),
-        tree(data.children.get('child_2') as ast_data)
+        tree(data.children.get(0) as ast_data),
+        tree(data.children.get(1) as ast_data),
+        tree(data.children.get(2) as ast_data)
     )
 }
-export default {
-    'NumberLiteral':G_NumberLiteral,
-    'StringLiteral':G_StringLiteral,
-    'BooleanLiteral':G_BooleanLiteral,
-    'NullLiteral':G_NullLiteral,
-    'Identifier':G_Identifier,
-    'ArrayExpression':G_ArrayExpression,
-    'MapExpression':G_MapExpression,
-    'PostfixExpression':G_PostfixExpression,
-    'PrefixExpression':G_PrefixExpression,
-    'AdditiveExpression':G_BinaryExpression,
-    'MultiplicativeExpression':G_BinaryExpression,
-    'ShiftExpression':G_BinaryExpression,
-    'BitwiseAndExpression':G_BinaryExpression,
-    'BitwiseOrExpression':G_BinaryExpression,
-    'BitwiseXorExpression':G_BinaryExpression,
-    'LogicalAndExpression':G_BinaryExpression,
-    'LogicalOrExpression':G_BinaryExpression,
-    'BinaryExpression':G_BinaryExpression,
-    'EqualityExpression':G_BinaryExpression,
-    'RelationalExpression':G_BinaryExpression,
-    'TernaryExpression':G_TernaryExpression,
-    'LambdaExpression':G_LambdaExpression,
-}
+export default new Map([
+    ['NumberLiteral',G_NumberLiteral],
+    ['StringLiteral',G_StringLiteral],
+    ['BooleanLiteral',G_BooleanLiteral],
+    ['NullLiteral',G_NullLiteral],
+    ['Identifier',G_Identifier],
+    ['ArrayExpression',G_ArrayExpression],
+    ['MapExpression',G_MapExpression],
+    ['PostfixExpression',G_PostfixExpression],
+    ['PrefixExpression',G_PrefixExpression],
+    ['AdditiveExpression',G_BinaryExpression],
+    ['MultiplicativeExpression',G_BinaryExpression],
+    ['ShiftExpression',G_BinaryExpression],
+    ['BitwiseAndExpression',G_BinaryExpression],
+    ['BitwiseOrExpression',G_BinaryExpression],
+    ['BitwiseXorExpression',G_BinaryExpression],
+    ['LogicalAndExpression',G_BinaryExpression],
+    ['LogicalOrExpression',G_BinaryExpression],
+    ['BinaryExpression',G_BinaryExpression],
+    ['EqualityExpression',G_BinaryExpression],
+    ['RelationalExpression',G_BinaryExpression],
+    ['TernaryExpression',G_TernaryExpression],
+    ['LambdaExpression',G_LambdaExpression]
+])

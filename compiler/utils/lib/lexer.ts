@@ -6,12 +6,11 @@ import {
     radix_map,
     string_start_end,
     token,
-    TokenParam, tokens,
+    TokenParam,
     TokenType
-} from './data'
+} from '../data.ts'
+import PeepholeTool from './tool.ts'
 
-export class Lexer{
-}
 class CharStream{
     public index:number
     public code:string[]
@@ -84,10 +83,6 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     }
     return [ret != '',ret,TokenType.Number]
 }
-//字符串转义:定界符本身与常见转义(\n \t \r \0 \\)转换为实际字符,未知转义保留反斜杠原样
-const string_escape:Record<string,string>={
-    'n':'\n','t':'\t','r':'\r','0':'\0','\\':'\\','"':'"',"'":"'",'`':'`'
-}
 let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     let start=stream.now()
     if(!string_start_end.includes(start))
@@ -105,7 +100,7 @@ let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
             stream.next()
             let esc=stream.now()
             if(esc==undefined)return [true,ret,TokenType.String]
-            ret+=string_escape[esc]??('\\'+esc)
+            ret+=JSON.parse(`"${esc}"`)
             stream.next()
             continue
         }
@@ -183,7 +178,7 @@ function match(input:TokenParam|string):(stream:CharStream)=>pre_token{
         }
     }
 }
-export function lexer(code:string):token[]{
+export function lexer(code:string,tokens:TokenParam[]):token[]{
     let ret:token[]=[]
     code=code.replace(/\r\n/g,'\n')
     let stream=new CharStream(code)
@@ -219,4 +214,17 @@ export function lexer(code:string):token[]{
             stream.next()
     }
     return ret
+}
+export default class Lexer extends PeepholeTool{
+    keyword:TokenParam[]
+    constructor(){
+        super('lexer')
+    }
+    use(data:TokenParam[]){
+        this.keyword.push(...data)
+        return this
+    }
+    run(code:string[]){
+        return code.map((item) => lexer(item, this.keyword))
+    }
 }

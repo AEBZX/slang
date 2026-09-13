@@ -3,7 +3,7 @@ import {
     asm_pool,
     BINARY,
     BIT_NOT, CALL, CMP, opt_visitor, CZ, IN,
-    IR,
+    IRTree,
     IRTool, JMP, JZ,
     LOAD,
     MOV,

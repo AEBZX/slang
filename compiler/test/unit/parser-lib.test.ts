@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lexer } from '../../utils/lexer'
+import { lexer } from '../../utils/lib/lexer.ts'
 import { Parser as $, ast_data, TokenType } from '../../utils'
 
 // 辅助: lex → 以指定规则集解析

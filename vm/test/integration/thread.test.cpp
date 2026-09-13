@@ -23,18 +23,24 @@ Command build_add_block(){
     };
     return cmds;
 }
-std::unordered_map<int,CommandRun> all_runs(){
-    std::unordered_map<int,CommandRun> _run;
-    for(auto [k,v]:basic())_run[k]=v;
-    for(auto [k,v]:io())_run[k]=v;
-    for(auto [k,v]:math())_run[k]=v;
+//opcode 直查表(RunTable):与 Manage 构造时同样的组装方式
+RunTable all_runs(){
+    RunTable _run;
+    _run.assign(OPCODE_MAX,nullptr);
+    auto put=[&](const std::unordered_map<int,CommandRun>& m){
+        for(auto [k,v]:m)
+            if(k>=0&&k<OPCODE_MAX)_run[k]=v;
+    };
+    put(basic());
+    put(io());
+    put(math());
     return _run;
 }
 //两个 Runtime 共享 pool/command/_run,并发执行块1(参数 a,b),结果写 out
 struct SharedRunner{
     VarPool pool;
     Command cmds;
-    std::unordered_map<int,CommandRun> _run;
+    RunTable _run;
     Runner runner;
     explicit SharedRunner(Command c):cmds(std::move(c)),_run(all_runs()),runner(r){}
     void run(const int a,const int b,int* out,std::atomic<bool>* go){
@@ -62,7 +68,7 @@ TEST_CASE("thread: concurrent join same block (array race)", "[thread]")
 {
     for(int round=0;round<200;round++){
         Command cmds=build_add_block();
-        Manage m(std::unordered_map<int,double>{},std::unordered_map<int,std::string>{},cmds,r);
+        Manage m(std::unordered_map<int,double>{},std::unordered_map<int,std::string>{},cmds,r,std::vector<std::string>{});
         std::atomic<bool> go=false;
         std::thread a([&]{
             while(!go.load()){}

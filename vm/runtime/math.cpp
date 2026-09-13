@@ -1,4 +1,14 @@
-#include "runtime.h"
+﻿#include "runtime.h"
+#include <cmath>
+#include <limits>
+//把 double 安全转成 32 位整数:NaN/inf/超范围时 (int) 强转是 UB(实测随机值)
+inline int to_int32(const double v)
+{
+    if (!std::isfinite(v)) return 0;
+    if (v>=2147483647.0) return 2147483647;
+    if (v<=-2147483648.0) return -2147483648;
+    return static_cast<int>(v);
+}
 //浮点二元运算(add/sub/mul/div):保留 double,禁止 (int) 截断
 //此前 (int) 截断 → 1/4=0、10/4=2,浮点运行时全错;
 //O2 常量折叠用 JS 浮点算出 0.25,造成 O0/O2 语义不一致(差分暴露)
@@ -11,7 +21,7 @@ void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,i
     double r=d->data.get(src(d,fc,c)).num; \
     v(d,A,d->data.link(l op r)); } \
 void name##_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},name##_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,name##_f##fa##fb##fc); }
 #define BIN3_F_ALL(name, op) \
 BIN3_F(name,op,0,0,0) BIN3_F(name,op,0,0,1) BIN3_F(name,op,0,1,0) BIN3_F(name,op,0,1,1) \
 BIN3_F(name,op,1,0,0) BIN3_F(name,op,1,0,1) BIN3_F(name,op,1,1,0) BIN3_F(name,op,1,1,1)
@@ -21,26 +31,28 @@ BIN3_F(name,op,1,0,0) BIN3_F(name,op,1,0,1) BIN3_F(name,op,1,1,0) BIN3_F(name,op
 void name##_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=dst(d,fa,a); \
-    int l=(int)d->data.get(src(d,fb,b)).num; \
-    int r=(int)d->data.get(src(d,fc,c)).num; \
+    int l=to_int32(d->data.get(src(d,fb,b)).num); \
+    int r=to_int32(d->data.get(src(d,fc,c)).num); \
     v(d,A,d->data.link((double)(l op r))); } \
 void name##_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},name##_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,name##_f##fa##fb##fc); }
 #define BIN3_I_ALL(name, op) \
 BIN3_I(name,op,0,0,0) BIN3_I(name,op,0,0,1) BIN3_I(name,op,0,1,0) BIN3_I(name,op,0,1,1) \
 BIN3_I(name,op,1,0,0) BIN3_I(name,op,1,0,1) BIN3_I(name,op,1,1,0) BIN3_I(name,op,1,1,1)
 
 BIN3_F_ALL(add,+) BIN3_F_ALL(sub,-) BIN3_F_ALL(mul,*) BIN3_F_ALL(div,/)
-//mod:整数取模,除数 0 保护(否则 x86 int 除零 → 0xC0000094 崩溃;返回 0 不崩)
+//mod:整数取模,除数 0 保护(否则 x86 int 除零 → 0xC0000094 崩溃)。
+//除零结果统一为 NaN —— 与编译器常量折叠(JS `%` 得 NaN)一致,否则 o0 与 o1/o2 语义不一致
 #define MOD_F(name, fa, fb, fc) \
 void mod_f##fa##fb##fc(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n; \
     int A=dst(d,fa,a); \
-    int l=(int)d->data.get(src(d,fb,b)).num; \
-    int r=(int)d->data.get(src(d,fc,c)).num; \
-    v(d,A,d->data.link((double)(r==0?0:l%r))); } \
+    int l=to_int32(d->data.get(src(d,fb,b)).num); \
+    int r=to_int32(d->data.get(src(d,fc,c)).num); \
+    const double res=(r==0)?std::numeric_limits<double>::quiet_NaN():(double)(l%r); \
+    v(d,A,d->data.link(res)); } \
 void mod_F##fa##fb##fc(Runtime* t,int a,int b,int c){ \
-    t->pool->oper({{valueCond(a),valueCond(b),valueCond(c)},mod_f##fa##fb##fc}); }
+    t->pool->oper(a,b,c,3,mod_f##fa##fb##fc); }
 #define MOD_ALL(name) \
 MOD_F(name,0,0,0) MOD_F(name,0,0,1) MOD_F(name,0,1,0) MOD_F(name,0,1,1) \
 MOD_F(name,1,0,0) MOD_F(name,1,0,1) MOD_F(name,1,1,0) MOD_F(name,1,1,1)
@@ -48,16 +60,28 @@ MOD_ALL(mod)
 BIN3_I_ALL(shr,>>) BIN3_I_ALL(shl,<<) BIN3_I_ALL(and,&) BIN3_I_ALL(or,|) BIN3_I_ALL(xor,^)
 
 //一元:not/bit_not(就地:var[A]=link(op 池值(var[A])))
+//not 的语义按类型定真值:数字看 num!=0,字符串看非空。
+//此前一律 !(int)num → 字符串的 num 恒为 0 → !任意字符串恒为真(如 if(!s) 恒成立)
+#define UN1_NOT(fa) \
+void not_f##fa(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
+    (void)o;(void)n;(void)b;(void)c; \
+    int A=dst(d,fa,a); \
+    const Const c0=d->data.get(VarPool::unsafeReadVar(d,A)); \
+    const int truth=c0.type?(c0.num!=0):(!c0.str.empty()); \
+    v(d,A,d->data.link((double)(truth?0:1))); } \
+void not_F##fa(Runtime* t,int a,int b,int c){ \
+    (void)b;(void)c; \
+    t->pool->oper(a,0,0,1,not_f##fa); }
+UN1_NOT(0) UN1_NOT(1)
 #define UN1(name, op, fa) \
 void name##_f##fa(VarPool* d,PoolValue v,PoolOffset o,PoolName n,int a,int b,int c){ \
     (void)o;(void)n;(void)b;(void)c; \
     int A=dst(d,fa,a); \
-    int r=op (int)d->data.get(VarPool::unsafeReadVar(d,A)).num; \
+    int r=op to_int32(d->data.get(VarPool::unsafeReadVar(d,A)).num); \
     v(d,A,d->data.link((double)r)); } \
 void name##_F##fa(Runtime* t,int a,int b,int c){ \
     (void)b;(void)c; \
-    t->pool->oper({{valueCond(a)},name##_f##fa}); }
-UN1(not,! ,0) UN1(not,! ,1)
+    t->pool->oper(a,0,0,1,name##_f##fa); }
 UN1(bit_not,~ ,0) UN1(bit_not,~ ,1)
 
 std::unordered_map<int,CommandRun> math()
@@ -87,3 +111,6 @@ std::unordered_map<int,CommandRun> math()
         {108,bit_not_F0},{109,bit_not_F1},
     };
 }
+
+
+

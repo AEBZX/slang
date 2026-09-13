@@ -4,12 +4,8 @@ import {kill} from './kill'
 import CP from './cp'
 import CONSTANT from './constant'
 import PEEPHOLE from './peephole'
-import {asm_command, BINARY, bin, BIT_NOT, BLOCK_END, BLOCK_START, CMP, IR, IRTool, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, opt_visitor, PARAM_LOAD, POP, to} from '../utils'
+import {asm_command, BINARY, bin, BIT_NOT, BLOCK_END, BLOCK_START, CMP, IRTree, IRTool, LOAD, MOV, NOT, OFFSET_ADDR, OFFSET_GET, opt_visitor, PARAM_LOAD, POP, to} from '../utils'
 const round=10
-//跨块写扫描:模拟各块局部 state 解析 value 左值写目标,收集 槽=>写入块集合
-//while 循环体在独立块修改变量后,块0内 if(变量==常量) 仍按初始化值折叠会错,折叠需保守
-//reg 左值(MOV reg X / LOAD reg X / CMP / BINARY 等)直接写槽 X,同样必须记录;
-//否则 CP 把循环体优化成 reg 直写后,后续轮 build_cross 丢失写记录,if(变量==常量) 被错误折叠
 const build_cross=(tool:IRTool)=>{
     let cross=new Map<number,Set<number>>()
     const mark=(slot:number|undefined,bid:number)=>{
@@ -63,7 +59,7 @@ const build_cross=(tool:IRTool)=>{
 const o1=(tool:IRTool)=>{
     build_cross(tool)
     //按指令真实下标分派规则
-    let each=(c:Map<any,opt_visitor>,bid:number,data:IR[])=>{
+    let each=(c:Map<any,opt_visitor>,bid:number,data:IRTree[])=>{
         for(let i=0;i<data.length;i++){
             let rule=c.get(data[i].constructor)
             if(rule)rule(data[i],tool,bid,i)
@@ -96,18 +92,12 @@ const o2=(tool:IRTool)=>{
 }
 const optimize=[o1,o2]
 //o0=不优化;o1=常量折叠/传播/窥孔/DCE(多轮收敛);o2=再循环 cfg 可达剪枝+变量 kill
-//此前 o1 无条件执行,level 0(CLI"关闭优化")也被优化,与优化器语义测试复刻逻辑不符
-//导出 IR 阶段供测试模拟器直接执行优化后指令,避免测试侧复制 pass 逻辑产生漂移(如漏 build_cross)
 export function opt_ir(data:{pool:Map<number|string,number>,code:Map<number,asm_command[]>,id:number},level:number):IRTool{
     let pool=new Map<number,number|string>
     for(let [k,v] of data.pool)pool.set(v,k)
     let tool=new IRTool(data.id,to(data.code),pool)
     if(level>=1)for(let i=0;i<round;i++)o1(tool)
-    if(level>=2)for(let i=0;i<round;i++){
-        build(tool.command,tool)
-        cfg_kill(tool)
-        kill(tool)
-    }
+    if(level>=2)for(let i=0;i<round;i++)o2(tool)
     return tool
 }
 export default function (data:{pool:Map<number|string,number>,code:Map<number,asm_command[]>,id:number},level:number){

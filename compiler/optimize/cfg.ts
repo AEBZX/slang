@@ -1,5 +1,5 @@
-import {asm_args, CALL, cfg, CZ, IR, IRTool, JMP, JZ, LOAD, MOV, OFFSET_SET, PARAM_LOAD, RET, RETN, TZ} from '../utils'
-export function build(code:Map<number,IR[]>,tool:IRTool){
+import {asm_args, CALL, cfg, CZ, IRTree, IRTool, JMP, JZ, LOAD, MOV, OFFSET_SET, PARAM_LOAD, RET, RETN, TZ} from '../utils'
+export function build(code:Map<number,IRTree[]>, tool:IRTool){
     let CFG:cfg={}
     for(let [id,] of code)
         CFG[id]={last:[],next:[],call:0}

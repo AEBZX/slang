@@ -3,7 +3,7 @@ import {
     BIT_NOT,
     CMP,
     CZ,
-    IR,
+    IRTree,
     JMP,
     JZ,
     LOAD,
@@ -43,7 +43,7 @@ const P_OFFSET_SET:opt_visitor=(data:OFFSET_SET, tool, bid, index)=>{
 //a+0,a-0,a*1,a/1,a mod 1
 const P_BINARY:opt_visitor=(data:BINARY, tool, bid, index) => {
     const $=tool.$
-    let _data:IR=data
+    let _data:IRTree=data
     let r=$.value(data.right)
     let l=$.value(data.left)
     //原写法 (add&&l==0)||(r==0) 优先级错误:r==0 会逃逸到所有运算,
@@ -116,7 +116,7 @@ const P_BIT_NOT:opt_visitor=(data:BIT_NOT, tool, bid, index)=>{
 }
 const P_CMP:opt_visitor=(data:CMP, tool, bid, index)=>{
     const $=tool.$
-    let _data:IR=data
+    let _data:IRTree=data
     let r=$.value(data.right),l=$.rvalue(data.left),o=$.value(data.oper)
     if(o==null)return
     if(r==l&&r!=null){
@@ -175,7 +175,7 @@ const P_TZ:opt_visitor=(data:TZ, tool, bid, index)=>{
 }
 const P_OFFSET_GET:opt_visitor=(data:OFFSET_GET, tool, bid, index)=>{
     const $=tool.$
-    let _data:IR=data
+    let _data:IRTree=data
     let t=$.value(data.data),o=$.value(data.offset)
     //_t 可能为 undefined(跨块访问数组/对象,last_touch 记录在别的块的 state 键上),跳过优化
     let _t=$.t(data.data)

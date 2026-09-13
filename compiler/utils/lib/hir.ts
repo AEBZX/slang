@@ -1,100 +1,34 @@
 import {ASTTree, HIRTree} from '../data'
 import {HBlock, HClass, HModule, HVariable} from '../model/hir'
 import {File} from '../model/ast'
-export type hir_visitor=(node:ASTTree,scope:HScope,call:(node:ASTTree,scope?:HScope)=>HIRTree)=>HIRTree
-export class HScope{
-    symbol:Map<string,number>
-    index:number
-    link:Map<number,number>
-    link_target:Map<string,string>  // link 别名→目标路径(如 io→std.io)
-    entry:boolean
-    constructor(public parent:HScope,public global:HScope){
-        this.index=1
-        this.symbol=new Map()
-        this.link=new Map()
-        this.link_target=new Map()
-        this.entry=false
+import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from "./tool.ts";
+export type hir_visitor = (node:PeepholeTree, scope:PeepholeScope, call:(node:PeepholeTree)=>PeepholeTree)=>PeepholeTree
+export default class HIR extends PeepholeTool{
+    ref:Map<any,hir_visitor>
+    _default:hir_visitor
+    create:init_peephole
+    constructor() {
+        super('hir')
     }
-    lnk(id:number,data:number){
-        this.link.set(id,data)
+    use(data:Map<any,hir_visitor>|hir_visitor|init_peephole){
+        if(data instanceof Map)
+            for(let [k,v] of data)
+                this.ref.set(k,v)
+        else if(data.length==1)
+            this.create=data as init_peephole
+        else this._default=data
+        return this
     }
-    lnk_get(id:number):number{
-        if(this.link.has(id))
-            return this.link.get(id)
-        if(this.parent!=null)
-            return this.parent.lnk_get(id)
-        if(this.global!=null&&this.global!==this)
-            return this.global.lnk_get(id)
-        return null
-    }
-    id(){
-        if(this.global!=null&&this.global!==this)return this.global.id()
-        return this.index++
-    }
-    get(name:string):number{
-        if(this.symbol.has(name))
-            return this.symbol.get(name)
-        if(this.parent!=null)
-            return this.parent.get(name)
-        return null
-    }
-    set(name:string,value:number){
-        this.symbol.set(name,value)
-    }
-    enter():HScope{
-        return new HScope(this,this.global)
-    }
-    leave():HScope{
-        return this.parent
-    }
-}
-export class HIR{
-    scope:HScope
-    constructor(public ast:File[],public data:Map<any,hir_visitor>,public pre:(node:File[],scope:HScope)=>void,
-                public FileDo:(node:File,scope:HScope)=>void){
-        this.scope=new HScope(null,null)
-        this.scope.global=this.scope
-    }
-    run(){
-        this.pre(this.ast,this.scope)
-        //visitor内enter出的子作用域经call下传
-        let visit=(node:ASTTree,scope?:HScope)=>{
-            let s=scope||this.scope
-            for(let [k,v] of this.data)
+    run(node:PeepholeTree[]){
+        let scope=this.create(node)
+        let g=(node:PeepholeTree)=>{
+            for(let [k,v] of this.ref)
                 if(node instanceof k)
-                    return v(node,s,visit)
+                    return v(node,scope,g)
+            if(this._default!=null)
+                return this._default(node,scope,g)
+            return node
         }
-        let module=[]
-        //对象扁平化:Module/Class的children展开,结果形如[module,...,class,...]
-        //非static的HVariable(实例成员)保留在容器children内不展开
-        let flat=(h:HIRTree)=>{
-            module.push(h)
-            if(h instanceof HModule||h instanceof HClass)
-                for(let c of h.children)
-                    if(!(c instanceof HVariable)||!c.unstatic)
-                        flat(c)
-        }
-        for(let node of this.ast){
-            this.scope=this.scope.enter()
-            this.FileDo(node,this.scope)
-            for(let j of node.children)
-                flat(visit(j,this.scope))
-        }
-        //入口块(static main)移到末尾:IR 按扁平序生成根块(block 0),
-        //main 的函数体里调用其他函数时其槽须已加载;多文件/前向引用时
-        //main 若在文件序前部,调用会先于被调函数的槽加载执行 → var[槽]=0 → call 跳块0死循环
-        let entry_index=module.findIndex(h=>h instanceof HVariable&&h.entry)
-        if(entry_index>=0){
-            let entry=module.splice(entry_index,1)[0]
-            module.push(entry)
-        }
-        return module
+        return [scope,node.map(g)]
     }
-}
-export default (ast:File[],data:Map<any,hir_visitor>,pre:(node:File[],scope:HScope)=>void,
-    FileDo:(node:File,scope:HScope)=>void):[number,HBlock[]]=> {
-    let ls=new HIR(ast,data,pre,FileDo)
-    let module=ls.run()
-    //run()里scope已enter,id总数取真正的根
-    return [ls.scope.global.index,module]
 }
