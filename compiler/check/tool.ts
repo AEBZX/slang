@@ -1,17 +1,49 @@
 import {
+    AdditiveExpression,
+    AddressPrefix,
+    ArgumentsPostfix,
     ASTTree,
-    BasicType, Block,
+    BasicType,
+    BinaryExpression,
+    BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
+    Block,
     BlockType,
-    Cast, Class,
-    ClassType, Enum,
-    EnumType,
+    Cast,
+    Class,
+    ClassType,
+    DecrementPostfix,
+    DecrementPrefix,
+    DivisionExpression,
+    Enum,
+    EnumType, EqualityExpression,
     FixType,
     Function,
-    GenericType, Interface,
-    LiteralType, Modifier, Module,
+    GenericType,
+    GreaterEqualExpression,
+    GreaterExpression,
+    IncrementPostfix,
+    IncrementPrefix,
+    IndexPostfix, InequalityExpression,
+    Interface, LessEqualExpression,
+    LessExpression,
+    LiteralType, LogicalAndExpression, LogicalOrExpression,
+    MinusPrefix,
+    ModExpression,
+    Modifier,
+    Module,
+    MultiplicativeExpression,
+    NotPrefix,
     NumberType,
     Operation,
-    Type, Value, Variable,
+    PointFix,
+    Postfix,
+    ReferencePrefix,
+    ShiftLeftExpression,
+    ShiftRightExpression,
+    SubtractiveExpression,
+    Type,
+    Value,
+    Variable,
     VoidType
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
@@ -342,3 +374,61 @@ export function overload_resolve(scope:Scope,name:string,fns:any[],arg_types:Typ
     if(idx==null)return {kind:'none'}
     return {kind:'best',fn:fns[idx]}
 }
+export function to_point(a:Type){
+    if(a instanceof FixType){
+        a.fix.push(new PointFix())
+        return a
+    }
+    return new FixType(a,[new PointFix()])
+}
+export function each_oper(scope:Scope,param:Type,ret:any[]){
+    let each=(data:Type)=>{
+        for(let i of scope.get_operation(data)){
+            if(i.oper!=':')continue
+            let type
+            if(ret.map(j=>{
+                type=j
+                return type_merge(i.command.ret,j,scope) instanceof j
+            }).includes(true))return type
+        }
+        for(let i of scope.get_operation(data))
+            each(i.command.ret)
+        return new VoidType()
+    }
+    return each(param)
+}
+export const Operation_Prefix=new Map([
+    [IncrementPrefix,'++'],
+    [DecrementPrefix,'--'],
+    [NotPrefix,'!'],
+    [MinusPrefix,'-'],
+    [BitNotPrefix,'~'],
+    [ReferencePrefix,'*'],
+    [AddressPrefix,'&']
+])
+export const Operation_Postfix=new Map<any,string>([
+    [IncrementPostfix,'++'],
+    [DecrementPostfix,'--'],
+    [ArgumentsPostfix,'()'],
+    [IndexPostfix,'[]']
+])
+export const Operation_Binary=new Map<any,string>([
+    [AdditiveExpression,'+'],
+    [MultiplicativeExpression,'*'],
+    [DivisionExpression,'/'],
+    [SubtractiveExpression,'-'],
+    [ModExpression,'%'],
+    [ShiftRightExpression,'>>'],
+    [ShiftLeftExpression,'<<'],
+    [GreaterExpression,'>'],
+    [LessExpression,'<'],
+    [GreaterEqualExpression,'>='],
+    [LessEqualExpression,'<='],
+    [InequalityExpression,'!='],
+    [EqualityExpression,'=='],
+    [BitwiseAndExpression,'&'],
+    [BitwiseOrExpression,'|'],
+    [BitwiseXorExpression,'^'],
+    [LogicalAndExpression,'&&'],
+    [LogicalOrExpression,'||'],
+])

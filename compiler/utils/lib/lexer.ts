@@ -8,8 +8,8 @@ import {
     token,
     TokenParam,
     TokenType
-} from '../data.ts'
-import PeepholeTool from './tool.ts'
+} from '../data'
+import PeepholeTool from './tool'
 
 class CharStream{
     public index:number

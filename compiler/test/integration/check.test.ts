@@ -148,7 +148,7 @@ describe('check 端到端', () => {
         const vd = (m.commands as any).commands[0] as any
         const postfix = vd.value as PostfixExpression
         // types 记录 primary 应用每个 postfix 后的类型:x.b → FixType, x.b[0] → NumberType
-        expect(postfix.types.map(t => t.constructor.name)).toEqual(['FixType', 'NumberType'])
+        expect(postfix._type.map(t => t.constructor.name)).toEqual(['FixType', 'NumberType'])
     })
 
     it('implements 链:接口的函数与变量必须实现', () => {

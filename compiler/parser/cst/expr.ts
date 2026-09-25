@@ -34,8 +34,6 @@ const PostfixExpression=$.s('PostfixExpression',
     )
 )
 const PrefixExpression=$.o('PrefixExpression',
-    //cast 前缀:(Type)expr —— 独立 or 分支优先尝试;若其后无法组成表达式则回退普通分支,
-    //避免 (x) 分组被当 cast 吞掉(TypePrefix 不在 PrefixList 内,prefix 列表只收一元/取址/new)
     $.s('PrefixExpression',
         $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')')),
         $.r('PrefixExpression')),

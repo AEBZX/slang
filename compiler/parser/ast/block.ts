@@ -125,7 +125,7 @@ const G_File:slang_ast_generate=(data,tree)=>{
 //组合符号(节点型)映射回操作符字符串;单字符符号直接是字符串
 const G_Operation:slang_ast_generate=(data,tree)=>{
     let sym=data.children.get(0)
-    let oper=(sym as ast_data).type
+    let oper=typeof sym=='string'?sym:(sym.type=='BIDX'?'[]':'()')
     return new Operation(oper,
         tree(data.children.get(1) as ast_data) as LambdaExpression)
 }

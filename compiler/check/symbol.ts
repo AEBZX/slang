@@ -14,7 +14,8 @@ import {
     Cast,
     Variable, VarDeclaration, VoidType, ListCommand, Assign, Call, Throw, Return, Increment, Decrement, IfStatement,
     WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
-    LambdaType
+    LambdaType, EnumType, LambdaExpression, PostfixExpression, ArgumentsPostfix, Expression, MapExpression,
+    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression
 } from '../utils'
 import {name, slang_check_visitor} from './tool'
 import {isolatedDeclaration} from "rolldown/experimental";
@@ -133,6 +134,8 @@ const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,cal
         if(!(implement instanceof Interface))
             scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
     }
+    if(new Set(ast.generic.keys()).size!=ast.generic.size)
+        scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
     scope=scope.enter()
     for(let i of ast.children)
         call(i,2)
@@ -147,6 +150,21 @@ const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     }
     scope.set(ast.name,ast)
     scope=scope.enter()
+    //generic implement且是否是Interface的是否存在
+    for(let i of ast.generic.values()){
+        call(i,2)
+        if(!(i instanceof ClassType))
+            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
+        if(!scope.get((<ClassType>i).local.join('.')))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
+        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        let implement=scope.global.get((<ClassType>i).local.join('.'))
+        if(!(implement instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+    }
+    if(new Set(ast.generic.keys()).size!=ast.generic.size)
+        scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
     for(let [name,i] of ast.params){
         call(i,2)
         scope.set(name,new VarDeclaration(name,i,new VoidType()))
@@ -188,6 +206,10 @@ const Verify_VarDeclaration:slang_check_visitor=(ast:VarDeclaration,scope,call)=
 }
 const Verify_ReturnOrThrowOrCallOrIncrementOrDecrement:slang_check_visitor=(ast:Call|Throw|Return|Increment|Decrement,scope,call)=>{
     call(ast.data,2)
+    if(ast instanceof Call)
+        if(!(ast.data instanceof PostfixExpression||
+            (<PostfixExpression>ast.data).postfix[(<PostfixExpression>ast.data).postfix.length-1] instanceof ArgumentsPostfix))
+            scope.thr(`call的data不是函数调用,在行${ast.line.join('\n')}`)
 }
 const Verify_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,2)
@@ -257,6 +279,73 @@ const Verify_LambdaType:slang_check_visitor=(ast:LambdaType,scope,call)=>{
         call(i,2)
     call(ast.returnType,2)
 }
+const Verify_BlockType:slang_check_visitor=(ast:BlockType,scope,call)=>{
+    if(!scope.get(ast.local.join('.')))
+        scope.thr(`${ast.local.join('.')}不存在,在行${ast.line.join('\n')}`)
+}
+const Verify_EnumType:slang_check_visitor=(ast:EnumType,scope,call)=>{
+    let data=scope.get(ast.local.join('.'))
+    if(data==null||!(data instanceof Enum))
+        scope.thr(`${ast.local.join('.')}不存在或不是枚举,在行${ast.line.join('\n')}`)
+    if(!(<Enum>data).children.includes(ast.value))
+        scope.thr(`${ast.value}不是${ast.local.join('.')}的成员,在行${ast.line.join('\n')}`)
+}
+const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
+    scope=scope.enter()
+    if(new Set(ast.params.keys()).size!=ast.params.size)
+        scope.thr(`参数重复声明,在行${ast.line.join('\n')}`)
+    for(let i of ast.params.values())
+        call(i,2)
+    for(let [i,j] of ast.params)
+        scope.set(i,new VarDeclaration(i,j,null))
+    //generic implement且是否是Interface的是否存在
+    for(let i of ast.generic.values()){
+        call(i,2)
+        if(!(i instanceof ClassType))
+            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
+        if(!scope.get((<ClassType>i).local.join('.')))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
+        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        let implement=scope.global.get((<ClassType>i).local.join('.'))
+        if(!(implement instanceof Interface))
+            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+    }
+    if(new Set(ast.generic.keys()).size!=ast.generic.size)
+        scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
+    call(ast.body,2)
+    call(ast.ret,2)
+    scope=scope.leave()
+}
+const Verify_MapExpressionOrArrayExpression:slang_check_visitor=(ast:MapExpression|ArrayExpression,scope,call)=>{
+    ast.elements.forEach(i=>call(i,2))
+}
+const Verify_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,call)=> {
+    call(ast.expr,2)
+    for(let i of ast.postfix){
+        if(i instanceof ArgumentsPostfix){
+            i.generic.forEach(j=>call(j,2))
+            i.args.forEach(j=>call(j,2))
+        }
+        if(i instanceof IndexPostfix)
+            call(i.index,2)
+    }
+}
+const Verify_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,call)=> {
+    for(let i of ast.prefix)
+        if(i instanceof TypePrefix)
+            call(i.type,2)
+    call(ast.expr,2)
+}
+const Verify_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,call)=> {
+    call(ast.left,2)
+    call(ast.right,2)
+}
+const Verify_TernaryExpression:slang_check_visitor=(ast:TernaryExpression,scope,call)=> {
+    call(ast.condition,2)
+    call(ast.trueExpr,2)
+    call(ast.falseExpr,2)
+}
 export const Round2=new Map<any,slang_check_visitor>([
     [File,Verify_File],
     [Module,Verify_Module],
@@ -282,5 +371,16 @@ export const Round2=new Map<any,slang_check_visitor>([
     [SwitchStatement,Verify_Switch],
     [TryStatement,Verify_Try],
     [ForStatement,Verify_For],
-    [ForeachStatement,Verify_Foreach]
+    [ForeachStatement,Verify_Foreach],
+    [LambdaType,Verify_LambdaType],
+    [BlockType,Verify_BlockType],
+    [EnumType,Verify_EnumType],
+    [ClassType,Verify_ClassType],
+    [LambdaExpression,Verify_LambdaExpression],
+    [MapExpression,Verify_MapExpressionOrArrayExpression],
+    [ArrayExpression,Verify_MapExpressionOrArrayExpression],
+    [PostfixExpression,Verify_PostfixExpression],
+    [PrefixExpression,Verify_PrefixExpression],
+    [BinaryExpression,Verify_BinaryExpression],
+    [TernaryExpression,Verify_TernaryExpression],
 ])

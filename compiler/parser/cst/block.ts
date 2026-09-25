@@ -23,18 +23,11 @@ const _function=$.s('Function',$.c($.r('GenericList')),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.o('Implement',$.r('Commands'),';'))
 const _operation=$.s('Operation',$.d('operation'),
-    //符号:组合型([]/[]=/()/p*/p&/p++/++p 等)须按 token 序列匹配;单字符直接匹配
     $.o('symbol',
-        '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','==','=','~',':',
-        $.s('BSET',$.d('['),$.d(']'),$.d('=')),
+        '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','==','=','~',':','new',
+        '++','--',
         $.s('BIDX',$.d('['),$.d(']')),
-        $.s('CALL',$.d('('),$.d(')')),
-        $.s('STAR',$.d('p'),$.d('*')),
-        $.s('AMPR',$.d('p'),$.d('&')),
-        $.s('PPRE',$.d('+'),$.d('+'),$.d('p')),
-        $.s('MPRE',$.d('-'),$.d('-'),$.d('p')),
-        $.s('PPOST',$.d('p'),$.d('+'),$.d('+')),
-        $.s('MPOST',$.d('p'),$.d('-'),$.d('-'))
+        $.s('CALL',$.d('('),$.d(')'))
     ),$.r('LambdaExpression'))
 const _cast=$.s('Cast',$.d('cast'),$.r('Type'),$.r('LambdaExpression'))
 const _var=$.s('Variable',$.r('Type'),$.c($.d('='),$.r('Expression')),';')

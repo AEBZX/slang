@@ -13,8 +13,4 @@ export * from './model/hir'
 export * from './data'
 export {Parser}
 export * from './model/ast'
-export * from './lib/lexer.ts'
-export default {
-    desugar:Desugar,
-    parser:Parser
-}
+export * from './lib/lexer'
