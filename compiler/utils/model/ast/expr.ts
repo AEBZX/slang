@@ -53,7 +53,7 @@ export class ArgumentsPostfix extends Postfix{
 export class PostfixExpression extends Expression{
     public call_targets:string[]=[]
     public opers:string[]=[]
-    public casts:number[]=[]
+    public casts:string[]=[]
     constructor(public expr:Expression,public postfix:Postfix[],public types:Type[]=[]) {
         super()
     }
@@ -73,15 +73,13 @@ export class TypePrefix extends Prefix{
     }
 }
 export class PrefixExpression extends Expression{
-    public casts:number[]=[]
+    public casts:string[]=[]
     public opers:string[]=[]
     constructor(public expr:Expression,public prefix:Prefix[]) {
         super()
     }
 }
 export class BinaryExpression extends Expression{
-    //oper:运算符重载决策结果——check 阶段命中 operation 时写入符号('+'/'[]'等),
-    //desugar 据此把二元运算脱糖成容器静态函数调用(无重载时保持 null 走原生语义)
     constructor(public left:Expression,public right:Expression,public oper:string=null) {
         super()
     }

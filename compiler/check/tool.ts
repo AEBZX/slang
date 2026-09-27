@@ -1,18 +1,20 @@
 import {
+    AAssign, AddAssign,
     AdditiveExpression,
     AddressPrefix,
-    ArgumentsPostfix,
+    ArgumentsPostfix, Assign,
     ASTTree,
     BasicType,
-    BinaryExpression,
-    BitNotPrefix, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression,
+    BinaryExpression, BitAndAssign,
+    BitNotPrefix, BitOrAssign,
+    BitShlAssign, BitShrAssign, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression, BitXorAssign,
     Block,
-    BlockType,
+    BlockType, BooleanType,
     Cast,
     Class,
     ClassType,
     DecrementPostfix,
-    DecrementPrefix,
+    DecrementPrefix, DivAssign,
     DivisionExpression,
     Enum,
     EnumType, EqualityExpression,
@@ -27,10 +29,10 @@ import {
     Interface, LambdaType, LessEqualExpression,
     LessExpression,
     LiteralType, LogicalAndExpression, LogicalOrExpression,
-    MinusPrefix,
+    MinusPrefix, ModAssign,
     ModExpression,
     Modifier,
-    Module,
+    Module, MulAssign,
     MultiplicativeExpression,
     NotPrefix,
     NumberType,
@@ -39,7 +41,7 @@ import {
     Postfix,
     ReferencePrefix,
     ShiftLeftExpression,
-    ShiftRightExpression,
+    ShiftRightExpression, StringType, SubAssign,
     SubtractiveExpression,
     Type,
     Value,
@@ -318,8 +320,14 @@ export function oper_best(scope:Scope,oper:string,...type:Type[]):Operation[]{
         }
     return all.filter(i=>!worse.has(i))
 }
-export function cast_get(type:Type,scope:Scope):{id:number,type:Type}[]{
-    return scope.get_cast(type).map(i=>{return {id:i.id,type:i.t}})
+export function cast_get(type:Type,scope:Scope):{id:string,type:Type}[]{
+    type=real_type(type,scope)
+    let local=''
+    if(type instanceof NumberType)local='number'
+    if(type instanceof StringType)local='string'
+    if(type instanceof BooleanType)local='boolean'
+    if(type instanceof ClassType)local=type.local.join('.')
+    return scope.get_cast(type).map(i=>{return {id:local+'.cast@'+i.id,type:i.t}})
 }
 export function type_is(type1:Type,type2:Type,scope:Scope){
     //type2(实际值)能否赋给 type1(目标)
@@ -385,21 +393,27 @@ export function to_point(a:Type){
         return new FixType(a.t,[...a.fix,new PointFix()])
     return new FixType(a,[new PointFix()])
 }
-export function each_oper(scope:Scope,param:Type,ret:any[]):Type{
+export function each_oper(scope:Scope,param:Type,ret:any[]):{type:Type,unwarp:string[]}{
+    let unwarp=[]
     let each=(data:Type)=>{
         for(let i of scope.get_operation(data)){
             if(i.oper!=':')continue
             let type
             if(ret.map(j=>{
                 type=j
-                return type_merge(i.command.ret,j,scope) instanceof j
+                let ret=type_merge(i.command.ret,j,scope) instanceof j
+                if(ret)unwarp.push(i.oper)
+                return ret
             }).includes(true))return type
         }
         for(let i of scope.get_operation(data))
             each(real_type(i.command.ret,scope))
-        return new VoidType()
+        return {type:new VoidType(),unwarp:[]}
     }
-    return each(real_type(param,scope))
+    return {
+        type:each(real_type(param,scope)),
+        unwarp
+    }
 }
 export const Operation_Prefix=new Map([
     [IncrementPrefix,'++'],
@@ -436,6 +450,19 @@ export const Operation_Binary=new Map<any,string>([
     [LogicalAndExpression,'&&'],
     [LogicalOrExpression,'||'],
 ])
+export const Operation_Assign=new Map<any,string>([
+    [AAssign,''],
+    [AddAssign,'+'],
+    [SubAssign,'-'],
+    [MulAssign,'*'],
+    [DivAssign,'/'],
+    [ModAssign,'%'],
+    [BitAndAssign,'&'],
+    [BitOrAssign,'|'],
+    [BitXorAssign,'^'],
+    [BitShlAssign,'<<'],
+    [BitShrAssign,'>>']
+])
 export function check_implement(i:Type,scope:Scope,line:string[]){
     const ls=real_type(i,scope)
     if(!(ls instanceof ClassType)){
@@ -451,7 +478,7 @@ export function check_implement(i:Type,scope:Scope,line:string[]){
     if(!(implement instanceof Interface))
         scope.thr(`generic implement的类型${name}不是Interface,在行${line}`)
 }
-export function cast_best(result:Type,_cast:Type,scope:Scope){
+export function cast_best(result:Type,_cast:Type,scope:Scope):{id:string,type:Type}{
     let cast=cast_get(real_type(_cast,scope),scope)
     cast=cast.filter(i=>!(type_merge(real_type(result,scope),real_type(i.type,scope),scope) instanceof VoidType))
     let ret=cast[0]
@@ -459,7 +486,10 @@ export function cast_best(result:Type,_cast:Type,scope:Scope){
         if(type_same(type_merge(real_type(i.type,scope),real_type(ret.type,scope),scope),i.type))
             ret=i
     if(ret==null)return undefined
-    return real_type(ret.type,scope)
+    return {
+        id:ret.id,
+        type:real_type(ret.type,scope)
+    }
 }
 //类型检查:a 是实际/来源类型,b 是期望/目标类型
 export function type_(a:Type,b:Type,scope:Scope){

@@ -103,7 +103,6 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
 const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
     let fix:Prefix[]=[]
     let c0=data.children.get(0) as ast_data
-    //cast 布局:(Type)expr —— child_0 是 TypePrefix 节点,child_1 是递归 PrefixExpression
     if(c0.type=='TypePrefix'){
         let primary=tree(data.children.get(1) as ast_data)
         return new PrefixExpression(primary,[new TypePrefix(tree(c0.children.get(0) as ast_data))])
@@ -142,7 +141,7 @@ const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
             }
     if(c0.children.size==0)
         return primary
-    return new PrefixExpression(primary,fix)
+    return new PrefixExpression(primary,fix.reverse())
 }
 const G_BinaryExpression:slang_ast_generate=(data,tree)=>{
     const g=(left:Expression,right:Expression,type:string)=>{

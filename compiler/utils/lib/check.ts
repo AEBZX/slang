@@ -15,10 +15,11 @@ import {Function} from '../model/ast'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool'
 export type check_visitor=(ast:PeepholeTree,scope:PeepholeScope,call:(ast:PeepholeTree,round:number,scope?:PeepholeScope)=>void)=>void
 export default class Check extends PeepholeTool{
-    ref:Map<number,Map<any,check_visitor>>=new Map()
+    ref:Map<number,Map<any,check_visitor>>
     create:init_peephole=null
     constructor(){
         super('check')
+        this.ref=new Map()
     }
     use(data:[number,Map<any,check_visitor>]|init_peephole){
         if(Array.isArray(data))

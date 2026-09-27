@@ -4,6 +4,8 @@ import {Type} from './identifier'
 export class Command extends ASTTree{}
 export class BasicCommand extends Command{}
 export class Assign extends BasicCommand{
+    public oper=null
+    public cast=null
     constructor(public data:Expression,public value:Expression) {
         super()
     }
@@ -79,7 +81,6 @@ export class ForStatement extends BlockCommand{
 }
 export class ForeachStatement extends BlockCommand{
     public unwrap:string[]=[]
-    public real_type:Type=null
     constructor(public iden:string,public data:Expression,public commands:Command) {
         super()
     }

@@ -55,13 +55,13 @@ export class File extends ASTTree{
 }
 export class Operation extends Block{
     public index=0
-    constructor(public oper:string,public command:LambdaExpression) {
+    constructor(public oper:string,public command:LambdaExpression,public local:string[]=[]) {
         super(null,null)
     }
 }
 export class Cast extends Block{
     public id=0
-    constructor(public t:Type,public command:LambdaExpression) {
+    constructor(public t:Type,public command:LambdaExpression,public local:string[]=[]) {
         super(null,null)
     }
 }

@@ -15,7 +15,8 @@ import {
     Variable, VarDeclaration, VoidType, ListCommand, Assign, Call, Throw, Return, Increment, Decrement, IfStatement,
     WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
     LambdaType, EnumType, LambdaExpression, PostfixExpression, ArgumentsPostfix, Expression, MapExpression,
-    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression, ASTTree
+    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression, ASTTree,
+    operations
 } from '../utils'
 import {build_chain, check_implement, name, resolve_named, slang_check_visitor} from './tool'
 //round1:Build不做任何检查,搭建全局static符号表
@@ -62,9 +63,11 @@ const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.leave()
 }
 const Build_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
+    ast.local=scope.path.split('.')
     scope.global.set_operation(scope.operation_cast_oper,ast)
 }
 const Build_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
+    ast.local=scope.path.split('.')
     scope.global.set_cast(scope.operation_cast_oper,ast)
 }
 const Build_Function:slang_check_visitor=(ast:Function, scope, call)=>{

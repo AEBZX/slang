@@ -22,7 +22,8 @@ import {
     cast_best,
     cast_get,
     each_oper, generic_name,
-    oper_best, Operation_Binary, Operation_Postfix, Operation_Prefix, overload_resolve, param_is, real_type,
+    oper_best,
+    Operation_Assign, Operation_Binary, Operation_Postfix, Operation_Prefix, overload_resolve, param_is, real_type,
     slang_check_visitor,
     to_point, type_, type_merge
 } from './tool'
@@ -102,12 +103,42 @@ const Label_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
         scope.thr(`变量${ast.name}赋值类型错误在行${ast.line.join('\n')}`)
 }
 const Label_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
+    scope=scope.enter()
     for(let i of ast.commands)
         call(i,3,scope)
+    scope=scope.leave()
 }
 const Label_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,3,scope)
     call(ast.value,3,scope)
+    //ast.data必须是左值
+    //左值:*a,纯member和下标组合
+    let is_left=false
+    if(ast.data instanceof PrefixExpression&&ast.data.prefix[ast.data.prefix.length-1] instanceof ReferencePrefix)
+        is_left=true
+    if(ast.data instanceof PostfixExpression){
+        is_left=true
+        for(let i of ast.data.postfix)
+            if(!(i instanceof IndexPostfix||i instanceof MemberPostfix))
+                is_left=false
+    }
+    if(ast.data instanceof IdentifierExpr)
+        is_left=true
+    if(!is_left)scope.thr(`赋值的左侧不是可赋值的左值,在行${ast.line.join('\n')}`)
+    let _oper:string=''
+    for(let [k,v] of Operation_Assign)
+        if(ast instanceof k)_oper=v
+    //是否重载operation=
+    let operation=oper_best(scope,_oper+'=',ast.data.type,ast.value.type)
+    if(operation.length>0)
+        ast.oper=operation[0].local.join('.')+_oper+'=@'+operation[0].index
+    else{
+        let cast=cast_best(ast.data.type,ast.value.type,scope)
+        if(cast!=null){
+            ast.value.cast=cast.id
+            return
+        }
+    }
     if(!type_(ast.value==null?null:ast.value.type,ast.data==null?null:ast.data.type,scope))
         scope.thr(`赋值类型错误在行${ast.line.join('\n')}`)
 }
@@ -123,9 +154,14 @@ const Label_ThrowOrReturnOrCallOrIncrementOrDecrement:slang_check_visitor=(ast:T
             scope.thr(`抛出异常类型错误在行${ast.line.join('\n')}`)
     }
     if(ast instanceof Increment||ast instanceof Decrement){
+        const operation=oper_best(scope,ast instanceof Increment?'++':'--',ast.data.type)
+        if(operation.length>0){
+            ast.oper=operation[0].local.join('.')+(ast instanceof Increment?'++':'--')+'=@'+operation[0].index
+            return
+        }
         const cast=cast_best(new NumberType(),ast.data==null?null:ast.data.type,scope)
         if(cast!=null){
-            ast.data.cast=cast
+            ast.data.cast=cast.id
             return
         }
         if(!(type_merge(ast.data.type,new NumberType(),scope) instanceof NumberType))
@@ -183,14 +219,15 @@ const Label_ForeachStatement:slang_check_visitor=(ast:ForeachStatement,scope,cal
     scope=scope.enter()
     call(ast.data,3,scope)
     const data_type=real_type(ast.data==null?null:ast.data.type,scope)
-    let data:Type=new VoidType()
+    let data:Type
+    let type=each_oper(scope,data_type,[ArrayExpression,MapExpression])
+    data=type.type
+    ast.unwrap=type.unwarp
     if(data_type instanceof FixType&&data_type.fix.length>0){
         const last=data_type.fix[data_type.fix.length-1]
         if(last instanceof ArrayFix||last instanceof MapFix)
             data=real_type(data_type.t,scope)
     }
-    if(data instanceof VoidType)
-        data=each_oper(scope,data_type,[ArrayExpression,MapExpression])
     if(data instanceof VoidType)
         scope.thr(`foreach的对象不是或不可以转换为数组或Map,在行${ast.line.join('\n')}`)
     scope.set(ast.iden,new VarDeclaration(ast.iden,real_type(data,scope),new NullLiteral(null)))
@@ -258,7 +295,7 @@ const Label_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,cal
             if(prefix instanceof k)oper=v
         let operation=oper_best(scope,oper,to_point(ast.expr.type))
         if(operation.length>0){
-            ast.opers[i]=operation[0].oper+'@'+operation[0].index
+            ast.opers[i]=operation[0].local.join('.')+'.'+operation[0].oper+'@'+operation[0].index
             type=operation[0].type
             continue
         }
@@ -395,8 +432,8 @@ const Label_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,c
             if(postfix instanceof ArgumentsPostfix){
                 //先看有没有转换到lambda的
                 if(type instanceof ClassType){
-                    let lambda_cast:{id:number,type:LambdaType}[]=
-                        cast_get(type,scope).filter(i=>i.type instanceof LambdaType) as {id:number,type:LambdaType}[]
+                    let lambda_cast:{id:string,type:LambdaType}[]=
+                        cast_get(type,scope).filter(i=>i.type instanceof LambdaType) as {id:string,type:LambdaType}[]
                     //泛型对的上筛选
                     lambda_cast=lambda_cast.filter(i=>param_is(Array.from(i.type.generic.values()),i.type.generic,scope))
                     //参数对的上的筛选

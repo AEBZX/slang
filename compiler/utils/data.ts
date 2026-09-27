@@ -27,7 +27,7 @@ export class ASTTree extends PeepholeTree{
     type:Type
     line:string[]
     public oper:string=null
-    public cast:Type=null
+    public cast:string=null
 }
 export class HIRTree extends PeepholeTree{}
 export type ast_generate=(data:ast_data,tree:(data:ast_data)=>PeepholeTree)=>PeepholeTree
@@ -76,6 +76,6 @@ export let keywords=[
 ]
 export let operations=[
     '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','==','=','~',':','new','++','--',
-    '[]','()'
+    '[]','()','+=','-=','*=','/=','%=','<<=','>>=','&&=','||=','&=','|=','^='
 ]
 export let tokens=[TokenParam.Number,TokenParam.String,...keywords,TokenParam.Identifier]
