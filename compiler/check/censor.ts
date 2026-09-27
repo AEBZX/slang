@@ -18,12 +18,12 @@ import {
 import {Default_Modifier, fill_modifier, slang_check_visitor} from './tool'
 const Check_File:slang_check_visitor=(ast:File,scope,call)=>{
     let lnk_name=ast.links.map(i=>i.as)
-    if(new Set(...lnk_name).size!=lnk_name.length)
+    if(new Set(lnk_name).size!=lnk_name.length)
         scope.thr(`link的别名不能重复,在行${ast.line.join('\n')}`)
     ast.children.forEach(i=>{
         if(!(i instanceof Module||i instanceof Value))
             scope.thr(`文件顶层只能是link/module/value,在行${i.line.join('\n')}`)
-        call(i,0)
+        call(i,0,scope)
     })
 }
 const Check_Value:slang_check_visitor=(ast:Value,scope,call)=>{
@@ -43,7 +43,7 @@ const Check_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     ast.children.forEach(i=>{
         if(!(i instanceof Operation||i instanceof Cast))
             scope.thr(`值定义内部只能是operation/cast,在行${i.line.join('\n')}`)
-        call(i,0)
+        call(i,0,scope)
     })
 }
 const Check_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
@@ -60,7 +60,7 @@ const Check_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     //不能有泛型
     if(ast.command.generic.size!=0)
         scope.thr(`运算符重载不能有泛型,在行${ast.line.join('\n')}`)
-    call(ast.command,0)
+    call(ast.command,0,scope)
 }
 const Check_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     ast.modifiers=fill_modifier(ast)
@@ -73,7 +73,7 @@ const Check_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     ast.modifiers=Default_Modifier.get(ast)
     if(ast.command.generic.size!=0)
         scope.thr(`类型转换不能有泛型,在行${ast.line.join('\n')}`)
-    call(ast.command,0)
+    call(ast.command,0,scope)
 }
 const Check_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     //自身必须静态
@@ -88,7 +88,7 @@ const Check_Module:slang_check_visitor=(ast:Module,scope,call)=>{
             scope.thr(`模块内部不能是非static的,在行${i.line.join('\n')}`)
         if(fill_modifier(i)._private)
             scope.thr(`模块内部不能是私有的,在行${i.line.join('\n')}`)
-        call(i,0)
+        call(i,0,scope)
     })
 }
 const Check_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
@@ -98,7 +98,7 @@ const Check_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
         ast.modifiers._async=false
     }
     //不重名即可
-    if(new Set(...ast.children).size!=ast.children.length)
+    if(new Set(ast.children).size!=ast.children.length)
         scope.thr(`枚举成员不能重复,在行${ast.line.join('\n')}`)
 }
 const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
@@ -110,7 +110,7 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
     if(ast.implement!=null&&!(ast.implement instanceof ClassType))
         scope.thr(`类的/接口implement必须是ClassType,在行${ast.line.join('\n')}`)
     let generic_name=Array.from(ast.generic.keys())
-    if(new Set(...generic_name).size!=generic_name.length)
+    if(new Set(generic_name).size!=generic_name.length)
         scope.thr(`类/接口中泛型的定义不能重复,在行${ast.line.join('\n')}`)
     //generic implement必须是ClassType
     for(let i of ast.generic.values())
@@ -123,37 +123,37 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
             scope.thr(`类内部的function必须实现,在行${i.line.join('\n')}`)
         if(ast instanceof Interface&&i instanceof Function&&i.commands!=null)
             scope.thr(`接口内部的function不可以实现,在行${i.line.join('\n')}`)
-        call(i,0)
+        call(i,0,scope)
     })
 }
 const Check_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     ast.modifiers=fill_modifier(ast)
     let generic_name=Array.from(ast.generic.keys())
-    if(new Set(...generic_name).size!=generic_name.length)
+    if(new Set(generic_name).size!=generic_name.length)
         scope.thr(`函数中泛型的定义不能重复,在行${ast.line.join('\n')}`)
     let param_name=Array.from(ast.params.keys())
-    if(new Set(...param_name).size!=param_name.length)
+    if(new Set(param_name).size!=param_name.length)
         scope.thr(`函数中参数的定义不能重复,在行${ast.line.join('\n')}`)
-    call(ast.commands,0)
+    call(ast.commands,0,scope)
 }
 const Check_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     ast.modifiers=fill_modifier(ast)
     if(ast.modifiers._async)
         scope.thr(`变量不能是异步的,在行${ast.line.join('\n')}`)
     ast.modifiers._async=false
-    call(ast.value,0)
+    call(ast.value,0,scope)
 }
 const Check_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
-    ast.commands.forEach(i=>call(i,0))
+    ast.commands.forEach(i=>call(i,0,scope))
 }
 const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|ForeachStatement|ForStatement,scope,call)=>{
     scope.loop=true
-    call(ast.commands,0)
+    call(ast.commands,0,scope)
     scope.loop=false
     if(ast instanceof WhileStatement||ast instanceof DoWhileStatement)
-        call(ast.condition,0)
+        call(ast.condition,0,scope)
     if(ast instanceof ForeachStatement)
-        call(ast.data,0)
+        call(ast.data,0,scope)
 }
 const Check_BreakContinue:slang_check_visitor=(ast:Break|Continue, scope, call)=>{
     if(!scope.loop)
@@ -161,29 +161,29 @@ const Check_BreakContinue:slang_check_visitor=(ast:Break|Continue, scope, call)=
 }
 const Check_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     scope.throw=true
-    call(ast.commands,0)
+    call(ast.commands,0,scope)
     scope.throw=false
-    call(ast.catch_.command,0)
-    call(ast.finally_,0)
+    call(ast.catch_.command,0,scope)
+    call(ast.finally_,0,scope)
 }
 const Check_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
     if(!scope.throw)
         scope.thr(`throw只能在try中使用,在行${ast.line.join('\n')}`)
-    call(ast.data,0)
+    call(ast.data,0,scope)
 }
 const Check_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
-    call(ast.condition,0)
-    call(ast.commands,0)
-    call(ast.else_,0)
+    call(ast.condition,0,scope)
+    call(ast.commands,0,scope)
+    call(ast.else_,0,scope)
 }
 const Check_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
     let generic_name=Array.from(ast.generic.keys())
-    if(new Set(...generic_name).size!=generic_name.length)
+    if(new Set(generic_name).size!=generic_name.length)
         scope.thr(`lambda中泛型的定义不能重复,在行${ast.line.join('\n')}`)
     let param_name=Array.from(ast.params.keys())
-    if(new Set(...param_name).size!=param_name.length)
+    if(new Set(param_name).size!=param_name.length)
         scope.thr(`lambda中参数的定义不能重复,在行${ast.line.join('\n')}`)
-    call(ast.body,0)
+    call(ast.body,0,scope)
 }
 export const Round0=new Map<any,slang_check_visitor>([
     [File, Check_File],

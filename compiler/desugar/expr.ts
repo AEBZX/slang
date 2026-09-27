@@ -13,14 +13,10 @@ const D_PostfixExpression:slang_desugar_visitor=(node:PostfixExpression,call)=>{
     node.expr=call(node.expr)
     let _node=node.expr
     //fix脱糖
-    let i=0
-    for(;i<node.opers.length;i++){
-        let target=node.call_func[i]
-        let oper=node.opers[i]
-        let postfix=node.postfix[i]
-        let type=node._type[i]
-        if(oper!=''){
-        }
+    for(let i=0;i<node.opers.length;i++){
+        const oper=node.opers[i]
+        const target=node.call_targets[i]
+        const cast=node.casts[i]
     }
     return _node
 }

@@ -53,7 +53,7 @@ export class ArgumentsPostfix extends Postfix{
 export class PostfixExpression extends Expression{
     public call_targets:string[]=[]
     public opers:string[]=[]
-    public casts:Type[]=[]
+    public casts:number[]=[]
     constructor(public expr:Expression,public postfix:Postfix[],public types:Type[]=[]) {
         super()
     }
@@ -73,7 +73,7 @@ export class TypePrefix extends Prefix{
     }
 }
 export class PrefixExpression extends Expression{
-    public casts:Type[]=[]
+    public casts:number[]=[]
     public opers:string[]=[]
     constructor(public expr:Expression,public prefix:Prefix[]) {
         super()

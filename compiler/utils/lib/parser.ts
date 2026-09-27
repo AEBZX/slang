@@ -80,7 +80,17 @@ function now_line(stream:ParserStream):string{
 function parse_seg(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
     let ls,ret:ast_data={type:data.name,children:new Map(),line:[]},line:Set<string>=new Set()
     for(let i of data.data){
+        //delete 规则是"必须匹配的字面量":匹配后只消费 token 并收集行号,不占用 child 序号。
+        //此前它作为 ast_data 写进 children,导致后续生成器按 child 序号取节点全部错位
+        let is_delete=typeof i=='object'&&i!=null&&(i as ast_rule).type=='delete'
         ls=parse(stream,i,ref)
+        if(is_delete){
+            if(typeof ls=='string')
+                line.add(stream.code[stream.pos-1].line)
+            else if(ls!=null)
+                for(let j of (ls as ast_data).line)line.add(j)
+            continue
+        }
         if(ls!=null){
             if(typeof ls=='string'){
                 ret.children.set(child_num,ls)
@@ -97,11 +107,9 @@ function parse_seg(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,strea
     return ret
 }
 function parse_delete(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
-    try{
-        return parse(stream,{...data,type:'seg'},ref) as ast_data
-    }catch (e){
-        return null
-    }
+    //delete 规则=必须匹配的字面量(仅从子节点丢弃)。失败必须抛出:此前 catch 返回 null
+    //会让包含它的 seg 零消耗成功,导致 parse_loop 死循环
+    return parse(stream,{...data,type:'seg'},ref) as ast_data
 }
 function parse_child(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
     let ls,ret:ast_data={type:data.name,children:new Map(),line:[]}
@@ -134,11 +142,16 @@ function parse_or(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream
     return ret
 }
 function parse_choose(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data {
-    let ls:ast_data
+    let ls:ast_data=null
     let saved = stream.pos
     try {
-        for (let i of data.data)
-            ls =<ast_data> parse(stream, i, ref)
+        for (let i of data.data){
+            let ret=parse(stream, i, ref)
+            //delete 只做字面量匹配,不能作为 choose 的结果返回
+            //(否则 choose(d('<'),...,d('>')) 会把 '>' 的包装对象当结果,泛型列表丢失)
+            if(typeof i=='object'&&i!=null&&(i as ast_rule).type=='delete')continue
+            ls =<ast_data> ret
+        }
         if (ls != null) return ls
     } catch (e) {
     }
@@ -176,6 +189,7 @@ function parse_while(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,str
         try{
             ls=parse(stream,data.data[1],ref)
             let child=parse(stream,data.data[0],ref)
+            if(stream.pos==saved)break
             ret.children.set(param_num,child)
             if(typeof child=='string')
                 line.add(stream.code[stream.pos-1].line)
@@ -198,6 +212,7 @@ function parse_loop(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stre
         let saved=stream.pos
         try{
             let child=parse(stream,data.data[0],ref)
+            if(stream.pos==saved)break
             ret.children.set(param_num,child)
             if(typeof child=='string')
                 line.add(stream.code[stream.pos-1].line)
@@ -248,9 +263,9 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
     }
 }
 export default class Parser extends PeepholeTool{
-    ref:Map<string,ast_generate>
-    _default:ast_generate
-    parse:ast_rule[]
+    ref:Map<string,ast_generate>=new Map()
+    _default:ast_generate=null
+    parse:ast_rule[]=[]
     constructor() {
         super('parser')
     }
@@ -267,24 +282,38 @@ export default class Parser extends PeepholeTool{
         return this
     }
     private call(name:string){
-        if(!this.ref.has(name))
-            return this._default
-        return this.ref.get(name)
+        let fn=this.ref.has(name)?this.ref.get(name):this._default
+        if(fn==null)
+            throw new Error('AST 生成器缺失:'+name)
+        return fn
     }
-    private generate(data:ast_data):PeepholeTree{
-        return this.call(data.type)(data,this.generate)
+    //箭头属性:作为回调传给各生成器时 this 不会丢失
+    private generate=(data:ast_data):PeepholeTree=>{
+        let node=this.call(data.type)(data,this.generate)
+        //统一把 cst 的行信息下发给生成的 AST 节点(check/censor 依赖 ast.line;
+        //直接透传子节点的生成器已有 line,不覆盖)
+        if(node instanceof ASTTree&&(node.line==null||node.line.length==0))
+            node.line=data.line
+        return node
     }
     _run(code:token[]){
         let entry='entry'
-        if(!this.parse.some(r=>r.name==entry))
+        //未显式注册 entry 时回退到 File 规则(或首个规则),保持 cst 节点 type=File 供 ast 分发
+        let rule=this.parse.find(r=>r.name==entry)||this.parse.find(r=>r.name=='File')||this.parse[0]
+        if(!rule)
             throw new Error('入口规则不存在')
-        let cst=parse(new ParserStream(code),this.parse.find(r=>r.name==entry),
+        let stream=new ParserStream(code)
+        let cst=parse(stream,rule,
             new Map(this.parse.map(r=>[r.name,r])))
         if(typeof cst=='string')throw new Error('解析出的头为字符串而非AST对象,请检查您的编译器插件')
+        //loop 规则(如 File 的 file/links)遇到失败会静默停止,若不检查残留 token,
+        //语法错误会被吞掉并产出"空/截断"程序(旧行为:map 少逗号→File 空且 check 0 error)
+        if(stream.now()!=null)
+            throw new Error(`未解析的 token:${stream.now().value}在${now_line(stream)}`)
         return this.generate(cst)
     }
     run(code:token[][]):PeepholeTree[]{
-        return code.map(this._run)
+        return code.map(c=>this._run(c))
     }
 }
 export const $={

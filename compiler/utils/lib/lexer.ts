@@ -216,7 +216,7 @@ export function lexer(code:string,tokens:TokenParam[]):token[]{
     return ret
 }
 export default class Lexer extends PeepholeTool{
-    keyword:TokenParam[]
+    keyword:TokenParam[]=[]
     constructor(){
         super('lexer')
     }

@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lib/lexer.ts'
-import cst_parse from '../../parser/cst'
-import ast_parse from '../../parser/ast'
+import parser from '../../parser'
 import {
     ArrayFix,
-    ast_data,
+    tokens,
     BinaryExpression,
     Class,
     File,
@@ -20,9 +19,9 @@ import {
     Variable
 } from '../../utils'
 
-// 辅助: code -> cst -> ast
+// 辅助: code -> lexer -> cst -> ast(新架构:Parser 实例 .use(cst).use(ast).run(文件列表))
 function parse_ast(code: string): any {
-    return ast_parse(cst_parse(lexer(code)) as ast_data)
+    return (parser.run([lexer(code, tokens)]) as any[])[0]
 }
 
 // ==================== 顶层 File ====================
@@ -106,7 +105,7 @@ describe('Function 转换', () => {
 // ==================== Variable ====================
 describe('Variable 转换', () => {
     it('类型与初值', () => {
-        const ast = parse_ast('public bar:var:number=5;\n') as File
+        const ast = parse_ast('public bar:number=5;\n') as File
         const v = ast.children[0] as Variable
         expect(v.name).toBe('bar')
         expect(v.t?.constructor?.name).toBe('NumberType')
@@ -114,14 +113,14 @@ describe('Variable 转换', () => {
     })
 
     it('无初值', () => {
-        const ast = parse_ast('public bar:var:number;\n') as File
+        const ast = parse_ast('public bar:number;\n') as File
         const v = ast.children[0] as Variable
         expect(v.name).toBe('bar')
         expect(v.value).toBeNull()
     })
 
     it('数组类型 FixType', () => {
-        const ast = parse_ast('public arr:var:number[];\n') as File
+        const ast = parse_ast('public arr:number[];\n') as File
         const v = ast.children[0] as Variable
         expect(v.t).toBeInstanceOf(FixType)
         const fix = (v.t as FixType).fix
@@ -129,27 +128,27 @@ describe('Variable 转换', () => {
     })
 
     it('map 类型 string{}', () => {
-        const ast = parse_ast('public y:var:string{};\n') as File
+        const ast = parse_ast('public y:string{};\n') as File
         const v = ast.children[0] as Variable
         expect(v.t).toBeInstanceOf(FixType)
         expect((v.t as FixType).fix[0]).toBeInstanceOf(MapFix)
     })
 
     it('限定名类型 std.io', () => {
-        const ast = parse_ast('public y:var:std.io;\n') as File
+        const ast = parse_ast('public y:std.io;\n') as File
         const v = ast.children[0] as Variable
         expect(v.t?.constructor?.name).toBe('ClassType')
         expect((v.t as any).local).toEqual(['std', 'io'])
     })
 
     it('括号类型 (number)', () => {
-        const ast = parse_ast('public y:var:(number);\n') as File
+        const ast = parse_ast('public y:(number);\n') as File
         const v = ast.children[0] as Variable
         expect(v.t?.constructor?.name).toBe('NumberType')
     })
 
     it('lambda 类型 (x:number)=>number', () => {
-        const ast = parse_ast('public y:var:(x:number)=>number;\n') as File
+        const ast = parse_ast('public y:(x:number)=>number;\n') as File
         const v = ast.children[0] as Variable
         expect(v.t?.constructor?.name).toBe('LambdaType')
         expect([...(v.t as any).params.keys()]).toEqual(['x'])

@@ -2,8 +2,8 @@ import {ast_data, ASTTree} from '../data'
 import PeepholeTool, {PeepholeTree} from './tool'
 export type desugar_visitor=(node:PeepholeTree,call:(node:PeepholeTree)=>PeepholeTree)=>PeepholeTree
 export default class Desugar extends PeepholeTool{
-    ref:Map<any,desugar_visitor>
-    _default:desugar_visitor
+    ref:Map<any,desugar_visitor>=new Map()
+    _default:desugar_visitor=null
     constructor(){
         super('desugar')
     }

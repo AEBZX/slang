@@ -34,23 +34,30 @@ const G_Value:slang_ast_generate=(data,tree)=>{
         Array.from((data.children.get(1) as ast_data).children.values())
             .map(i=>tree(i as ast_data)) as Block[])
 }
+//直接构造的类型不经 Parser.generate,需手动补 line,否则报错时 ast.line.join 崩
+function stamp(data:ast_data,node:ASTTree){
+    if(node!=null&&node.line==null&&data!=null)node.line=data.line
+    return node
+}
 export function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:number){
-    let first=data.children.get(key) as ast_data
-    if(first.type=='ImplementsName')
+    let first=data&&data.children?data.children.get(key) as ast_data:null
+    if(first==null)
+        return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
+    if(first.type=='ImplementsName'||first.type=='ModuleName')
         return {is:true,data:tree(first.children.get(0) as ast_data)}
-    if(first.type=='ModuleName')
-        return {is:true,data:tree(first.children.get(0) as ast_data)}
-    return {is:false,data:new ClassType(['std','ObjectInterface'],[])}
+    if(first.type=='Type'||first.type=='BasicType')
+        return {is:true,data:tree(first.type=='Type'?first.children.get(0) as ast_data:first)}
+    return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
 }
 export function parseGeneric(data:ast_data,tree:(data:ast_data)=>ASTTree){
     let generic=data.children.get(0) as ast_data
-    if(generic.type!='GenericList')return {
+    if(generic==null||generic.type!='GenericList')return {
         is:false,data:new Map<string,Type>()
     }
     let ret=new Map<string,Type>()
     for(let [k,v] of (generic.children.get(0) as ast_data).children)
         if(typeof v=='object')
-            ret.set(v.children.get(0) as string,parseImplement(v.children.get(1) as ast_data,tree,0).data)
+            ret.set(v.children.get(0) as string,parseImplement(v,tree,1).data)
     return {is:true,data:ret}
 }
 const G_Class:slang_ast_generate=(data,tree)=>{
@@ -91,9 +98,10 @@ const G_Function:slang_ast_generate=(data,tree)=>{
                        _implement?tree(data.children.get(2+off) as ast_data):null)
 }
 const G_Variable:slang_ast_generate=(data,tree)=>{
-    let value=data.children.get(2)
-    return new Variable(null,null,tree(data.children.get(1) as ast_data),
-                       value&&typeof value=='object'?tree(value as ast_data):null)
+    //Variable = seg(Type, choose('=',Expression), ';'),delete 不占 child
+    let value=data.children.get(1)
+    return new Variable(null,null,tree(data.children.get(0) as ast_data),
+                       value&&typeof value==='object'?tree(value as ast_data):null)
 }
 const G_Block:slang_ast_generate=(data,tree)=>{
     let modifier=data.children.get(0) as ast_data
@@ -104,10 +112,10 @@ const G_Block:slang_ast_generate=(data,tree)=>{
     ret.modifiers=new Modifier(
         _Modifier.includes('unstatic')?true:_Modifier.includes('static')?false:null,
         _Modifier.includes('async')?true:_Modifier.includes('sync')?false:null,
-        _Modifier.includes('unprivate')?true:_Modifier.includes('private')?false:null
+        _Modifier.includes('private')?true:(_Modifier.includes('public')||_Modifier.includes('unprivate'))?false:null
     )
     ret.name=data.children.get(1) as string
-    //ObjectInterface 接口本身不实现自己(否则 collect 递归 implement 死循环栈溢出)
+    //ObjectInterface 接口本身不实现自己
     if((ret instanceof Class||ret instanceof Interface)&&ret.name=='ObjectInterface')ret.implement=null
     return ret
 }
@@ -122,7 +130,6 @@ const G_File:slang_ast_generate=(data,tree)=>{
             blocks.push(tree(v))
     return new File(links,blocks)
 }
-//组合符号(节点型)映射回操作符字符串;单字符符号直接是字符串
 const G_Operation:slang_ast_generate=(data,tree)=>{
     let sym=data.children.get(0)
     let oper=typeof sym=='string'?sym:(sym.type=='BIDX'?'[]':'()')
@@ -134,6 +141,7 @@ const G_Cast:slang_ast_generate=(data,tree)=>{
         tree((data.children.get(1) as ast_data)) as LambdaExpression)
 }
 export default new Map([
+    ['link',G_Link],
     ['Link',G_Link],
     ['Module',G_Module],
     ['Value',G_Value],

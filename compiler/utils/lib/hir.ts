@@ -4,9 +4,9 @@ import {File} from '../model/ast'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from "./tool.ts";
 export type hir_visitor = (node:PeepholeTree, scope:PeepholeScope, call:(node:PeepholeTree)=>PeepholeTree)=>PeepholeTree
 export default class HIR extends PeepholeTool{
-    ref:Map<any,hir_visitor>
-    _default:hir_visitor
-    create:init_peephole
+    ref:Map<any,hir_visitor>=new Map()
+    _default:hir_visitor=null
+    create:init_peephole=null
     constructor() {
         super('hir')
     }

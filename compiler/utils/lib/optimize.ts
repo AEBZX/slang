@@ -26,9 +26,10 @@ import {
 export type opt_visitor =(data:PeepholeTree, tool:PeepholeScope, bid:number, index:number)=>void
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool.ts'
 export default class Optimize extends PeepholeTool{
-    ref:Map<any,opt_visitor>
-    create:init_peephole
-    each:(scope:PeepholeScope,each:(ir:IRTree, bid:number, index:number)=>void)=>any
+    ref:Map<any,opt_visitor>=new Map()
+    create:init_peephole=null
+    each:any=null
+    _each:(scope:PeepholeScope,each:(ir:IRTree, bid:number, index:number)=>void)=>any
     constructor() {
         super('optimize')
     }

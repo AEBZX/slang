@@ -13,34 +13,31 @@ import {
 } from '../model/ast'
 import {Function} from '../model/ast'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool'
-export type check_visitor=(ast:PeepholeTree,scope:PeepholeScope,call:(ast:PeepholeTree,round:number)=>void)=>void
+export type check_visitor=(ast:PeepholeTree,scope:PeepholeScope,call:(ast:PeepholeTree,round:number,scope?:PeepholeScope)=>void)=>void
 export default class Check extends PeepholeTool{
-    ref:Map<number,Map<any,check_visitor>>
-    create:init_peephole
+    ref:Map<number,Map<any,check_visitor>>=new Map()
+    create:init_peephole=null
     constructor(){
         super('check')
     }
     use(data:[number,Map<any,check_visitor>]|init_peephole){
         if(Array.isArray(data))
-            for(let [k,v] of data[1])
-                this.ref.get(k).set(k,v)
+            this.ref.set(data[0],new Map(data[1]))
         else this.create=data
         return this
     }
     run(ast:PeepholeTree[]){
         let scope=this.create(ast)
-        let round=[]
-        let g=(node:PeepholeTree,round:number)=>{
-            for(let [k,v] of this.ref.get(round))
+        //按轮次升序,逐根节点派发;visitor 的 call 会把当前 scope 一并下传
+        let rounds=[...this.ref.keys()].sort((a,b)=>a-b)
+        let g=(node:PeepholeTree,round:number,current?:PeepholeScope)=>{
+            let sc=current??scope
+            for(let [k,v] of (this.ref.get(round)??[]))
                 if(node instanceof k)
-                    v(node,scope,g)
+                    v(node,sc,g)
         }
-        //从小到大排序
-        for(let [k,v] of this.ref)
-            round.push(k)
-        round.sort((a,b)=>a-b)
-        for(let i of round)
-            g(ast,i)
-        return ast
+        for(let r of rounds)
+            ast.forEach(node=>g(node,r))
+        return scope
     }
 }

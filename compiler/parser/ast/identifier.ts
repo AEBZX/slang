@@ -21,18 +21,19 @@ const G_LambdaType:slang_ast_generate=(data,tree)=>{
         if(typeof v=='object')
             params.set(v.children.get(0) as string,
                        tree(v.children.get(2) as ast_data))
-    //模型槽位 (generic,params,returnType,_await):此前 3 参调用把 params 塞 generic、ret 塞 params
     return new LambdaType(new Map(),params,ret,false)
 }
 const G_GenericType:slang_ast_generate=(data,tree)=>new GenericType(data.children.get(0) as string)
 const G_ClassType:slang_ast_generate=(data,tree)=>{
     let local=new Array<string>()
-    let _data=data.children.get(0) as ast_data
-    for(let [k,v] of _data.children)
-        local.push(v as string)
+    local.push(data.children.get(0) as string)
+    let rest=data.children.get(1) as ast_data
+    for(let [k,v] of rest.children)
+        if(typeof v=='object')
+            local.push(v.children.get(0) as string)
     let generic=[]
-    if(data.children.has(1))
-        for(let [k,v] of (data.children.get(1) as ast_data).children)
+    if(data.children.has(2))
+        for(let [k,v] of (data.children.get(2) as ast_data).children)
             if(typeof v=='object')
                 generic.push(tree(v))
     return new ClassType(local,generic)

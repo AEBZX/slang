@@ -63,6 +63,8 @@ export class Scope extends PeepholeScope{
     loop:boolean
     throw:boolean
     path:string
+    operation_number=0
+    cast_number=0
     constructor(parent:Scope,global:Scope){
         super(parent,global)
         this.data=new Map()
@@ -101,6 +103,11 @@ export class Scope extends PeepholeScope{
     leave(){
         return this.parent
     }
+    root():Scope{
+        let s:Scope=this
+        while(s.parent)s=s.parent
+        return s
+    }
     sym(ast:ASTTree,type:Type){
         this.symbol.set(ast,type)
     }
@@ -137,6 +144,7 @@ export class Scope extends PeepholeScope{
     }
     set_operation(type:Type,operation:Operation){
         let key=null
+        operation.index=this.operation_number++
         for(let [k,v] of this.operation)if(type_same(k,type)){key=k;break}
         if(key!=null)this.operation.get(key).push(operation)
         else this.operation.set(type,[operation])
@@ -152,6 +160,7 @@ export class Scope extends PeepholeScope{
     }
     set_cast(type:Type,cast:Cast){
         let key=null
+        cast.id=this.cast_number++
         for(let [k,v] of this.cast)if(type_same(k,type)){key=k;break}
         if(key!=null)this.cast.get(key).push(cast)
         else this.cast.set(type,[cast])
@@ -161,10 +170,12 @@ export class Scope extends PeepholeScope{
     }
 }
 export function name(name:string,scope:Scope,ast:ASTTree=null,func=false){
-    if(scope.get(name)!=ast&&!func)
-        return true
-    return !(scope.get(name) != ast && scope.get(name) instanceof Function && func)
-
+    const exist=scope.get(name)
+    //未定义或就是自身:不算冲突
+    if(exist==null||exist==ast)return false
+    //函数重载允许同名
+    if(func&&exist instanceof Function)return false
+    return true
 }
 export const Default_Modifier=new Map<any,Modifier>([
     [Module,new Modifier(false,false,false)],
@@ -177,19 +188,27 @@ export const Default_Modifier=new Map<any,Modifier>([
     [Cast,new Modifier(false,false,false)],
     [Operation,new Modifier(false,false,false)]
 ])
-export type slang_check_visitor =(ast:ASTTree, scope:Scope, call:(ast:ASTTree,round:number)=>void)=>void
+export type slang_check_visitor =(ast:ASTTree, scope:Scope, call:(ast:ASTTree,round:number,scope?:Scope)=>void)=>void
 export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
     let real=Array.from(param.values())
     if(iden.length!=real.length)return false
+    //每个声明形参都要能接受对应实参
     for(let i=0;i<iden.length;i++)
-        if(type_merge(iden[i],real[i],scope)!=iden[i])return false
+        if(!type_is(real[i],iden[i],scope))return false
     return true
 }
 export function fill_modifier(data:Block){
-    if(data.modifiers!=null)return data.modifiers
+    let def=null
     for(let [k,v] of Default_Modifier)
-        if(data instanceof k)
-            return v
+        if(data instanceof k){def=v;break}
+    //未显式指定的字段(null)用默认值补齐,否则 null 会被当成 false(例如 public 方法被当成 static)
+    if(data.modifiers==null)return def
+    if(def==null)return data.modifiers
+    return new Modifier(
+        data.modifiers.unstatic==null?def.unstatic:data.modifiers.unstatic,
+        data.modifiers._async==null?def._async:data.modifiers._async,
+        data.modifiers._private==null?def._private:data.modifiers._private
+    )
 }
 //类型结构相等
 export function type_same(a:Type,b:Type):boolean{
@@ -210,25 +229,33 @@ export function type_same(a:Type,b:Type):boolean{
     return true
 }
 export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
+    //null 入参无从合并
+    if(_type1==null||_type2==null)return new VoidType()
     let type1=real_type(_type1,scope)
     let type2=real_type(_type2,scope)
-    let root=scope
-    while(root.parent)root=root.parent
-    let chain=root.chain
+    //未解析的泛型(real_type 返回 undefined)
+    if(type1==null){
+        scope.thr(`generic type ${_type1 instanceof GenericType?_type1.generic:'unknown'} not found`)
+        return new VoidType()
+    }
+    if(type2==null){
+        scope.thr(`generic type ${_type2 instanceof GenericType?_type2.generic:'unknown'} not found`)
+        return new VoidType()
+    }
     if(type1 instanceof BasicType&&type2 instanceof BasicType){
         //情况1:两个Class
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
+            //同名即同一类型
+            if(name1==name2)return type1
+            //实现链:type2 的实现链中含 type1 则 type2 是 type1 的子类型,取 type1
+            let chain=scope.root().chain
             let _t1=scope.get(name1)
             let _t2=scope.get(name2)
-            //type2的子类型中存在type1
             if(chain.has(name2)&&chain.get(name2).has(_t1 as Interface))return type1
-            //反之
             if(chain.has(name1)&&chain.get(name1).has(_t2 as Interface))return type2
-            //是否是一个类
-            let s=root.global&&root.global!=root?root.global:root
-            return real_type(s.get(name1)===s.get(name2)?type1:new VoidType(),scope)
+            return new VoidType()
         }
         if(type1 instanceof EnumType||type2 instanceof EnumType){
             let e=type1 instanceof EnumType?type1:type2 as EnumType
@@ -238,20 +265,12 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
             if(o instanceof BlockType)return (o as BlockType).local.join('.')==e.local.join('.')?o:new VoidType()
             if(o instanceof ClassType)return (o as ClassType).local.join('.')==e.local.join('.')?o:new VoidType()
         }
-        //泛型
-        if(type1 instanceof GenericType||type2 instanceof GenericType){
-            type1=type1 instanceof GenericType?scope.get_generic(type1.generic):type1
-            type2=type2 instanceof GenericType?scope.get_generic(type2.generic):type2
-            if(type1==null)scope.thr(`generic type ${type1} not found`)
-            if(type2==null)scope.thr(`generic type ${type2} not found`)
-            return type_merge(type1,type2,scope)
-        }
         //情况2:正常类型且都不是VoidType
         if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))
-            return real_type(type1.constructor==type2.constructor?type1:new VoidType(),scope)
+            return type1.constructor==type2.constructor?type1:new VoidType()
         //一边为 VoidType(代表 null 字面量):null 可与任意类型兼容,返回另一边类型
-        if(type1 instanceof VoidType)return real_type(type2,scope)
-        return real_type(type1,scope)
+        if(type1 instanceof VoidType)return type2
+        return type1
     }
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
@@ -262,7 +281,7 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
         //基础类型不兼容则整体不兼容;fix数组用副本避免污染原类型
         let base=type_merge(type1.t,type2.t,scope)
         if(base instanceof VoidType)return new VoidType()
-        return real_type(new FixType(base,[...type1.fix]),scope)
+        return new FixType(base,[...type1.fix])
     }
     return new VoidType()
 }
@@ -299,24 +318,12 @@ export function oper_best(scope:Scope,oper:string,...type:Type[]):Operation[]{
         }
     return all.filter(i=>!worse.has(i))
 }
-export function cast_get(type:Type,scope:Scope){
-    return [type,...scope.get_cast(type).map(i=>i.t)]
+export function cast_get(type:Type,scope:Scope):{id:number,type:Type}[]{
+    return scope.get_cast(type).map(i=>{return {id:i.id,type:i.t}})
 }
 export function type_is(type1:Type,type2:Type,scope:Scope){
-    //type2(实际值)能否赋给 type1(目标):merge 后非 Void 即兼容
-    if(!(type_merge(type2,type1,scope) instanceof VoidType))return true
-    //operation=优先级高于cast
-    let operation=scope.get_operation(type1)
-        .filter(i=>i.oper=='=')
-        .filter(i=>
-            type_merge(Array.from(i.command.params.values())[1],type2,scope)
-            ==Array.from(i.command.params.values())[1]).length!=0
-    if(operation)return true
-    //cast强转
-    return scope.get_cast(type2)
-        .filter(i => type_merge(i.t, type1, scope) == type1)
-        .length != 0
-
+    //type2(实际值)能否赋给 type1(目标)
+    return type_(type2,type1,scope)
 }
 //子类型判断:type 兼容 target(同构或实现链上 type 是 target 的子类)
 function type_sub(type:Type,target:Type,scope:Scope):boolean{
@@ -326,10 +333,8 @@ function type_sub(type:Type,target:Type,scope:Scope):boolean{
         let tn=type.local.join('.'),an=target.local.join('.')
         //一个类
         if(tn==an)return true
-        let root=scope
-        while(root.parent)root=root.leave()
-        return root.chain.has(tn) && root.chain.get(tn).has(scope.get(an) as Interface)
-
+        let chain=scope.root().chain
+        return chain.has(tn) && chain.get(tn).has(scope.get(an) as Interface)
     }
     //或者合并了正常
     return !(type_merge(type,target,scope) instanceof VoidType)
@@ -375,10 +380,9 @@ export function overload_resolve(scope:Scope,name:string,arg_types:Type[]):
     return {kind:'best',fn:fns[idx]}
 }
 export function to_point(a:Type){
-    if(a instanceof FixType){
-        a.fix.push(new PointFix())
-        return a
-    }
+    //不原地修改操作数类型:返回带 PointFix 的新 FixType
+    if(a instanceof FixType)
+        return new FixType(a.t,[...a.fix,new PointFix()])
     return new FixType(a,[new PointFix()])
 }
 export function each_oper(scope:Scope,param:Type,ret:any[]):Type{
@@ -434,58 +438,74 @@ export const Operation_Binary=new Map<any,string>([
 ])
 export function check_implement(i:Type,scope:Scope,line:string[]){
     const ls=real_type(i,scope)
-    if(!(ls instanceof ClassType))
+    if(!(ls instanceof ClassType)){
         scope.thr(`generic implement的类型不是ClassType,在行${line}`)
-    if(!scope.get((<ClassType>ls).local.join('.')))
-        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不存在,在行${line}`)
-    if(!(scope.get((<ClassType>ls).local.join('.')) instanceof Interface))
-        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不是Interface,在行${line}`)
-    let implement=scope.global.get((<ClassType>ls).local.join('.'))
+        return
+    }
+    const name=ls.local.join('.')
+    const implement=resolve_named(scope,name)
+    if(implement==null){
+        scope.thr(`generic implement的类型${name}不存在,在行${line}`)
+        return
+    }
     if(!(implement instanceof Interface))
-        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不是Interface,在行${line}`)
+        scope.thr(`generic implement的类型${name}不是Interface,在行${line}`)
 }
 export function cast_best(result:Type,_cast:Type,scope:Scope){
     let cast=cast_get(real_type(_cast,scope),scope)
-    cast=cast.filter(i=>type_merge(real_type(result,scope),real_type(i,scope),scope)==result)
+    cast=cast.filter(i=>!(type_merge(real_type(result,scope),real_type(i.type,scope),scope) instanceof VoidType))
     let ret=cast[0]
     for(let i of cast)
-        if(type_merge(real_type(i,scope),real_type(ret,scope),scope)==i)
+        if(type_same(type_merge(real_type(i.type,scope),real_type(ret.type,scope),scope),i.type))
             ret=i
-    return real_type(ret,scope)
+    if(ret==null)return undefined
+    return real_type(ret.type,scope)
 }
+//类型检查:a 是实际/来源类型,b 是期望/目标类型
 export function type_(a:Type,b:Type,scope:Scope){
-    const cast=cast_best(real_type(b,scope),real_type(a,scope),scope)
-    if(!cast)return true
-    return type_merge(real_type(a,scope),real_type(b,scope),scope)==b
+    if(a==null)return b==null||real_type(b,scope) instanceof VoidType
+    if(b==null)return false
+    const ra=real_type(a,scope)
+    const rb=real_type(b,scope)
+    if(ra==null||rb==null)return false
+    //Void(无值/未解析)只与 Void 兼容
+    if(ra instanceof VoidType||rb instanceof VoidType)
+        return ra instanceof VoidType&&rb instanceof VoidType
+    //同构或可合并即兼容
+    if(!(type_merge(ra,rb,scope) instanceof VoidType))return true
+    //'=' 重载:目标类型上的 = 第二个参数接受来源
+    const assign=scope.get_operation(rb).filter(i=>i.oper=='=').filter(i=>{
+        const ps=Array.from(i.command.params.values())
+        return ps.length>=2&&!(type_merge(real_type(ps[1],scope),ra,scope) instanceof VoidType)
+    })
+    if(assign.length>0)return true
+    //cast 放行
+    return cast_best(rb,ra,scope)!=null
 }
 export function generic_name(name:string,scope:Scope){
     return scope.generic.get(name) == null
 }
 export function real_type(type:Type,scope:Scope){
+    if(type==null)return null
     if(type instanceof FixType)
         return new FixType(real_type(type.t,scope),type.fix)
-    if(type instanceof ClassType){
-        const is_generic=scope.get_generic(type.local.join('.'))
-        if(is_generic!=null)return real_type(new GenericType(type.local.join('.')),scope)
-        const block=scope.get(type.local.join('.'))
-        if(block instanceof Class||block instanceof Interface){
-            for(let [,v] of block.generic)v=real_type(v,scope)
-            return block
-        }
-        if(block instanceof Enum)return new EnumType(type.local)
-    }
+    //保留 ClassType,只解析其泛型实参(不能替换成 Class 块)
+    if(type instanceof ClassType)
+        return new ClassType(type.local,type.generic.map(i=>real_type(i,scope)),type._this)
     if(type instanceof GenericType)return scope.get_generic(type.generic)
     if(type instanceof LambdaType){
         if(!type.overload){
-            let param=type.params
-            for(let [,k] of param)k=real_type(k,scope)
-            return new LambdaType(null,type.params,type.returnType,type._await)
+            let params=new Map<string,Type>()
+            for(let [k,v] of type.params)params.set(k,real_type(v,scope))
+            return new LambdaType(type.generic,params,real_type(type.returnType,scope),type._await,false,type.name)
         }
-        let real=scope.get_overload(type.name.split('@')[0])
-            .filter(i=>i.index=parseInt(type.name.split('@')[1]))[0];
-        (real.type as LambdaType).overload=false
-        real.type=real_type(real.type,scope);
-        (real.type as LambdaType).overload=true
+        const parts=type.name.split('@')
+        const index=parseInt(parts[1])
+        const real=scope.get_overload(parts[0]).filter(i=>i.index===index)[0]
+        if(real==null)return type
+        if(real.type instanceof LambdaType)real.type.overload=false
+        real.type=real_type(real.type,scope)
+        if(real.type instanceof LambdaType)real.type.overload=true
         return real.type
     }
     return type
@@ -495,4 +515,35 @@ export function get_field(type:Class|Interface,scope:Scope){
     let ret=new Map<string,Type>()
     for(let i of field)
         ret.set(i.name,real_type(i.type,scope))
+    return ret
+}
+//按名解析符号:本地作用域优先,其次全局,最后按当前路径补全
+export function resolve_named(scope:Scope,name:string):ASTTree{
+    let data=scope.get(name)
+    if(data==null&&scope.global)data=scope.global.get(name)
+    if(data==null&&scope.path!=''&&scope.global)data=scope.global.get(scope.path+'.'+name)
+    return data==null?null:data
+}
+//收集 block 实现/继承的接口(传递闭包)
+export function collect_chain(scope:Scope,block:Class|Interface,out:Set<Interface>,seen:Set<Block>){
+    if(block==null||seen.has(block))return
+    seen.add(block)
+    if(!(block.implement instanceof ClassType))return
+    const target=resolve_named(scope,block.implement.local.join('.'))
+    if(target instanceof Interface){
+        out.add(target)
+        collect_chain(scope,target,out,seen)
+    }
+}
+//把 类/接口名 -> 实现接口集合 写入 root().chain(全名与裸名都注册)
+export function build_chain(scope:Scope,name:string,block:Class|Interface){
+    const root=scope.root()
+    const set=new Set<Interface>()
+    collect_chain(scope,block,set,new Set())
+    for(const key of [name,block.name]){
+        if(key==null||key=='')continue
+        let cur=root.chain.get(key)
+        if(!cur){cur=new Set();root.chain.set(key,cur)}
+        for(const i of set)cur.add(i)
+    }
 }

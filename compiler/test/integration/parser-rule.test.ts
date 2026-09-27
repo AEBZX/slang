@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { lexer } from '../../utils/lib/lexer.ts'
-import { ast_data, TokenType } from '../../utils'
-import $ from '../../utils'
+import { ast_data, TokenType, tokens } from '../../utils'
+import Parser, {$} from '../../utils/lib/parser'
 import ExprRules from '../../parser/cst/expr.js'
 import IdentifierRules from '../../parser/cst/identifier.js'
 import CommandRules from '../../parser/cst/command.js'
@@ -12,10 +12,14 @@ function clone_rules(rules: any[]): any[] {
     return JSON.parse(JSON.stringify(rules))
 }
 
-// 辅助: lex → parse 指定规则
+// 辅助: lex → 以指定规则为入口解析出 cst(identity 生成器:只取 ast_data,不生成 AST)
 function parse_entry(entry: string, rules: any[], code: string): ast_data | string {
-    const tokens = lexer(code)
-    return $.parser.run(entry, clone_rules(rules), tokens)
+    const p = new Parser()
+        .use(clone_rules(rules) as any)
+        .use($.s('entry', $.r(entry)))
+        //entry 是包装 seg,真正结果在 child_0
+        .use((data: any) => data.children.get(0))
+    return p.run([lexer(code, tokens)])[0] as any
 }
 
 // ==================== File 语法错误上报 ====================
@@ -53,67 +57,67 @@ describe('类型解析 (Type)', () => {
     it('基础类型: number', () => {
         const result = parse_entry('Type', rules, 'number') as ast_data
         expect(result.type).toBe('Type')
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('NumberType')
     })
 
     it('基础类型: boolean', () => {
         const result = parse_entry('Type', rules, 'boolean') as ast_data
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('BooleanType')
     })
 
     it('基础类型: string', () => {
         const result = parse_entry('Type', rules, 'string') as ast_data
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('StringType')
     })
 
     it('数组类型: number[]', () => {
         const result = parse_entry('Type', rules, 'number[]') as ast_data
-        const postfixList = result.children.get('child_1') as ast_data
+        const postfixList = result.children.get(1) as ast_data
         expect(postfixList.children.size).toBe(1)
-        expect((postfixList.children.get('param_0') as ast_data).type).toBe('ArrayPostfix')
+        expect((postfixList.children.get(0) as ast_data).type).toBe('ArrayPostfix')
     })
 
     it('map 类型: string{}', () => {
         const result = parse_entry('Type', rules, 'string{}') as ast_data
-        const postfixList = result.children.get('child_1') as ast_data
+        const postfixList = result.children.get(1) as ast_data
         expect(postfixList.children.size).toBe(1)
-        expect((postfixList.children.get('param_0') as ast_data).type).toBe('MapPostfix')
+        expect((postfixList.children.get(0) as ast_data).type).toBe('MapPostfix')
     })
 
     it('指针类型: number*', () => {
         const result = parse_entry('Type', rules, 'number*') as ast_data
-        const postfixList = result.children.get('child_1') as ast_data
+        const postfixList = result.children.get(1) as ast_data
         expect(postfixList.children.size).toBe(1)
-        expect((postfixList.children.get('param_0') as ast_data).type).toBe('PointPostfix')
+        expect((postfixList.children.get(0) as ast_data).type).toBe('PointPostfix')
     })
 
     it('多层嵌套: number[][]*', () => {
         const result = parse_entry('Type', rules, 'number[][]*') as ast_data
-        const postfixList = result.children.get('child_1') as ast_data
+        const postfixList = result.children.get(1) as ast_data
         expect(postfixList.children.size).toBe(3)
-        expect((postfixList.children.get('param_0') as ast_data).type).toBe('ArrayPostfix')
-        expect((postfixList.children.get('param_1') as ast_data).type).toBe('ArrayPostfix')
-        expect((postfixList.children.get('param_2') as ast_data).type).toBe('PointPostfix')
+        expect((postfixList.children.get(0) as ast_data).type).toBe('ArrayPostfix')
+        expect((postfixList.children.get(1) as ast_data).type).toBe('ArrayPostfix')
+        expect((postfixList.children.get(2) as ast_data).type).toBe('PointPostfix')
     })
 
     it('void 作为返回类型', () => {
         const result = parse_entry('Type', rules, 'void') as ast_data
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('VoidType')
     })
 
     it('lambda 类型: (x:number)=>number', () => {
         const result = parse_entry('Type', rules, '(x:number)=>number') as ast_data
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('LambdaType')
     })
 
     it('lambda 类型空参数: ()=>number', () => {
         const result = parse_entry('Type', rules, '()=>number') as ast_data
-        const basic = result.children.get('child_0') as ast_data
+        const basic = result.children.get(0) as ast_data
         expect(basic.type).toBe('LambdaType')
     })
 })
@@ -182,9 +186,8 @@ describe('表达式解析 (Expression)', () => {
         expect(result.type).toBe('BinaryExpression')
     })
 
-    it('严格等于: a === b', () => {
-        const result = parse_entry('Expression', rules, 'a === b') as ast_data
-        expect(result.type).toBe('BinaryExpression')
+    it('严格等于: a === b 语言未定义该运算符,必须报残留 token 而非静默截断', () => {
+        expect(() => parse_entry('Expression', rules, 'a === b')).toThrow(/未解析的 token/)
     })
 
     it('逻辑与: a && b', () => {
@@ -393,9 +396,9 @@ describe('顶层块解析 (File)', () => {
         expect(result.type).toBe('link')
     })
 
-    it('var 变量 (通过block提供名字): var:number=5;', () => {
-        // Variable 规则: var : Type = Expr ; 名字由 block 规则提供
-        const result = parse_entry('Variable', all_rules, 'var:number=5;') as ast_data
+    it('变量 (通过block提供名字): number=5;', () => {
+        // Variable 规则: Type = Expr ; 名字由 block 规则提供
+        const result = parse_entry('Variable', all_rules, 'number=5;') as ast_data
         expect(result.type).toBe('Variable')
     })
 
@@ -408,12 +411,14 @@ describe('顶层块解析 (File)', () => {
     it('ModuleName: 多级限定名', () => {
         const result = parse_entry('ModuleName', all_rules, 'std.io.print') as ast_data
         expect(result.type).toBe('ModuleName')
-        //ModuleName→Type→(BasicType)ClassType→ClassTypeData:路径段收在 ClassTypeData
-        const type = result.children.get('child_0') as ast_data
-        const basic = type.children.get('child_0') as ast_data
-        const data = basic.children.get('child_0') as ast_data
+        //ModuleName→Type→(BasicType)ClassType:child_0 是首段,child_1 是 ClassTypeData(后续 .段)
+        const type = result.children.get(0) as ast_data
+        const basic = type.children.get(0) as ast_data
+        expect(basic.children.get(0)).toBe('std')
+        const data = basic.children.get(1) as ast_data
         expect(data.type).toBe('ClassTypeData')
-        expect(data.children.size).toBeGreaterThanOrEqual(3)
+        expect(data.children.size).toBe(2)
+        expect((data.children.get(0) as ast_data).type).toBe('ClassTypeItem')
     })
 
     it('blocks: 多行顶层定义', () => {
@@ -445,7 +450,7 @@ describe('顶层块解析 (File)', () => {
         const result = parse_entry('Class', all_rules, 'class implements std.io {}') as ast_data
         expect(result.type).toBe('Class')
         // d('class') 不占 child → implements 子句是 child_0(ImplementsName 包装接口类型)
-        const child = result.children.get('child_0') as ast_data
+        const child = result.children.get(0) as ast_data
         expect(child.type).toBe('ImplementsName')
     })
 
@@ -474,10 +479,10 @@ describe('顶层块解析 (File)', () => {
             'public main:void(){return;}'
         ) as ast_data
         expect(result.type).toBe('blocks')
-        const block = result.children.get('param_0') as ast_data
+        const block = result.children.get(0) as ast_data
         expect(block.type).toBe('Block')
         // Block = seg(Modifiers, Identifier, ':', or(BlockData))
-        const fn = block.children.get('child_3') as ast_data
+        const fn = block.children.get(3) as ast_data
         expect(fn.type).toBe('Function')
     })
 })
