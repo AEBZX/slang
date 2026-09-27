@@ -16,22 +16,23 @@ export class GenericType extends BasicType{
     }
 }
 export class LambdaType extends BasicType{
-    constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public returnType:Type,public _await:boolean){
+    constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public returnType:Type
+                ,public _await:boolean,public overload:boolean=false,public name:string=''){
         super()
     }
 }
 export class ClassType extends BasicType{
-    constructor(public local:string[],public generic:Type[]){
+    constructor(public local:string[],public generic:Type[],public _this:boolean=false){
         super()
     }
 }
 export class BlockType extends BasicType{
-    constructor(public local:string[]){
+    constructor(public local:string[],public _this:boolean=false){
         super()
     }
 }
 export class EnumType extends BasicType{
-    constructor(public local:string[],public value:string){
+    constructor(public local:string[]){
         super()
     }
 }

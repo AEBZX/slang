@@ -24,7 +24,7 @@ import {
     IncrementPostfix,
     IncrementPrefix,
     IndexPostfix, InequalityExpression,
-    Interface, LessEqualExpression,
+    Interface, LambdaType, LessEqualExpression,
     LessExpression,
     LiteralType, LogicalAndExpression, LogicalOrExpression,
     MinusPrefix,
@@ -50,7 +50,8 @@ import {PeepholeScope} from '../utils/lib/tool'
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
-    chain:Map<string,Set<string>>
+    //接口/类->继承链上的接口
+    chain:Map<string,Set<Interface>>
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
     generic:Map<string,Type>
@@ -208,7 +209,9 @@ export function type_same(a:Type,b:Type):boolean{
     if(a instanceof GenericType)return (a as GenericType).generic==(b as GenericType).generic
     return true
 }
-export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
+export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
+    let type1=real_type(_type1,scope)
+    let type2=real_type(_type2,scope)
     let root=scope
     while(root.parent)root=root.parent
     let chain=root.chain
@@ -217,13 +220,15 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
-            //name1的子类型中存在name2
-            if(chain.has(name1)&&chain.get(name1).has(name2))return type1
+            let _t1=scope.get(name1)
+            let _t2=scope.get(name2)
+            //type2的子类型中存在type1
+            if(chain.has(name2)&&chain.get(name2).has(_t1 as Interface))return type1
             //反之
-            if(chain.has(name2)&&chain.get(name2).has(name1))return type2
+            if(chain.has(name1)&&chain.get(name1).has(_t2 as Interface))return type2
             //是否是一个类
             let s=root.global&&root.global!=root?root.global:root
-            return s.get(name1)===s.get(name2)?type1:new VoidType()
+            return real_type(s.get(name1)===s.get(name2)?type1:new VoidType(),scope)
         }
         if(type1 instanceof EnumType||type2 instanceof EnumType){
             let e=type1 instanceof EnumType?type1:type2 as EnumType
@@ -242,10 +247,11 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
             return type_merge(type1,type2,scope)
         }
         //情况2:正常类型且都不是VoidType
-        if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))return type1.constructor==type2.constructor?type1:new VoidType()
+        if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))
+            return real_type(type1.constructor==type2.constructor?type1:new VoidType(),scope)
         //一边为 VoidType(代表 null 字面量):null 可与任意类型兼容,返回另一边类型
-        if(type1 instanceof VoidType)return type2
-        return type1
+        if(type1 instanceof VoidType)return real_type(type2,scope)
+        return real_type(type1,scope)
     }
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
@@ -256,16 +262,9 @@ export function type_merge(type1:Type,type2:Type,scope:Scope):Type{
         //基础类型不兼容则整体不兼容;fix数组用副本避免污染原类型
         let base=type_merge(type1.t,type2.t,scope)
         if(base instanceof VoidType)return new VoidType()
-        return new FixType(base,[...type1.fix])
+        return real_type(new FixType(base,[...type1.fix]),scope)
     }
     return new VoidType()
-}
-export function oper_get_have(scope:Scope,oper:string,...type:Type[]){
-    return scope.get_operation(type[0]).filter(i=>i.oper==oper)
-        //所有可以将...type放进去调用的
-        .filter(i=>!Array.from(i.command.params.values())
-            .map((j,k)=>type_is(j,type[k],scope)).includes(false))
-        .map(i=>i.command.ret)
 }
 export function oper_candidates(scope:Scope,oper:string,...type:Type[]):Operation[]{
     return scope.get_operation(type[0]).filter(i=>i.oper==oper)
@@ -329,7 +328,7 @@ function type_sub(type:Type,target:Type,scope:Scope):boolean{
         if(tn==an)return true
         let root=scope
         while(root.parent)root=root.leave()
-        return root.chain.has(an) && root.chain.get(an).has(tn)
+        return root.chain.has(tn) && root.chain.get(tn).has(scope.get(an) as Interface)
 
     }
     //或者合并了正常
@@ -366,10 +365,11 @@ export function pick_best(scope:Scope,param_sets:Type[][],arg_types:Type[]):numb
     return -1   //并列歧义
 }
 //重载决议结果:best=唯一最优;ambiguous=并列最符合(需报错);none=无签名匹配
-export function overload_resolve(scope:Scope,name:string,fns:any[],arg_types:Type[]):
-    {kind:'best',fn:any}|{kind:'ambiguous'}|{kind:'none'}{
-    let sets:Type[][]=fns.map((f:any)=>Array.from(f.params.values()))
-    let idx=pick_best(scope,sets,arg_types)
+export function overload_resolve(scope:Scope,name:string,arg_types:Type[]):
+    {kind:'best',fn:Function}|{kind:'ambiguous'}|{kind:'none'}{
+    let fns=scope.get_overload(name)
+    let sets:Type[][]=fns.map((f:Function)=>Array.from(f.params.values()).map(i=>real_type(i,scope)))
+    let idx=pick_best(scope,sets,arg_types.map(i=>real_type(i,scope)))
     if(idx==-1)return {kind:'ambiguous'}
     if(idx==null)return {kind:'none'}
     return {kind:'best',fn:fns[idx]}
@@ -381,7 +381,7 @@ export function to_point(a:Type){
     }
     return new FixType(a,[new PointFix()])
 }
-export function each_oper(scope:Scope,param:Type,ret:any[]){
+export function each_oper(scope:Scope,param:Type,ret:any[]):Type{
     let each=(data:Type)=>{
         for(let i of scope.get_operation(data)){
             if(i.oper!=':')continue
@@ -392,10 +392,10 @@ export function each_oper(scope:Scope,param:Type,ret:any[]){
             }).includes(true))return type
         }
         for(let i of scope.get_operation(data))
-            each(i.command.ret)
+            each(real_type(i.command.ret,scope))
         return new VoidType()
     }
-    return each(param)
+    return each(real_type(param,scope))
 }
 export const Operation_Prefix=new Map([
     [IncrementPrefix,'++'],
@@ -432,3 +432,67 @@ export const Operation_Binary=new Map<any,string>([
     [LogicalAndExpression,'&&'],
     [LogicalOrExpression,'||'],
 ])
+export function check_implement(i:Type,scope:Scope,line:string[]){
+    const ls=real_type(i,scope)
+    if(!(ls instanceof ClassType))
+        scope.thr(`generic implement的类型不是ClassType,在行${line}`)
+    if(!scope.get((<ClassType>ls).local.join('.')))
+        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不存在,在行${line}`)
+    if(!(scope.get((<ClassType>ls).local.join('.')) instanceof Interface))
+        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不是Interface,在行${line}`)
+    let implement=scope.global.get((<ClassType>ls).local.join('.'))
+    if(!(implement instanceof Interface))
+        scope.thr(`generic implement的类型${(<ClassType>ls).local.join('.')}不是Interface,在行${line}`)
+}
+export function cast_best(result:Type,_cast:Type,scope:Scope){
+    let cast=cast_get(real_type(_cast,scope),scope)
+    cast=cast.filter(i=>type_merge(real_type(result,scope),real_type(i,scope),scope)==result)
+    let ret=cast[0]
+    for(let i of cast)
+        if(type_merge(real_type(i,scope),real_type(ret,scope),scope)==i)
+            ret=i
+    return real_type(ret,scope)
+}
+export function type_(a:Type,b:Type,scope:Scope){
+    const cast=cast_best(real_type(b,scope),real_type(a,scope),scope)
+    if(!cast)return true
+    return type_merge(real_type(a,scope),real_type(b,scope),scope)==b
+}
+export function generic_name(name:string,scope:Scope){
+    return scope.generic.get(name) == null
+}
+export function real_type(type:Type,scope:Scope){
+    if(type instanceof FixType)
+        return new FixType(real_type(type.t,scope),type.fix)
+    if(type instanceof ClassType){
+        const is_generic=scope.get_generic(type.local.join('.'))
+        if(is_generic!=null)return real_type(new GenericType(type.local.join('.')),scope)
+        const block=scope.get(type.local.join('.'))
+        if(block instanceof Class||block instanceof Interface){
+            for(let [,v] of block.generic)v=real_type(v,scope)
+            return block
+        }
+        if(block instanceof Enum)return new EnumType(type.local)
+    }
+    if(type instanceof GenericType)return scope.get_generic(type.generic)
+    if(type instanceof LambdaType){
+        if(!type.overload){
+            let param=type.params
+            for(let [,k] of param)k=real_type(k,scope)
+            return new LambdaType(null,type.params,type.returnType,type._await)
+        }
+        let real=scope.get_overload(type.name.split('@')[0])
+            .filter(i=>i.index=parseInt(type.name.split('@')[1]))[0];
+        (real.type as LambdaType).overload=false
+        real.type=real_type(real.type,scope);
+        (real.type as LambdaType).overload=true
+        return real.type
+    }
+    return type
+}
+export function get_field(type:Class|Interface,scope:Scope){
+    let field=type.children
+    let ret=new Map<string,Type>()
+    for(let i of field)
+        ret.set(i.name,real_type(i.type,scope))
+}

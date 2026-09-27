@@ -57,6 +57,9 @@ const Check_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     ast.modifiers=Default_Modifier.get(ast)
     if(ast.command.ret instanceof VoidType)
         scope.thr(`运算符重载不能返回void,在行${ast.line.join('\n')}`)
+    //不能有泛型
+    if(ast.command.generic.size!=0)
+        scope.thr(`运算符重载不能有泛型,在行${ast.line.join('\n')}`)
     call(ast.command,0)
 }
 const Check_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
@@ -68,6 +71,8 @@ const Check_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     if(ast.modifiers._async)
         scope.thr(`类型转换不能是异步的,在行${ast.line.join('\n')}`)
     ast.modifiers=Default_Modifier.get(ast)
+    if(ast.command.generic.size!=0)
+        scope.thr(`类型转换不能有泛型,在行${ast.line.join('\n')}`)
     call(ast.command,0)
 }
 const Check_Module:slang_check_visitor=(ast:Module,scope,call)=>{

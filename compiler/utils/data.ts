@@ -26,9 +26,8 @@ import type {Type} from './model/ast'
 export class ASTTree extends PeepholeTree{
     type:Type
     line:string[]
-    //oper:运算符重载/强转命中标记——check 阶段命中 operation/cast 时写入,
-    //desugar 据此把该表达式脱糖成容器静态函数调用。各节点按自身语义解读。
     public oper:string=null
+    public cast:Type=null
 }
 export class HIRTree extends PeepholeTree{}
 export type ast_generate=(data:ast_data,tree:(data:ast_data)=>PeepholeTree)=>PeepholeTree
@@ -59,9 +58,6 @@ export let number_radix=['x','X','b','B','o','O']
 export let keywords=[
     //修饰符
     'public','private','async','sync','static','unstatic',
-    //特殊关键字(注意:重载符号 p* p& []= p++ ++p 等不能进 keywords——
-    //lexer 会把普通代码里的 []=(数组赋初值) 误切为单 token,导致解析错位;
-    //这些符号仅在 operation 关键字后由 CST 按 operations 表匹配)
     '=>',
     //运算符
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
@@ -76,7 +72,7 @@ export let keywords=[
     //选择块关键字
     'if','else','switch','case','default','for','while','do',
     //其他
-    'null','true','false','(',')','{','}',',','.',':',';','?','~'
+    'null','true','false','(',')','{','}',',','.',':',';','?','~','@'
 ]
 export let operations=[
     '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','==','=','~',':','new','++','--',

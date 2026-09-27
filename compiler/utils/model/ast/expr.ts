@@ -51,9 +51,9 @@ export class ArgumentsPostfix extends Postfix{
     }
 }
 export class PostfixExpression extends Expression{
-    //call_target:函数重载决策结果——check 在 ArgumentsPostfix 命中重载组时写入实际函数名(f2/f3),
-    //desugar 据此把调用标识符改写为该名,指向具体重载槽
-    public call_target:string=null
+    public call_targets:string[]=[]
+    public opers:string[]=[]
+    public casts:Type[]=[]
     constructor(public expr:Expression,public postfix:Postfix[],public types:Type[]=[]) {
         super()
     }
@@ -73,6 +73,8 @@ export class TypePrefix extends Prefix{
     }
 }
 export class PrefixExpression extends Expression{
+    public casts:Type[]=[]
+    public opers:string[]=[]
     constructor(public expr:Expression,public prefix:Prefix[]) {
         super()
     }

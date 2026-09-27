@@ -15,9 +15,9 @@ import {
     Variable, VarDeclaration, VoidType, ListCommand, Assign, Call, Throw, Return, Increment, Decrement, IfStatement,
     WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
     LambdaType, EnumType, LambdaExpression, PostfixExpression, ArgumentsPostfix, Expression, MapExpression,
-    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression
+    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression, ASTTree
 } from '../utils'
-import {name, slang_check_visitor} from './tool'
+import {check_implement, name, slang_check_visitor} from './tool'
 import {isolatedDeclaration} from "rolldown/experimental";
 //round1:Build不做任何检查,搭建全局static符号表
 const Build_File:slang_check_visitor=(ast:File, scope, call)=>{
@@ -27,8 +27,8 @@ const Build_File:slang_check_visitor=(ast:File, scope, call)=>{
 const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     scope.path=name
-    if(scope.get(name)!=null){
-        let module=scope.get(name) as Module
+    let module=scope.get(name)
+    if(module!=null&&module instanceof Module){
         module.children=[...module.children,...ast.children]
         scope.set(name,module)
     }
@@ -40,7 +40,6 @@ const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
 }
 const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
-
     scope.global.set(name,ast)
     scope=scope.enter()
     if(ast instanceof Class||ast instanceof Interface)
@@ -106,7 +105,13 @@ const Verify_File:slang_check_visitor=(ast:File,scope,call)=>{
 }
 const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope=scope.enter()
+    if(scope.get(ast.name)){
+        let module=scope.get(ast.name)
+        if(!(module instanceof Module))scope.thr(`重复定义了${ast.name},在行${ast.line.join('\n')}`)
+        ast.children.push(...(<Module>module).children)
+    }
     scope.set(ast.name,ast)
+    scope.set('up',new ASTTree())
     for(let i of ast.children)
         call(i,2)
     scope=scope.leave()
@@ -114,6 +119,15 @@ const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
 const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     if(name(ast.name,scope,ast))
         scope.thr(`类/接口${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    if(ast.implement!=null||(ast.implement as ClassType).local.join('.')!=''){
+        let name=(ast.implement as ClassType).local.join('.')
+        const chain_set=(data:Interface)=>{
+            scope.chain.get(name).add(data)
+            for(let i of scope.chain.get(data.name))
+                chain_set(i)
+        }
+        chain_set(<Interface>ast.implement)
+    }
     //implement检查
     if(ast.implement instanceof ClassType){
         call(ast.implement,2)
@@ -124,19 +138,15 @@ const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,cal
     //generic implement且是否是Interface的是否存在
     for(let i of ast.generic.values()){
         call(i,2)
-        if(!(i instanceof ClassType))
-            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
-        if(!scope.get((<ClassType>i).local.join('.')))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
-        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
-        let implement=scope.global.get((<ClassType>i).local.join('.'))
-        if(!(implement instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        check_implement(i,scope,ast.line)
     }
     if(new Set(ast.generic.keys()).size!=ast.generic.size)
         scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
     scope=scope.enter()
+    for(let [name,i] of ast.generic)
+        scope.set_generic(name,i)
+    scope.set('this',new ASTTree())
+    scope.set('up',new ASTTree())
     for(let i of ast.children)
         call(i,2)
     scope=scope.leave()
@@ -153,18 +163,12 @@ const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     //generic implement且是否是Interface的是否存在
     for(let i of ast.generic.values()){
         call(i,2)
-        if(!(i instanceof ClassType))
-            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
-        if(!scope.get((<ClassType>i).local.join('.')))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
-        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
-        let implement=scope.global.get((<ClassType>i).local.join('.'))
-        if(!(implement instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        check_implement(i,scope,ast.line)
     }
     if(new Set(ast.generic.keys()).size!=ast.generic.size)
         scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
+    for(let [name,i] of ast.generic)
+        scope.set_generic(name,i)
     for(let [name,i] of ast.params){
         call(i,2)
         scope.set(name,new VarDeclaration(name,i,new VoidType()))
@@ -263,15 +267,7 @@ const Verify_LambdaType:slang_check_visitor=(ast:LambdaType,scope,call)=>{
         scope.thr(`泛型重复声明,在行${ast.line.join('\n')}`)
     for(let i of ast.generic.values()){
         call(i,2)
-        if(!(i instanceof ClassType))
-            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
-        if(!scope.get((<ClassType>i).local.join('.')))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
-        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
-        let implement=scope.global.get((<ClassType>i).local.join('.'))
-        if(!(implement instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        check_implement(i,scope,ast.line)
     }
     if(new Set(ast.params.keys()).size!=ast.params.size)
         scope.thr(`参数重复声明,在行${ast.line.join('\n')}`)
@@ -290,6 +286,10 @@ const Verify_EnumType:slang_check_visitor=(ast:EnumType,scope,call)=>{
     if(!(<Enum>data).children.includes(ast.value))
         scope.thr(`${ast.value}不是${ast.local.join('.')}的成员,在行${ast.line.join('\n')}`)
 }
+const Verify_GenericType:slang_check_visitor=(ast:GenericType,scope,call)=>{
+    if(!scope.get_generic(ast.generic))
+        scope.thr(`泛型${ast.generic}不存在,在行${ast.line.join('\n')}`)
+}
 const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
     scope=scope.enter()
     if(new Set(ast.params.keys()).size!=ast.params.size)
@@ -301,15 +301,7 @@ const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,ca
     //generic implement且是否是Interface的是否存在
     for(let i of ast.generic.values()){
         call(i,2)
-        if(!(i instanceof ClassType))
-            scope.thr(`generic implement的类型不是ClassType,在行${ast.line.join('\n')}`)
-        if(!scope.get((<ClassType>i).local.join('.')))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不存在,在行${ast.line.join('\n')}`)
-        if(!(scope.get((<ClassType>i).local.join('.')) instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
-        let implement=scope.global.get((<ClassType>i).local.join('.'))
-        if(!(implement instanceof Interface))
-            scope.thr(`generic implement的类型${(<ClassType>i).local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        check_implement(i,scope,ast.line)
     }
     if(new Set(ast.generic.keys()).size!=ast.generic.size)
         scope.thr(`泛型重复定义,在行${ast.line.join('\n')}`)
@@ -376,6 +368,7 @@ export const Round2=new Map<any,slang_check_visitor>([
     [BlockType,Verify_BlockType],
     [EnumType,Verify_EnumType],
     [ClassType,Verify_ClassType],
+    [GenericType,Verify_GenericType],
     [LambdaExpression,Verify_LambdaExpression],
     [MapExpression,Verify_MapExpressionOrArrayExpression],
     [ArrayExpression,Verify_MapExpressionOrArrayExpression],
