@@ -21,7 +21,7 @@ import {
 import {
     cast_best,
     cast_get,
-    each_oper, generic_name,
+    each_oper, generic_name, is_array_or_map,
     oper_best,
     Operation_Assign, Operation_Binary, Operation_Postfix, Operation_Prefix, overload_resolve, param_is, real_type,
     slang_check_visitor,
@@ -167,8 +167,6 @@ const Label_ThrowOrReturnOrCallOrIncrementOrDecrement:slang_check_visitor=(ast:T
         if(!(type_merge(ast.data.type,new NumberType(),scope) instanceof NumberType))
             scope.thr(`返回类型错误在行${ast.line.join('\n')}`)
     }
-    if(ast instanceof Call)
-        call(ast.data,3,scope)
 }
 const Label_VarDeclaration:slang_check_visitor=(ast:VarDeclaration,scope,call)=>{
     call(ast.value,3,scope)
@@ -230,7 +228,10 @@ const Label_ForeachStatement:slang_check_visitor=(ast:ForeachStatement,scope,cal
     }
     if(data instanceof VoidType)
         scope.thr(`foreach的对象不是或不可以转换为数组或Map,在行${ast.line.join('\n')}`)
-    scope.set(ast.iden,new VarDeclaration(ast.iden,real_type(data,scope),new NullLiteral(null)))
+    const elem=real_type(data,scope)
+    const vd=new VarDeclaration(ast.iden,elem,new NullLiteral(null))
+    vd.type=elem
+    scope.set(ast.iden,vd)
     call(ast.commands,3,scope)
     scope=scope.leave()
 }
@@ -241,7 +242,10 @@ const Label_TryStatement:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     call(ast.commands,3,scope)
     scope=scope.leave()
     scope=scope.enter()
-    scope.set(ast.catch_.iden,new VarDeclaration(ast.catch_.iden,real_type(ast.catch_.type,scope),new NullLiteral(null)))
+    const ct=real_type(ast.catch_.type,scope)
+    const cv=new VarDeclaration(ast.catch_.iden,ct,new NullLiteral(null))
+    cv.type=ct
+    scope.set(ast.catch_.iden,cv)
     call(ast.catch_.command,3,scope)
     scope=scope.leave()
     scope=scope.enter()
@@ -265,7 +269,7 @@ const Label_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,cal
     let operation=oper_best(scope,oper,to_point(ast.left.type),to_point(ast.right.type))
     //oper_best 无匹配时返回空数组,必须判 length 而不是判 null
     if(operation.length>0){
-        ast.type=real_type(operation[0].type,scope)
+        ast.type=real_type(operation[0].command.ret,scope)
         ast.oper=operation[0].oper
         return
     }
@@ -293,10 +297,10 @@ const Label_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,cal
         let oper=''
         for(let [k,v] of Operation_Prefix)
             if(prefix instanceof k)oper=v
-        let operation=oper_best(scope,oper,to_point(ast.expr.type))
+        let operation=oper_best(scope,oper,to_point(type))
         if(operation.length>0){
             ast.opers[i]=operation[0].local.join('.')+'.'+operation[0].oper+'@'+operation[0].index
-            type=operation[0].type
+            type=real_type(operation[0].command.ret,scope)
             continue
         }
         if(prefix instanceof TypePrefix)type=prefix.type
@@ -320,7 +324,7 @@ const Label_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,cal
         const cast=cast_get(type,scope)
         if(prefix instanceof IncrementPrefix||prefix instanceof DecrementPrefix||prefix instanceof BitNotPrefix||
             prefix instanceof MinusPrefix){
-            if(cast.find(i=>i instanceof NumberType)){
+            if(cast.find(i=>i.type instanceof NumberType)){
                 ast.casts[i]=cast.find(i=>i.type instanceof NumberType).id
                 type=new NumberType()
                 continue
@@ -330,7 +334,7 @@ const Label_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,cal
             type=new NumberType()
         }
         if(prefix instanceof NotPrefix){
-            if(cast.find(i=>i instanceof BooleanType)){
+            if(cast.find(i=>i.type instanceof BooleanType)){
                 ast.casts[i]=cast.find(i=>i.type instanceof BooleanType).id
                 type=new BooleanType()
                 continue
@@ -370,10 +374,10 @@ const Label_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,c
             call(postfix.index,3,scope)
             data=[to_point(postfix.index.type)]
         }
-        let operation=oper_best(scope,oper,to_point(ast.expr.type),...data)
+        let operation=oper_best(scope,oper,to_point(type),...data)
         if(operation.length>0){
             ast.opers[i]=operation[0].oper+'@'+operation[0].index
-            type=operation[0].type
+            type=real_type(operation[0].command.ret,scope)
         }else{
             if(postfix instanceof IncrementPostfix||postfix instanceof DecrementPostfix)
                 type=new NumberType()
@@ -384,9 +388,18 @@ const Label_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,c
                     fix=container.fix[container.fix.length-1]
                 if(fix instanceof MapFix&&!(postfix.index.type instanceof StringType))
                     scope.thr(`Map的键必须是string,在行${ast.line.join('\n')}`)
-                if(container instanceof FixType&&(fix instanceof ArrayFix||fix instanceof MapFix))
-                    type=real_type(container.t,scope)
-                else{
+                if(container instanceof FixType&&(fix instanceof ArrayFix||fix instanceof MapFix)){
+                    const rest=container.fix.slice(0,-1)
+                    type=rest.length>0?new FixType(container.t,rest):container.t
+                }else{
+                    //尝试cast
+                    const cast=cast_get(type,scope)
+                    const has=cast.find(i=>is_array_or_map(i.type))
+                    if(has){
+                        ast.casts[i]=has.id
+                        ast.type=has.type
+                        continue
+                    }
                     scope.thr(`[]操作符用于对数组或Map进行操作,除非被重载`)
                     type=new VoidType()
                 }
@@ -400,7 +413,7 @@ const Label_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,c
                     //this 内部可访问任意成员;外部实例只能访问非 static 且非 private 的成员
                     const cond=type._this
                         ?(i:Block)=>i.name==postfix.name
-                        :(i:Block)=>i.name==postfix.name&&!!i.modifiers.unstatic&&!i.modifiers._private
+                        :(i:Block)=>i.name==postfix.name&&!!i.modifiers.unstatic
                     let found:Block=null
                     if(cls instanceof Class||cls instanceof Interface)
                         found=cls.children.find(i=>cond(i))??null
@@ -474,7 +487,8 @@ const Label_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,c
                             scope.thr(`调用的lambda参数类型错误,在行${ast.line.join('\n')}`)
                         type=type.returnType
                     }
-                }
+                }else if(!(type instanceof ClassType))
+                    scope.thr(`调用的类型不是函数,在行${ast.line.join('\n')}`)
             }
         }
         //每个 postfix 处理后记录类型,循环结束后写 ast.type
@@ -489,7 +503,6 @@ const Label_IdentifierExpression:slang_check_visitor=(ast:IdentifierExpr,scope,c
         ast.type=new VoidType()
         return
     }
-    //this/up/泛型等直接以 Type 形式存放,此时 data 本身就是类型
     ast.type=data instanceof Type?data:(data.type!=null?data.type:new VoidType())
 }
 const Label_ArrayExpression:slang_check_visitor=(ast:ArrayExpression,scope,call)=>{

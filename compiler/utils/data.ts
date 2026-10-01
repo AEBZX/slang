@@ -26,8 +26,6 @@ import type {Type} from './model/ast'
 export class ASTTree extends PeepholeTree{
     type:Type
     line:string[]
-    public oper:string=null
-    public cast:string=null
 }
 export class HIRTree extends PeepholeTree{}
 export type ast_generate=(data:ast_data,tree:(data:ast_data)=>PeepholeTree)=>PeepholeTree

@@ -2,7 +2,7 @@ import {
     AAssign, AddAssign,
     AdditiveExpression,
     AddressPrefix,
-    ArgumentsPostfix, Assign,
+    ArgumentsPostfix, ArrayFix, Assign,
     ASTTree,
     BasicType,
     BinaryExpression, BitAndAssign,
@@ -26,9 +26,9 @@ import {
     IncrementPostfix,
     IncrementPrefix,
     IndexPostfix, InequalityExpression,
-    Interface, LambdaType, LessEqualExpression,
+    Interface, LambdaExpression, LambdaType, LessEqualExpression,
     LessExpression,
-    LiteralType, LogicalAndExpression, LogicalOrExpression,
+    LiteralType, LogicalAndExpression, LogicalOrExpression, MapFix,
     MinusPrefix, ModAssign,
     ModExpression,
     Modifier,
@@ -38,7 +38,7 @@ import {
     NumberType,
     Operation,
     PointFix,
-    Postfix,
+    Postfix, PostfixExpression, PrefixExpression,
     ReferencePrefix,
     ShiftLeftExpression,
     ShiftRightExpression, StringType, SubAssign,
@@ -52,7 +52,6 @@ import {PeepholeScope} from '../utils/lib/tool'
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
-    //接口/类->继承链上的接口
     chain:Map<string,Set<Interface>>
     data:Map<string,ASTTree>
     symbol:Map<ASTTree,Type>
@@ -176,8 +175,8 @@ export function name(name:string,scope:Scope,ast:ASTTree=null,func=false){
     //未定义或就是自身:不算冲突
     if(exist==null||exist==ast)return false
     //函数重载允许同名
-    if(func&&exist instanceof Function)return false
-    return true
+    return !(func && exist instanceof Function)
+
 }
 export const Default_Modifier=new Map<any,Modifier>([
     [Module,new Modifier(false,false,false)],
@@ -212,15 +211,12 @@ export function fill_modifier(data:Block){
         data.modifiers._private==null?def._private:data.modifiers._private
     )
 }
-//类型结构相等
 export function type_same(a:Type,b:Type):boolean{
     if(a==null||b==null)return a==b
-    //必须是同构的
     if(a.constructor!=b.constructor)return false
     if(a instanceof LiteralType)return true
     if(a instanceof ClassType)return (a as ClassType).local.join('.')==(b as ClassType).local.join('.')
     if(a instanceof FixType){
-        //fix和本身都得同构
         let fa=a as FixType,fb=b as FixType
         if(fa.fix.length!=fb.fix.length)return false
         for(let i=0;i<fa.fix.length;i++)
@@ -244,6 +240,8 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
         scope.thr(`generic type ${_type2 instanceof GenericType?_type2.generic:'unknown'} not found`)
         return new VoidType()
     }
+    if(type1 instanceof VoidType)return type2
+    if(type2 instanceof VoidType)return type1
     if(type1 instanceof BasicType&&type2 instanceof BasicType){
         //情况1:两个Class
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
@@ -267,12 +265,7 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
             if(o instanceof BlockType)return (o as BlockType).local.join('.')==e.local.join('.')?o:new VoidType()
             if(o instanceof ClassType)return (o as ClassType).local.join('.')==e.local.join('.')?o:new VoidType()
         }
-        //情况2:正常类型且都不是VoidType
-        if(!(type1 instanceof VoidType)&&!(type2 instanceof VoidType))
-            return type1.constructor==type2.constructor?type1:new VoidType()
-        //一边为 VoidType(代表 null 字面量):null 可与任意类型兼容,返回另一边类型
-        if(type1 instanceof VoidType)return type2
-        return type1
+        return type1.constructor==type2.constructor?type1:new VoidType()
     }
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
@@ -576,4 +569,74 @@ export function build_chain(scope:Scope,name:string,block:Class|Interface){
         if(!cur){cur=new Set();root.chain.set(key,cur)}
         for(const i of set)cur.add(i)
     }
+}
+export function is_array_or_map(type:Type){
+    if(!(type instanceof FixType))return false
+    const last=type.fix[type.fix.length-1]
+    return last instanceof MapFix || last instanceof ArrayFix;
+
+}
+export function record(ast:PostfixExpression|PrefixExpression, i:number, type:Type, res?: {oper?:string, cast?:string, callTarget?:string}) {
+    if (res?.oper) ast.opers[i] = res.oper
+    if (res?.cast) ast.casts[i] = res.cast
+    if (res?.callTarget&&ast instanceof PostfixExpression) ast.call_targets[i] = res.callTarget
+    ast.types[i] = type
+}
+export function findOper(map: Map<any,string>, node:ASTTree): string {
+    for (const [k, v] of map) if (node instanceof k) return v
+    return ''
+}
+export function tryOverload(scope:Scope, oper:string, args: Type[], ast:PrefixExpression|PostfixExpression, idx?: number): Type | null {
+    const op = oper_best(scope, oper, ...args);
+    if (op.length === 0) return null;
+    if (idx != null) ast.opers[idx] = op[0].oper + '@' + op[0].index;
+    return real_type(op[0].command.ret, scope);
+}
+export function findCastBy(scope:Scope, from:Type, pred: (t:Type)=>boolean){
+    const cast=cast_get(from,scope)
+    return cast.filter(i=>pred(i.type))[0]
+}
+export function localToName(local:string[]){
+    return local.join('.')
+}
+export function nameToLocal(name:string){
+    return name.split('.')
+}
+export function bindGenerics(scope:Scope, defGeneric: Map<string,Type>, instGeneric: Type[]) {
+    let k = 0;
+    for (const key of defGeneric.keys()) {
+        if (k >= instGeneric.length) break
+        scope.set_generic(key, instGeneric[k++])
+    }
+}
+export function check_static_modifier(ast:Block, scope:Scope, kind: string) {
+    ast.modifiers = fill_modifier(ast)
+    const line = ast.line.join('\n')
+    if (ast.modifiers.unstatic) scope.thr(`${kind}不能是非static的,在行${line}`)
+    if (ast.modifiers._private) scope.thr(`${kind}不能是私有的,在行${line}`)
+    if (ast.modifiers._async)   scope.thr(`${kind}不能是异步的,在行${line}`)
+    ast.modifiers = Default_Modifier.get(ast)
+}
+export function check_async_modifier(ast:Block, scope:Scope,kind:string){
+    ast.modifiers=fill_modifier(ast)
+    if(ast.modifiers._async){
+        scope.thr(`${kind}不能是异步的,在行${ast.line.join('\n')}`)
+        ast.modifiers._async=false
+    }
+}
+export function check_dup(keys: Iterable<string>, scope: Scope, label: string, line: string[]) {
+    const arr = Array.from(keys)
+    if (new Set(arr).size != arr.length)
+        scope.thr(`${label}重复定义,在行${line.join('\n')}`)
+}
+export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {
+    for (let i of ast.generic.values()) {
+        call(i, 2, scope)
+        check_implement(i, scope, ast.line)
+    }
+}
+export function try_cast_to(scope:Scope, type:Type, want: Type){
+    const cast = cast_get(type, scope)
+    const hit = cast.find(i => i.type instanceof want.constructor)
+    return hit ? {id: hit.id, type: hit.type} : null
 }

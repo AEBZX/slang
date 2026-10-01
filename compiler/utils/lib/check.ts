@@ -1,4 +1,3 @@
-import {ast_data, ast_type, ASTTree} from '../data'
 import {
     BasicType,
     BlockType, Cast,

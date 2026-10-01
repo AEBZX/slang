@@ -1,7 +1,10 @@
 import {ASTTree} from '../../data'
 import {Type} from './identifier'
 import {Command} from './command'
-export class Expression extends ASTTree{}
+export class Expression extends ASTTree{
+    public oper:string=null
+    public cast:string=null
+}
 export class PrimaryExpression extends Expression{}
 export class Literal extends PrimaryExpression{
     constructor(public value:string) {
@@ -75,7 +78,7 @@ export class TypePrefix extends Prefix{
 export class PrefixExpression extends Expression{
     public casts:string[]=[]
     public opers:string[]=[]
-    constructor(public expr:Expression,public prefix:Prefix[]) {
+    constructor(public expr:Expression,public prefix:Prefix[],public types:Type[]=[]) {
         super()
     }
 }
