@@ -1,19 +1,21 @@
 //round0:无需符号表等的静态检查
 import {
-    ArrayExpression,
+    ArgumentsPostfix,
+    ArrayExpression, Assign, Await, BinaryExpression,
     BooleanType,
     Break,
     Cast,
     Class, ClassType, Continue, DoWhileStatement,
-    Enum,
-    File, ForeachStatement, ForStatement,
-    Function, IfStatement,
+    Enum, ExprCommand,
+    File, FixType, ForeachStatement, ForStatement,
+    Function, IfStatement, IndexPostfix,
     Interface, LambdaExpression, Link,
     ListCommand, LiteralType, MapExpression,
     Module, NumberType,
-    Operation, PostfixExpression, PrefixExpression, StringType, SwitchStatement, Throw, TryStatement,
-    Value,
-    Variable,
+    Operation, PostfixExpression, PrefixExpression, Return, StringType, SwitchStatement,
+    TernaryExpression, Throw, TryStatement, Type,
+    Value, VarDecl,
+    Variable, VM,
     VoidType, WhileStatement
 } from '../utils'
 import {
@@ -154,10 +156,43 @@ const Check_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
         scope.thr(`throw只能在try中使用,在行${ast.line.join('\n')}`)
     call(ast.data,0)
 }
-const Check_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
+const Check_IfStatement:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,0)
     call(ast.commands,0)
     call(ast.else_,0)
+}
+const Check_ExprCommand:slang_check_visitor=(ast:ExprCommand,scope,call)=>{
+    call(ast.data,0)
+}
+const Check_Await:slang_check_visitor=(ast:Await,scope,call)=>{
+    call(ast.command,0)
+}
+const Check_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
+    call(ast.data,0)
+    call(ast.value,0)
+}
+const Check_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
+    const is_void=(t:Type)=>{
+        if(t instanceof VoidType)return t
+        if(t instanceof FixType)return is_void(t.t)
+    }
+    if(is_void(ast.t))
+        scope.thr(`var的类型不能是void,在行${ast.line.join('\n')}`)
+    call(ast.value,0)
+}
+const Check_SwitchStatement:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
+    call(ast.condition,0)
+    for(const i of ast.case_list){
+        call(i.condition,0)
+        call(i.commands,0)
+    }
+    call(ast.default_,0)
+}
+const Check_Return:slang_check_visitor=(ast:Return,scope,call)=>{
+    call(ast.data,0)
+}
+const Check_VM:slang_check_visitor=(ast:VM,scope,call)=>{
+    for(const i of ast.param)call(i,0)
 }
 const Check_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
     check_dup(ast.generic.keys(),scope,'lambda中泛型定义',ast.line)
@@ -177,6 +212,20 @@ const Check_MapExpression:slang_check_visitor=(ast:MapExpression,scope,call)=>{
 }
 const Check_PostfixOrPrefixExpression:slang_check_visitor=(ast:PostfixExpression|PrefixExpression,scope,call)=>{
     call(ast.expr,0)
+    if(ast instanceof ArgumentsPostfix)
+        for(const i of ast.args)
+            call(i,0)
+    if(ast instanceof IndexPostfix)
+        call(ast.index,0)
+}
+const Check_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
+    call(ast.left,0)
+    call(ast.right,1)
+}
+const Check_TernaryExpression:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
+    call(ast.condition,0)
+    call(ast.trueExpr,0)
+    call(ast.falseExpr,0)
 }
 export const Round0=new Map<any,slang_check_visitor>([
     [File, Check_File],
@@ -198,6 +247,19 @@ export const Round0=new Map<any,slang_check_visitor>([
     [Continue, Check_BreakContinue],
     [TryStatement, Check_Try],
     [Throw, Check_Throw],
-    [IfStatement, Check_If],
-    [LambdaExpression, Check_LambdaExpression]
+    [IfStatement, Check_IfStatement],
+    [LambdaExpression, Check_LambdaExpression],
+    [ExprCommand, Check_ExprCommand],
+    [Await,Check_Await],
+    [Assign,Check_Assign],
+    [VarDecl,Check_VarDecl],
+    [SwitchStatement,Check_SwitchStatement],
+    [Return,Check_Return],
+    [VM,Check_VM],
+    [ArrayExpression,Check_ArrayExpression],
+    [MapExpression,Check_MapExpression],
+    [PostfixExpression,Check_PostfixOrPrefixExpression],
+    [PrefixExpression,Check_PostfixOrPrefixExpression],
+    [BinaryExpression,Check_BinaryExpression],
+    [TernaryExpression,Check_TernaryExpression]
 ])

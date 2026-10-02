@@ -121,7 +121,6 @@ export class GreaterExpression extends BinaryExpression{
         super(left,right,'>')
     }
 }
-
 export class LessExpression extends BinaryExpression{
     constructor(left:Expression,right:Expression) {
         super(left,right,'<')

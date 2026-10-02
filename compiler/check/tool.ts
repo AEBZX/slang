@@ -1,23 +1,19 @@
 import {
-    AAssign, AddAssign,
-    AdditiveExpression,
-    AddressPrefix,
-    ArgumentsPostfix, ArrayFix, Assign,
+    AAssign, AddAssign, AddExpression,
+    AddressPrefix, AndAssign, AndExpression,
+    ArgumentsPostfix, Assign,
     ASTTree,
     BasicType,
-    BinaryExpression, BitAndAssign,
-    BitNotPrefix, BitOrAssign,
-    BitShlAssign, BitShrAssign, BitwiseAndExpression, BitwiseOrExpression, BitwiseXorExpression, BitXorAssign,
+    BinaryExpression, BitNotPrefix,
     Block,
     BlockType, BooleanType,
     Cast,
     Class,
     ClassType,
     DecrementPostfix,
-    DecrementPrefix, DivAssign,
-    DivisionExpression,
+    DecrementPrefix, DivAssign, DivExpression,
     Enum,
-    EnumType, EqualityExpression,
+    EnumType, EqualExpression,
     FixType,
     Function,
     GenericType,
@@ -25,28 +21,22 @@ import {
     GreaterExpression,
     IncrementPostfix,
     IncrementPrefix,
-    IndexPostfix, InequalityExpression,
+    IndexPostfix, InequalExpression,
     Interface, LambdaExpression, LambdaType, LessEqualExpression,
     LessExpression,
-    LiteralType, LogicalAndExpression, LogicalOrExpression, MapFix,
+    LiteralType, LogicAndExpression, LogicOrExpression,
     MinusPrefix, ModAssign,
     ModExpression,
     Modifier,
-    Module, MulAssign,
-    MultiplicativeExpression,
+    Module, MulAssign, MulExpression,
     NotPrefix,
     NumberType,
-    Operation,
-    PointFix,
-    Postfix, PostfixExpression, PrefixExpression,
-    ReferencePrefix,
-    ShiftLeftExpression,
-    ShiftRightExpression, StringType, SubAssign,
-    SubtractiveExpression,
+    Operation, OrAssign, OrExpression, PointType,
+    ReferencePrefix, ShlAssign, ShlExpression, ShrAssign, ShrExpression, StringType, SubAssign, SubExpression,
     Type,
     Value,
     Variable,
-    VoidType
+    VoidType, XorAssign, XorExpression
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export class Scope extends PeepholeScope{
@@ -136,7 +126,7 @@ export class Scope extends PeepholeScope{
     }
     get_operation(type:Type):Operation[]{
         let ret=[]
-        for(let [k,v] of this.operation)
+        for(const [k,v] of this.operation)
             if(type_same(k,type))ret.push(...v)
         if(ret.length)return ret
         if(this.parent)return this.parent.get_operation(type)
@@ -146,13 +136,13 @@ export class Scope extends PeepholeScope{
     set_operation(type:Type,operation:Operation){
         let key=null
         operation.index=this.operation_number++
-        for(let [k,v] of this.operation)if(type_same(k,type)){key=k;break}
+        for(const k of this.operation.keys())if(type_same(k,type)){key=k;break}
         if(key!=null)this.operation.get(key).push(operation)
         else this.operation.set(type,[operation])
     }
     get_cast(type:Type):Cast[]{
         let ret=[]
-        for(let [k,v] of this.cast)
+        for(const [k,v] of this.cast)
             if(type_same(k,type))ret.push(...v)
         if(ret.length)return ret
         if(this.parent)return this.parent.get_cast(type)
@@ -162,7 +152,7 @@ export class Scope extends PeepholeScope{
     set_cast(type:Type,cast:Cast){
         let key=null
         cast.id=this.cast_number++
-        for(let [k,v] of this.cast)if(type_same(k,type)){key=k;break}
+        for(const k of this.cast.keys())if(type_same(k,type)){key=k;break}
         if(key!=null)this.cast.get(key).push(cast)
         else this.cast.set(type,[cast])
     }
@@ -191,7 +181,7 @@ export const Default_Modifier=new Map<any,Modifier>([
 ])
 export type slang_check_visitor =(ast:ASTTree, scope:Scope, call:(ast:ASTTree,round:number,scope?:Scope)=>void)=>void
 export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
-    let real=Array.from(param.values())
+    const real=Array.from(param.values())
     if(iden.length!=real.length)return false
     //每个声明形参都要能接受对应实参
     for(let i=0;i<iden.length;i++)
@@ -200,7 +190,7 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
 }
 export function fill_modifier(data:Block){
     let def=null
-    for(let [k,v] of Default_Modifier)
+    for(const [k,v] of Default_Modifier)
         if(data instanceof k){def=v;break}
     //未显式指定的字段(null)用默认值补齐,否则 null 会被当成 false(例如 public 方法被当成 static)
     if(data.modifiers==null)return def
@@ -216,15 +206,10 @@ export function type_same(a:Type,b:Type):boolean{
     if(a.constructor!=b.constructor)return false
     if(a instanceof LiteralType)return true
     if(a instanceof ClassType)return (a as ClassType).local.join('.')==(b as ClassType).local.join('.')
-    if(a instanceof FixType){
-        let fa=a as FixType,fb=b as FixType
-        if(fa.fix.length!=fb.fix.length)return false
-        for(let i=0;i<fa.fix.length;i++)
-            if(fa.fix[i].constructor!=fb.fix[i].constructor)return false
-        return type_same(fa.t,fb.t)
-    }
+    if(a instanceof FixType&&b instanceof FixType)
+        return type_same(a.t,b.t)
     if(a instanceof GenericType)return (a as GenericType).generic==(b as GenericType).generic
-    return true
+    return false
 }
 export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
     //null 入参无从合并
@@ -269,14 +254,9 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
     }
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
-        if(type1.fix.length!=type2.fix.length)return new VoidType()
-        //每个fix都一致
-        for(let i=0;i<type1.fix.length;i++)
-            if(type1.fix[i].constructor!=type2.fix[i].constructor)return new VoidType()
-        //基础类型不兼容则整体不兼容;fix数组用副本避免污染原类型
-        let base=type_merge(type1.t,type2.t,scope)
-        if(base instanceof VoidType)return new VoidType()
-        return new FixType(base,[...type1.fix])
+        if(type1.constructor!=type2.constructor)return new VoidType()
+        type1.t=type_merge(type1.t,type2.t,scope)
+        return type1
     }
     return new VoidType()
 }
@@ -293,10 +273,10 @@ export function oper_best(scope:Scope,oper:string,...type:Type[]):Operation[]{
     //只有一个即最优
     if(all.length<=1)return all
     let worse=new Set<Operation>()
-    for(let a of all)
-        for(let b of all){
+    for(const a of all)
+        for(const b of all){
             if(a==b)continue
-            let pa=Array.from(a.command.params.values()),pb=Array.from(b.command.params.values())
+            const pa=Array.from(a.command.params.values()),pb=Array.from(b.command.params.values())
             //参数数量不一致
             if(pa.length!=pb.length)continue
             let b_more_specific=true,a_strict=false
@@ -381,10 +361,7 @@ export function overload_resolve(scope:Scope,name:string,arg_types:Type[]):
     return {kind:'best',fn:fns[idx]}
 }
 export function to_point(a:Type){
-    //不原地修改操作数类型:返回带 PointFix 的新 FixType
-    if(a instanceof FixType)
-        return new FixType(a.t,[...a.fix,new PointFix()])
-    return new FixType(a,[new PointFix()])
+    return new PointType(a)
 }
 export function each_oper(scope:Scope,param:Type,ret:any[]):{type:Type,unwarp:string[]}{
     let unwarp=[]
@@ -424,24 +401,24 @@ export const Operation_Postfix=new Map<any,string>([
     [IndexPostfix,'[]']
 ])
 export const Operation_Binary=new Map<any,string>([
-    [AdditiveExpression,'+'],
-    [MultiplicativeExpression,'*'],
-    [DivisionExpression,'/'],
-    [SubtractiveExpression,'-'],
+    [AddExpression,'+'],
+    [MulExpression,'*'],
+    [DivExpression,'/'],
+    [SubExpression,'-'],
     [ModExpression,'%'],
-    [ShiftRightExpression,'>>'],
-    [ShiftLeftExpression,'<<'],
+    [ShrExpression,'>>'],
+    [ShlExpression,'<<'],
     [GreaterExpression,'>'],
     [LessExpression,'<'],
     [GreaterEqualExpression,'>='],
     [LessEqualExpression,'<='],
-    [InequalityExpression,'!='],
-    [EqualityExpression,'=='],
-    [BitwiseAndExpression,'&'],
-    [BitwiseOrExpression,'|'],
-    [BitwiseXorExpression,'^'],
-    [LogicalAndExpression,'&&'],
-    [LogicalOrExpression,'||'],
+    [InequalExpression,'!='],
+    [EqualExpression,'=='],
+    [AndExpression,'&'],
+    [OrExpression,'|'],
+    [XorExpression,'^'],
+    [LogicAndExpression,'&&'],
+    [LogicOrExpression,'||'],
 ])
 export const Operation_Assign=new Map<any,string>([
     [AAssign,''],
@@ -450,11 +427,11 @@ export const Operation_Assign=new Map<any,string>([
     [MulAssign,'*'],
     [DivAssign,'/'],
     [ModAssign,'%'],
-    [BitAndAssign,'&'],
-    [BitOrAssign,'|'],
-    [BitXorAssign,'^'],
-    [BitShlAssign,'<<'],
-    [BitShrAssign,'>>']
+    [AndAssign,'&'],
+    [OrAssign,'|'],
+    [XorAssign,'^'],
+    [ShlAssign,'<<'],
+    [ShrAssign,'>>']
 ])
 export function check_implement(i:Type,scope:Scope,line:string[]){
     const ls=real_type(i,scope)
@@ -510,8 +487,10 @@ export function generic_name(name:string,scope:Scope){
 }
 export function real_type(type:Type,scope:Scope){
     if(type==null)return null
-    if(type instanceof FixType)
-        return new FixType(real_type(type.t,scope),type.fix)
+    if(type instanceof FixType){
+        type.t=real_type(type.t,scope)
+        return type
+    }
     //保留 ClassType,只解析其泛型实参(不能替换成 Class 块)
     if(type instanceof ClassType)
         return new ClassType(type.local,type.generic.map(i=>real_type(i,scope)),type._this)
@@ -519,8 +498,8 @@ export function real_type(type:Type,scope:Scope){
     if(type instanceof LambdaType){
         if(!type.overload){
             let params=new Map<string,Type>()
-            for(let [k,v] of type.params)params.set(k,real_type(v,scope))
-            return new LambdaType(type.generic,params,real_type(type.returnType,scope),type._await,false,type.name)
+            for(const [k,v] of type.params)params.set(k,real_type(v,scope))
+            return new LambdaType(type.generic,params,real_type(type.returnType,scope),false,type.name)
         }
         const parts=type.name.split('@')
         const index=parseInt(parts[1])
@@ -571,26 +550,10 @@ export function build_chain(scope:Scope,name:string,block:Class|Interface){
     }
 }
 export function is_array_or_map(type:Type){
-    if(!(type instanceof FixType))return false
-    const last=type.fix[type.fix.length-1]
-    return last instanceof MapFix || last instanceof ArrayFix;
-
-}
-export function record(ast:PostfixExpression|PrefixExpression, i:number, type:Type, res?: {oper?:string, cast?:string, callTarget?:string}) {
-    if (res?.oper) ast.opers[i] = res.oper
-    if (res?.cast) ast.casts[i] = res.cast
-    if (res?.callTarget&&ast instanceof PostfixExpression) ast.call_targets[i] = res.callTarget
-    ast.types[i] = type
 }
 export function findOper(map: Map<any,string>, node:ASTTree): string {
     for (const [k, v] of map) if (node instanceof k) return v
     return ''
-}
-export function tryOverload(scope:Scope, oper:string, args: Type[], ast:PrefixExpression|PostfixExpression, idx?: number): Type | null {
-    const op = oper_best(scope, oper, ...args);
-    if (op.length === 0) return null;
-    if (idx != null) ast.opers[idx] = op[0].oper + '@' + op[0].index;
-    return real_type(op[0].command.ret, scope);
 }
 export function findCastBy(scope:Scope, from:Type, pred: (t:Type)=>boolean){
     const cast=cast_get(from,scope)
