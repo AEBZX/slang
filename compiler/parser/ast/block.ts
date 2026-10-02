@@ -11,135 +11,103 @@ import {
     Type, Value,
     Variable
 } from '../../utils'
+import {parseGeneric, parseImplement, to_ast_data, to_string, tree_ast} from "./tool";
 const G_Link:slang_ast_generate=(data,tree)=>{
     let local:string[]=[]
     let name=data.children.get(0) as ast_data
     //须递归收集而非只取直接 child
     let collect=(n:ast_data)=>{
-        for(let v of n.children.values())
+        for(const v of n.children.values())
             if(typeof v=='string')local.push(v)
             else if(typeof v=='object')collect(v)
     }
     collect(name)
-    return new Link(local,data.children.get(1) as string)
+    return new Link(local,to_string(data,1))
 }
 const G_Module:slang_ast_generate=(data,tree)=>{
     let children=[]
-    for(let [k,v] of (data.children.get(0) as ast_data).children)
+    for(const v of to_ast_data(data,0).children.values())
         if(typeof v=='object')children.push(tree(v))
     return new Module(null,null,children)
 }
 const G_Value:slang_ast_generate=(data,tree)=>{
     return new Value(tree(data.children.get(0) as ast_data),
-        Array.from((data.children.get(1) as ast_data).children.values())
+        Array.from((to_ast_data(data,1).children.values()))
             .map(i=>tree(i as ast_data)) as Block[])
-}
-//直接构造的类型不经 Parser.generate,需手动补 line,否则报错时 ast.line.join 崩
-function stamp(data:ast_data,node:ASTTree){
-    if(node!=null&&node.line==null&&data!=null)node.line=data.line
-    return node
-}
-export function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:number){
-    let first=data&&data.children?data.children.get(key) as ast_data:null
-    if(first==null)
-        return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
-    if(first.type=='ImplementsName'||first.type=='ModuleName')
-        return {is:true,data:tree(first.children.get(0) as ast_data)}
-    if(first.type=='Type'||first.type=='BasicType')
-        return {is:true,data:tree(first.type=='Type'?first.children.get(0) as ast_data:first)}
-    return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
-}
-export function parseGeneric(data:ast_data,tree:(data:ast_data)=>ASTTree){
-    let generic=data.children.get(0) as ast_data
-    if(generic==null||generic.type!='GenericList')return {
-        is:false,data:new Map<string,Type>()
-    }
-    let ret=new Map<string,Type>()
-    for(let [k,v] of (generic.children.get(0) as ast_data).children)
-        if(typeof v=='object')
-            ret.set(v.children.get(0) as string,parseImplement(v,tree,1).data)
-    return {is:true,data:ret}
 }
 const G_Class:slang_ast_generate=(data,tree)=>{
     let generic=parseGeneric(data,tree)
     let implement=generic.is?parseImplement(data,tree,1):parseImplement(data,tree,0)
     let children=[]
-    for(let [k,v] of
-        (data.children.get(generic.is&&implement.is?2:generic.is||implement.is?1:0) as ast_data).children)
+    for(const v of to_ast_data(data,generic.is&&implement.is?2:generic.is||implement.is?1:0).children.values())
         if(typeof v=='object')children.push(tree(v))
     return new Class(null,null,generic.data,implement.data,children)
 }
 const G_Interface:slang_ast_generate=(data,tree)=>{
-    let generic=parseGeneric(data,tree)
-    let implement=generic.is?parseImplement(data,tree,1):parseImplement(data,tree,0)
+    const generic=parseGeneric(data,tree)
+    const implement=generic.is?parseImplement(data,tree,1):parseImplement(data,tree,0)
     let children=[]
-    for(let [k,v] of
-        (data.children.get(generic.is&&implement.is?2:generic.is||implement.is?1:0) as ast_data).children)
+    for(const v of to_ast_data(data,generic.is&&implement.is?2:generic.is||implement.is?1:0).children.values())
         if(typeof v=='object')children.push(tree(v))
     return new Interface(null,null,generic.data,implement.data,children)
 }
 const G_Enum:slang_ast_generate=(data,tree)=>{
     let children=[]
-    for(let [k,v] of (data.children.get(0) as ast_data).children)
+    for(const v of to_ast_data(data,0).children.values())
         children.push(v as string)
     return new Enum(null,null,children)
 }
 const G_Function:slang_ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
-    let generic=parseGeneric(data,tree)
-    let off=generic.is?1:0
-    let ParamIdentifier=data.children.get(1+off) as ast_data
-    for(let [k,v] of ParamIdentifier.children)
+    const generic=parseGeneric(data,tree)
+    const off=generic.is?1:0
+    const ParamIdentifier=to_ast_data(data,1+off)
+    for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
-            params.set(v.children.get(0) as string,
-                       tree(v.children.get(2) as ast_data))
-    let _implement=typeof data.children.get(2+off)=='object'
-    return new Function(null,null,generic.data,params,tree(data.children.get(off) as ast_data),
-                       _implement?tree(data.children.get(2+off) as ast_data):null)
+            params.set(to_string(v,0),
+                       tree_ast(data,2,tree))
+    const _implement=typeof data.children.get(2+off)=='object'
+    return new Function(null,null,generic.data,params,tree_ast(data,off,tree),
+                       _implement?tree_ast(data,2+off,tree):null)
 }
 const G_Variable:slang_ast_generate=(data,tree)=>{
-    //Variable = seg(Type, choose('=',Expression), ';'),delete 不占 child
-    let value=data.children.get(1)
-    return new Variable(null,null,tree(data.children.get(0) as ast_data),
-                       value&&typeof value==='object'?tree(value as ast_data):null)
+    return new Variable(null,null,tree_ast(data,0,tree),tree_ast(to_ast_data(data,1),0,tree))
 }
 const G_Block:slang_ast_generate=(data,tree)=>{
     let modifier=data.children.get(0) as ast_data
     let _Modifier=[]
-    for(let [k,v] of modifier.children)
+    for(const v of modifier.children.values())
         _Modifier.push(v as string)
-    let ret=tree(data.children.get(3) as ast_data) as Block
+    let ret=tree_ast<Block>(data,3,tree)
     ret.modifiers=new Modifier(
         _Modifier.includes('unstatic')?true:_Modifier.includes('static')?false:null,
         _Modifier.includes('async')?true:_Modifier.includes('sync')?false:null,
         _Modifier.includes('private')?true:(_Modifier.includes('public')||_Modifier.includes('unprivate'))?false:null
     )
-    ret.name=data.children.get(1) as string
-    //ObjectInterface 接口本身不实现自己
+    ret.name=to_string(data,1)
     if((ret instanceof Class||ret instanceof Interface)&&ret.name=='ObjectInterface')ret.implement=null
     return ret
 }
 const G_File:slang_ast_generate=(data,tree)=>{
     let links=[]
-    for(let [k,v] of (data.children.get(0) as ast_data).children)
+    for(const v of to_ast_data(data,0).children.values())
         if(typeof v=='object')
             links.push(tree(v))
     let blocks=[]
-    for(let [k,v] of (data.children.get(1) as ast_data).children)
+    for(const v of to_ast_data(data,1).children.values())
         if(typeof v=='object')
             blocks.push(tree(v))
     return new File(links,blocks)
 }
 const G_Operation:slang_ast_generate=(data,tree)=>{
-    let sym=data.children.get(0)
+    let sym=to_ast_data(data,0)
     let oper=typeof sym=='string'?sym:(sym.type=='BIDX'?'[]':'()')
     return new Operation(oper,
-        tree(data.children.get(1) as ast_data) as LambdaExpression)
+        tree_ast(data,1,tree))
 }
-const G_Cast:slang_ast_generate=(data,tree)=>{
-    return new Cast(tree(data.children.get(0) as ast_data),
-        tree((data.children.get(1) as ast_data)) as LambdaExpression)
-}
+const G_Cast:slang_ast_generate=(data,tree)=>
+    new Cast(tree_ast(data,0,tree),
+        tree_ast(data,1,tree))
 export default new Map([
     ['link',G_Link],
     ['Link',G_Link],

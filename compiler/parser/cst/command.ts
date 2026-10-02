@@ -33,9 +33,7 @@ const Break=$.s('Break',$.d('break'),$.d(';'))
 const Continue=$.s('Continue',$.d('continue'),$.d(';'))
 const Throw=$.s('Throw',$.d('throw'),$.r('Expression'),$.d(';'))
 const VM=$.s('VM',$.d('vm')
-    ,$.d('('),TokenType.String,$.w('VMParam',$.r('Expression'),','),$.d(','),$.d(';'))
-const Increment=$.s('Increment',$.r('Expression'),$.d('++'),$.d(';'))
-const Decrement=$.s('Decrement',$.r('Expression'),$.d('--'),$.d(';'))
+    ,$.d('('),TokenType.String,$.w('VMParam',$.r('Expression'),','),$.d(')'),$.d(';'))
 const BasicCommand=$.o('BasicCommand',
     $.r('VarDecl'),
     $.r('ExprCommand'),
@@ -45,10 +43,7 @@ const BasicCommand=$.o('BasicCommand',
     $.r('Continue'),
     $.r('Throw'),
     $.r('VM'),
-    $.r('Increment'),
-    $.r('Decrement'),
-    $.r('Assign'),
-    $.r('Expression')
+    $.r('Assign')
     )
 const Condition=$.s('Condition',$.t('(',$.r('Expression'),')'))
 const IfStatement=$.s('IfStatement',$.d('if'),$.r('Condition'),$.r('Commands'),
@@ -103,8 +98,6 @@ export default [
     Continue,
     Throw,
     VM,
-    Increment,
-    Decrement,
     BasicCommand,
     ForeachStatement,
     IfStatement,

@@ -79,13 +79,13 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
                     let param:Expression[]=[]
                     let type:Type[]=[]
                     let args=0
-                    const first=to_ast_data(data,0)
+                    const first=to_ast_data(v,0)
                     if(first&&first.type=='GenericData'){
                         args=1
                         for(const _v of first.children.values())
                             type.push(tree(_v as ast_data))
                     }
-                    const args_data=to_ast_data(data,args)
+                    const args_data=to_ast_data(v,args)
                     if(args_data)
                         for(const arg of args_data.children.values())
                             if(typeof arg=='object')
@@ -99,11 +99,11 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
 const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
     const FixList=data.children.get(0) as ast_data
     let primary:Expression=tree(to_ast_data(data,1)) as Expression
-    for(const v of FixList.children.values())
+    for(const v of Array.from(FixList.children.values()).reverse())
         if(typeof v=='object')
             switch (v.type) {
                 case 'TypePrefix':
-                    primary=new TypePrefix(primary,tree_ast(data,0,tree))
+                    primary=new TypePrefix(primary,tree_ast(v,0,tree))
                     break
                 case 'IncrementPrefix':
                     primary=new IncrementPrefix(primary)
@@ -133,7 +133,7 @@ const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
     return primary
 }
 const G_BinaryExpression:slang_ast_generate=(data,tree)=>{
-    const g=(left:Expression,right:Expression,type:string)=>BinaryMap.get(type)(left,right)
+    const g=(left:Expression,right:Expression,type:string)=>new (BinaryMap.get(type))(left,right)
     let ret=tree_ast<Expression>(data,0,tree)
     const right=to_ast_data(data,1)
     for(const v of right.children.values())

@@ -17,52 +17,52 @@ export class AAssign extends Assign{
 }
 export class AddAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'+')
+        super(data,value,'+=')
     }
 }
 export class SubAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'-')
+        super(data,value,'-=')
     }
 }
 export class MulAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'*')
+        super(data,value,'*=')
     }
 }
 export class DivAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'/')
+        super(data,value,'/=')
     }
 }
 export class ModAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'%')
+        super(data,value,'%=')
     }
 }
 export class AndAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'&&')
+        super(data,value,'&=')
     }
 }
 export class OrAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'||')
+        super(data,value,'|=')
     }
 }
 export class XorAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'^')
+        super(data,value,'^=')
     }
 }
 export class ShlAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'<<')
+        super(data,value,'<<=')
     }
 }
 export class ShrAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,">>")
+        super(data,value,'>>=')
     }
 }
 export class VarDecl extends BasicCommand{

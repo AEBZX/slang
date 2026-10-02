@@ -9,20 +9,22 @@ import {
     Type,
     VoidType, GenericType, ArrayType, MapType, PointType
 } from '../../utils'
-import {to_ast_data, to_string, tree_ast} from "./tool";
+import {parseGeneric, to_ast_data, to_string, tree_ast} from "./tool";
 const G_NumberType:slang_ast_generate=(data,tree)=>new NumberType()
 const G_StringType:slang_ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:slang_ast_generate=(data,tree)=>new BooleanType()
 const G_VoidType:slang_ast_generate=(data,tree)=>new VoidType()
 const G_LambdaType:slang_ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
-    const ParamIdentifier=to_ast_data(data,0)
-    const ret=tree_ast<Type>(data,2,tree)
+    const generic=parseGeneric(data,tree)
+    const off=generic.is?1:0
+    const ParamIdentifier=to_ast_data(data,off)
+    const ret=tree_ast<Type>(data,off+1,tree)
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
             params.set(to_string(v,0),
-                       tree_ast(v,2,tree))
-    return new LambdaType(new Map(),params,ret,false)
+                       tree_ast(v,1,tree))
+    return new LambdaType(generic.data,params,ret,false)
 }
 const G_GenericType:slang_ast_generate=(data,tree)=>new GenericType(to_string(data,0))
 const G_ClassType:slang_ast_generate=(data,tree)=>{
@@ -31,7 +33,7 @@ const G_ClassType:slang_ast_generate=(data,tree)=>{
     const rest=to_ast_data(data,1)
     for(const v of rest.children.values())
         if(typeof v=='object')
-            local.push(to_string(data,0))
+            local.push(to_string(v,0))
     let generic:Type[]=[]
     if(data.children.has(2))
         for(const v of to_ast_data(data,2).children.values())

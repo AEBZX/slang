@@ -12,7 +12,7 @@ import {AssignMap, to_ast_data, to_string, tree_ast} from "./tool";
 
 const G_Assign:slang_ast_generate=(data,tree)=>{
     const g=(left:Expression,right:Expression,operator:string)=>
-        AssignMap.get(operator)(left,right)
+        new (AssignMap.get(operator))(left,right)
     const left=tree_ast<Expression>(data,0,tree)
     const right=tree_ast<Expression>(data,1,tree)
     return g(left,right,data.type)
