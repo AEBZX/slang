@@ -17,11 +17,6 @@ export type ast_data={
     line:string[],
     children:Map<number,ast_data|string>
 }
-export type ast_type={
-    type:string
-    data:string
-    child:ast_type[]
-}
 import type {Type} from './model/ast'
 export class ASTTree extends PeepholeTree{
     type:Type
@@ -36,11 +31,6 @@ export type ast_rule={
     data:ast_rule_param[]
 }
 export type ast_rule_param=ast_rule|string|TokenType
-//三地址码形式
-export type asm_args =['value'|'reg',number]
-export type asm_command=[string,asm_args,asm_args,asm_args]
-export type asm_pool=Map<string|number,number>
-export type bin=[number,number,number,number]
 export let radix_map={
     'x':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],
     'X':['1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','A','B','C','D','E','F'],

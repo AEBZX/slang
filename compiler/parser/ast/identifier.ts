@@ -4,60 +4,58 @@ import {
     BooleanType,
     ClassType, FixType,
     LambdaType,
-    NumberType, PointFix,
+    NumberType,
     StringType,
-    Type, TypeFix,
-    VoidType, ArrayFix, MapFix, GenericType
+    Type,
+    VoidType, GenericType, ArrayType, MapType, PointType
 } from '../../utils'
+import {to_ast_data, to_string, tree_ast} from "./tool";
 const G_NumberType:slang_ast_generate=(data,tree)=>new NumberType()
 const G_StringType:slang_ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:slang_ast_generate=(data,tree)=>new BooleanType()
 const G_VoidType:slang_ast_generate=(data,tree)=>new VoidType()
 const G_LambdaType:slang_ast_generate=(data,tree)=>{
     let params=new Map<string,Type>()
-    let ParamIdentifier=data.children.get(0) as ast_data
-    let ret=tree(data.children.get(2) as ast_data)
-    for(let [k,v] of ParamIdentifier.children)
+    const ParamIdentifier=to_ast_data(data,0)
+    const ret=tree_ast<Type>(data,2,tree)
+    for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
-            params.set(v.children.get(0) as string,
-                       tree(v.children.get(2) as ast_data))
+            params.set(to_string(v,0),
+                       tree_ast(v,2,tree))
     return new LambdaType(new Map(),params,ret,false)
 }
-const G_GenericType:slang_ast_generate=(data,tree)=>new GenericType(data.children.get(0) as string)
+const G_GenericType:slang_ast_generate=(data,tree)=>new GenericType(to_string(data,0))
 const G_ClassType:slang_ast_generate=(data,tree)=>{
-    let local=new Array<string>()
-    local.push(data.children.get(0) as string)
-    let rest=data.children.get(1) as ast_data
-    for(let [k,v] of rest.children)
+    let local:string[]=[]
+    local.push(to_string(data,0))
+    const rest=to_ast_data(data,1)
+    for(const v of rest.children.values())
         if(typeof v=='object')
-            local.push(v.children.get(0) as string)
-    let generic=[]
+            local.push(to_string(data,0))
+    let generic:Type[]=[]
     if(data.children.has(2))
-        for(let [k,v] of (data.children.get(2) as ast_data).children)
+        for(const v of to_ast_data(data,2).children.values())
             if(typeof v=='object')
                 generic.push(tree(v))
     return new ClassType(local,generic)
 }
 const G_FixType:slang_ast_generate=(data,tree)=>{
-    let basic=tree(data.children.get(0) as ast_data)
-    let fix:TypeFix[]=[]
-    let FixList=data.children.get(1) as ast_data
-    for(let [k,v] of FixList.children)
+    let basic=tree_ast<Type>(data,0,tree)
+    const FixList=to_ast_data(data,1)
+    for(const v of FixList.children.values())
         if(typeof v=='object')
             switch (v.type){
                 case 'ArrayPostfix':
-                    fix.push(new ArrayFix())
+                    basic=new ArrayType(basic)
                     break
                 case 'MapPostfix':
-                    fix.push(new MapFix())
+                    basic=new MapType(basic)
                     break
                 case 'PointPostfix':
-                    fix.push(new PointFix())
+                    basic=new PointType(basic)
                     break
             }
-    if(fix.length==0)
-        return basic
-    return new FixType(basic,fix)
+    return basic
 }
 export default new Map([
     ['NumberType',G_NumberType],

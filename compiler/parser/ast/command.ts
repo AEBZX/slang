@@ -1,127 +1,99 @@
 import {
     AAssign,
-    AddAssign,
-    ast_data,
-    ast_generate, BitAndAssign, BitOrAssign, BitShlAssign,
-    BitShrAssign, BitXorAssign, Break, Call, Case, Continue, Decrement,
-    DivAssign, DoWhileStatement,
-    Expression, ForeachStatement, ForStatement, IfStatement, Increment, ListCommand, ModAssign,
-    MulAssign, Return, slang_ast_generate,
-    SubAssign, SwitchStatement, Throw, TryStatement, VarDeclaration, VM, WhileStatement
+    AddAssign, AndAssign, ast_data, Await, Break, Case, Command, Continue,
+    DivAssign, DoWhileStatement, ExprCommand,
+    Expression, ForeachStatement, ForStatement, IfStatement, ListCommand,
+    ModAssign,
+    MulAssign, OrAssign, Return, ShlAssign, ShrAssign,
+    slang_ast_generate,
+    SubAssign, SwitchStatement, Throw, TryStatement, Type, VarDecl, VM, WhileStatement, XorAssign
 } from '../../utils'
+import {AssignMap, to_ast_data, to_string, tree_ast} from "./tool";
+
 const G_Assign:slang_ast_generate=(data,tree)=>{
-    const g=(left:Expression,right:Expression,operator:string)=>{
-        switch (operator) {
-            case '=':
-                return new AAssign(left,right)
-            case '+=':
-                return new AddAssign(left,right)
-            case '-=':
-                return new SubAssign(left,right)
-            case '*=':
-                return new MulAssign(left,right)
-            case '/=':
-                return new DivAssign(left,right)
-            case '%=':
-                return new ModAssign(left,right)
-            case '&=':
-                return new BitAndAssign(left,right)
-            case '|=':
-                return new BitOrAssign(left,right)
-            case '^=':
-                return new BitXorAssign(left,right)
-            case '<<=':
-                return new BitShlAssign(left,right)
-            case '>>=':
-                return new BitShrAssign(left,right)
-        }
-    }
-    let left=tree(data.children.get(0) as ast_data)
-    let right=tree(data.children.get(1) as ast_data)
-    const op:Record<string,string>={
-        'AAssign':'=','AddAssign':'+=','SubAssign':'-=','MulAssign':'*=',
-        'DivAssign':'/=','ModAssign':'%=','BitAndAssign':'&=','BitOrAssign':'|=',
-        'BitXorAssign':'^=','BitShlAssign':'<<=','BitShrAssign':'>>='
-    }
-    return g(left,right,op[data.type])
+    const g=(left:Expression,right:Expression,operator:string)=>
+        AssignMap.get(operator)(left,right)
+    const left=tree_ast<Expression>(data,0,tree)
+    const right=tree_ast<Expression>(data,1,tree)
+    return g(left,right,data.type)
 }
-const G_VarDeclaration:slang_ast_generate=(data,tree)=>{
-    let name=(data.children.get(0) as ast_data).children.get(0) as string
-    let type=tree(data.children.get(1) as ast_data)
-    let value=data.children.has(2)?tree(data.children.get(2) as ast_data):null
-    return new VarDeclaration(name,type,value)
-}
-const G_Call:slang_ast_generate=(data,tree)=>{
-    let await_=data.children.get(0)=='await'
-    let expr=data.children.get(await_?1:0) as ast_data
-    return new Call(tree(expr),await_)
+const G_VarDecl:slang_ast_generate=(data,tree)=>{
+    const name=to_string(to_ast_data(data,0),0)
+    const type=tree_ast<Type>(data,1,tree)
+    const value=tree_ast<Expression>(data,2,tree)
+    return new VarDecl(name,type,value)
 }
 const G_Return:slang_ast_generate = (data, tree) => {
-    let ret=data.children.has(0)?tree(data.children.get(0) as ast_data):null
-    return new Return(ret)
+    return new Return(tree_ast(data,0,tree))
 }
 const G_Break:slang_ast_generate=(data,tree)=>new Break()
 const G_Continue:slang_ast_generate=(data,tree)=>new Continue()
-const G_Throw:slang_ast_generate=(data,tree)=>new Throw(tree(data.children.get(0) as ast_data))
-const G_VM:slang_ast_generate=(data,tree)=>new VM(data.children.get(0) as string)
-const G_Increment:slang_ast_generate=(data,tree)=>new Increment(tree(data.children.get(0) as ast_data))
-const G_Decrement:slang_ast_generate=(data,tree)=>new Decrement(tree(data.children.get(0) as ast_data))
+const G_Await:slang_ast_generate=(data, tree)=>new Await(tree_ast(data,0,tree))
+const G_ExprCommand:slang_ast_generate=(data, tree)=>new ExprCommand(tree_ast(data,0,tree))
+const G_Throw:slang_ast_generate=(data,tree)=>new Throw(tree_ast<Expression>(data,0,tree))
+const G_VM:slang_ast_generate=(data,tree)=> {
+    const str=to_string(data,0)
+    let param:Expression[]=[]
+    for(const v of to_ast_data(data,1).children.values())
+        param.push(tree_ast<Expression>(v as ast_data,0,tree))
+    return new VM(str,param)
+}
 const G_Condition:slang_ast_generate=(data,tree)=>tree(data.children.get(0) as ast_data)
 const G_IfStatement:slang_ast_generate=(data,tree)=>new IfStatement(
-    tree(data.children.get(0) as ast_data),
-    tree(data.children.get(1) as ast_data),
-    data.children.has(2)?tree(data.children.get(2) as ast_data):null
+    tree_ast(data,0,tree),
+    tree_ast(data,1,tree),
+    tree_ast(data,2,tree)
 )
 const G_WhileStatement:slang_ast_generate=(data,tree)=>new WhileStatement(
-    tree(data.children.get(0) as ast_data),
-    tree(data.children.get(1) as ast_data)
+    tree_ast(data,0,tree),
+    tree_ast(data,1,tree)
 )
 const G_DoWhileStatement:slang_ast_generate=(data,tree)=>new DoWhileStatement(
-    tree(data.children.get(0) as ast_data),
-    tree(data.children.get(1) as ast_data)
+    tree_ast(data,0,tree),
+    tree_ast(data,1,tree)
 )
 const G_ForStatement:slang_ast_generate=(data,tree)=>{
-    let init=[]
-    let Init=data.children.get(0) as ast_data
-    for(let [k,v] of Init.children)
+    let init:VarDecl[]=[]
+    const Init=to_ast_data(data,0)
+    for(const v of Init.children.values())
         if(typeof v=='object')
-            init.push(tree(v))
-    let step=[]
-    let Step=data.children.get(2) as ast_data
-    for(let [k,v] of Step.children)
+            init.push(tree(v) as VarDecl)
+    let step:Command[]=[]
+    const Step=to_ast_data(data,2)
+    for(const v of Step.children.values())
         if(typeof v=='object')
             step.push(tree(v))
-    return new ForStatement(init,tree(data.children.get(1) as ast_data),step,
-        tree(data.children.get(3) as ast_data))
+    return new ForStatement(init,tree_ast(data,1,tree),step,
+        tree_ast(data,3,tree))
 }
 const G_ForeachStatement:slang_ast_generate=(data,tree)=>new ForeachStatement(
-    (data.children.get(0) as ast_data).children.get(0) as string,
-    tree(data.children.get(1) as ast_data),
-    tree(data.children.get(2) as ast_data)
+    to_string(to_ast_data(data,0),0),
+    tree_ast(data,1,tree),
+    tree_ast(data,2,tree)
 )
 const G_SwitchStatement:slang_ast_generate=(data,tree)=>{
-    let cond=tree(data.children.get(0) as ast_data)
-    let list=data.children.get(1) as ast_data
+    const cond=tree_ast<Expression>(data,0,tree)
+    const list=data.children.get(1) as ast_data
     let cases:Case[]=[]
-    for(let [k,v] of list.children)
+    for(const v of list.children.values())
         if(typeof v=='object')
-            cases.push(new Case(tree(v.children.get(0) as ast_data),tree(v.children.get(1) as ast_data)))
-    return new SwitchStatement(cond,cases,data.children.has(2)?tree(data.children.get(2) as ast_data):null)
+            cases.push(new Case(tree_ast(v,0,tree),tree_ast(v,1,tree)))
+    return new SwitchStatement(cond,cases,tree_ast(data,2,tree))
 }
 const G_TryStatement:slang_ast_generate=(data,tree)=>{
     return new TryStatement(
-        tree(data.children.get(0) as ast_data),
+        tree_ast(data,0,tree),
         {
-            iden:data.children.get(1) as string,
-            type:tree(data.children.get(2) as ast_data),
-            command:tree(data.children.get(3) as ast_data)
+            iden:to_string(data,1),
+            type:tree_ast(data,2,tree),
+            command:tree_ast(data,3,tree)
         },
-        data.children.has(4)?tree(data.children.get(4) as ast_data):null
+       tree_ast(data,4,tree)
     )
 }
 const G_Commands:slang_ast_generate=(data,tree)=>{
     let commands=[]
-    for(let [k,v] of data.children)
+    for(const v of data.children.values())
         if(typeof v=='object')
             commands.push(tree(v))
     return new ListCommand(commands)
@@ -133,20 +105,19 @@ export default new Map([
     ['MulAssign',G_Assign],
     ['DivAssign',G_Assign],
     ['ModAssign',G_Assign],
-    ['BitAndAssign',G_Assign],
-    ['BitOrAssign',G_Assign],
-    ['BitXorAssign',G_Assign],
-    ['BitShlAssign',G_Assign],
-    ['BitShrAssign',G_Assign],
-    ['VarDeclaration',G_VarDeclaration],
-    ['Call',G_Call],
+    ['AndAssign',G_Assign],
+    ['OrAssign',G_Assign],
+    ['XorAssign',G_Assign],
+    ['ShlAssign',G_Assign],
+    ['ShrAssign',G_Assign],
+    ['VarDecl',G_VarDecl],
     ['Return',G_Return],
     ['Break',G_Break],
     ['Continue',G_Continue],
+    ['Await',G_Await],
+    ['ExprCommand',G_ExprCommand],
     ['Throw',G_Throw],
     ['VM',G_VM],
-    ['Increment',G_Increment],
-    ['Decrement',G_Decrement],
     ['IfStatement',G_IfStatement],
     ['WhileStatement',G_WhileStatement],
     ['DoWhileStatement',G_DoWhileStatement],

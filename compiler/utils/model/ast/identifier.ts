@@ -1,8 +1,4 @@
 import {ASTTree} from '../../data'
-export class TypeFix{}
-export class ArrayFix extends TypeFix{}
-export class MapFix extends TypeFix{}
-export class PointFix extends TypeFix{}
 export class Type extends ASTTree{}
 export class BasicType extends Type{}
 export class LiteralType extends BasicType{}
@@ -17,7 +13,7 @@ export class GenericType extends BasicType{
 }
 export class LambdaType extends BasicType{
     constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public returnType:Type
-                ,public _await:boolean,public overload:boolean=false,public name:string=''){
+                ,public overload:boolean=false,public name:string=''){
         super()
     }
 }
@@ -37,7 +33,10 @@ export class EnumType extends BasicType{
     }
 }
 export class FixType extends Type{
-    constructor(public t:BasicType,public fix:TypeFix[]){
+    constructor(public t:Type){
         super()
     }
 }
+export class ArrayType extends FixType{}
+export class MapType extends FixType{}
+export class PointType extends FixType{}

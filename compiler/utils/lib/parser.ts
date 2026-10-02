@@ -107,8 +107,6 @@ function parse_seg(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,strea
     return ret
 }
 function parse_delete(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{
-    //delete 规则=必须匹配的字面量(仅从子节点丢弃)。失败必须抛出:此前 catch 返回 null
-    //会让包含它的 seg 零消耗成功,导致 parse_loop 死循环
     return parse(stream,{...data,type:'seg'},ref) as ast_data
 }
 function parse_child(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream:ParserStream):ast_data{

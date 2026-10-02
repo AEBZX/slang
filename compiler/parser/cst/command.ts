@@ -6,11 +6,11 @@ const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.
 const MulAssign=$.s('MulAssign',$.r('Expression'),$.d('*='),$.r('Expression'),$.c(';'))
 const DivAssign=$.s('DivAssign',$.r('Expression'),$.d('/='),$.r('Expression'),$.c(';'))
 const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.c(';'))
-const BitAndAssign=$.s('BitAndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.c(';'))
-const BitOrAssign=$.s('BitOrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.c(';'))
-const BitXorAssign=$.s('BitXorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.c(';'))
-const BitShlAssign=$.s('BitShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.c(';'))
-const BitShrAssign=$.s('BitShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.c(';'))
+const AndAssign=$.s('AndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.c(';'))
+const OrAssign=$.s('OrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.c(';'))
+const XorAssign=$.s('XorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.c(';'))
+const ShlAssign=$.s('ShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.c(';'))
+const ShrAssign=$.s('ShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.c(';'))
 const Assign=$.o('Assign',
     $.r('AAssign'),
     $.r('AddAssign'),
@@ -18,25 +18,28 @@ const Assign=$.o('Assign',
     $.r('MulAssign'),
     $.r('DivAssign'),
     $.r('ModAssign'),
-    $.r('BitAndAssign'),
-    $.r('BitOrAssign'),
-    $.r('BitXorAssign'),
-    $.r('BitShlAssign'),
-    $.r('BitShrAssign'),
+    $.r('AndAssign'),
+    $.r('OrAssign'),
+    $.r('XorAssign'),
+    $.r('ShlAssign'),
+    $.r('ShrAssign'),
 )
-const VarDeclaration=$.s('VarDeclaration',$.d('var'),$.r('Identifier'),$.d(':'),$.r('Type')
+const VarDecl=$.s('VarDecl',$.d('var'),$.r('Identifier'),$.d(':'),$.r('Type')
     ,$.c($.d('='),$.r('Expression')),$.d(';'))
-const Call=$.s('Call',$.c('await'),$.r('Expression'),$.d(';'))
+const ExprCommand=$.s('ExprCommand',$.r('Expression'),$.d(';'))
+const Await=$.s('Await',$.d('await'),$.r('Commands'))
 const Return=$.s('Return',$.d('return'),$.c($.r('Expression')),$.d(';'))
 const Break=$.s('Break',$.d('break'),$.d(';'))
 const Continue=$.s('Continue',$.d('continue'),$.d(';'))
 const Throw=$.s('Throw',$.d('throw'),$.r('Expression'),$.d(';'))
-const VM=$.s('VM',$.d('vm'),TokenType.String,$.d(';'))
+const VM=$.s('VM',$.d('vm')
+    ,$.d('('),TokenType.String,$.w('VMParam',$.r('Expression'),','),$.d(','),$.d(';'))
 const Increment=$.s('Increment',$.r('Expression'),$.d('++'),$.d(';'))
 const Decrement=$.s('Decrement',$.r('Expression'),$.d('--'),$.d(';'))
 const BasicCommand=$.o('BasicCommand',
-    $.r('VarDeclaration'),
-    $.r('Call'),
+    $.r('VarDecl'),
+    $.r('ExprCommand'),
+    $.r('Await'),
     $.r('Return'),
     $.r('Break'),
     $.r('Continue'),
@@ -53,7 +56,7 @@ const IfStatement=$.s('IfStatement',$.d('if'),$.r('Condition'),$.r('Commands'),
 const WhileStatement=$.s('WhileStatement',$.d('while'),$.r('Condition'),$.r('Commands'))
 const DoWhileStatement=$.s('DoWhileStatement',$.d('do'),$.r('Commands'),$.d('while'),$.r('Condition'),$.d(';'))
 const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
-    $.l('Init',$.r('VarDeclaration')),$.r('Expression'),$.d(';'),$.l('Step',$.r('BasicCommand')),
+    $.l('Init',$.r('VarDecl')),$.r('Expression'),$.d(';'),$.l('Step',$.r('BasicCommand')),
     $.d(')'),$.r('Commands'))
 const ForeachStatement=$.s('ForeachStatement',$.d('foreach'),$.d('('),
     $.r('Identifier'),$.d(':'),$.r('Expression'),$.d(')'),$.r('Commands')
@@ -86,14 +89,15 @@ export default [
     MulAssign,
     DivAssign,
     ModAssign,
-    BitAndAssign,
-    BitOrAssign,
-    BitXorAssign,
-    BitShlAssign,
-    BitShrAssign,
+    AndAssign,
+    OrAssign,
+    XorAssign,
+    ShlAssign,
+    ShrAssign,
     Assign,
-    VarDeclaration,
-    Call,
+    VarDecl,
+    Await,
+    ExprCommand,
     Return,
     Break,
     Continue,

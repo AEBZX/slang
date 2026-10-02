@@ -50,29 +50,29 @@ const PrefixExpression=$.o('PrefixExpression',
         )),
         $.r('PostfixExpression'))
 )
-const MultiplicativeExpression=$.s('MultiplicativeExpression',
+const MulExpression=$.s('MulExpression',
     $.r('PrefixExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('Multiplicative',$.d('*')),
-                $.s('Divide',$.d('/')),
+            $.o('Oper',$.s('Mul',$.d('*')),
+                $.s('Div',$.d('/')),
                 $.s('Mod',$.d('%'))
             ),$.r('PrefixExpression'))
     )
 )
-const AdditiveExpression=$.s('AdditiveExpression',
-    $.r('MultiplicativeExpression'),$.l('OperList',
+const AddExpression=$.s('AddExpression',
+    $.r('MulExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('Additive',$.d('+')),
-                $.s('Subtract',$.d('-'))
-            ),$.r('MultiplicativeExpression'))
+            $.o('Oper',$.s('Add',$.d('+')),
+                $.s('Sub',$.d('-'))
+            ),$.r('MulExpression'))
     )
 )
 const ShiftExpression=$.s('ShiftExpression',
-    $.r('AdditiveExpression'),$.l('OperList',
+    $.r('AddExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('ShiftLeft',$.d('<<')),
-                $.s('ShiftRight',$.d('>>'))
-            ),$.r('AdditiveExpression'))
+            $.o('Oper',$.s('Shl',$.d('<<')),
+                $.s('Shr',$.d('>>'))
+            ),$.r('AddExpression'))
     )
 )
 const RelationalExpression=$.s('RelationalExpression',
@@ -85,47 +85,47 @@ const RelationalExpression=$.s('RelationalExpression',
             ),$.r('ShiftExpression'))
     )
 )
-const EqualityExpression=$.s('EqualityExpression',
+const EqualExpression=$.s('EqualExpression',
     $.r('RelationalExpression'),$.l('OperList',
         $.s('OperData',
             $.o('Oper',$.s('Equal',$.d('==')),
-                $.s('NotEqual',$.d('!='))
+                $.s('Inequal',$.d('!='))
             ),$.r('RelationalExpression'))
     )
 )
-const BitwiseAndExpression=$.s('BitwiseAndExpression',
-    $.r('EqualityExpression'),$.l('OperList',
+const AndExpression=$.s('AndExpression',
+    $.r('EqualExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('BitwiseAnd',$.d('&'))),
-            $.r('EqualityExpression'))
+            $.o('Oper',$.s('And',$.d('&'))),
+            $.r('EqualExpression'))
     )
 )
-const BitwiseXorExpression=$.s('BitwiseXorExpression',
-    $.r('BitwiseAndExpression'),$.l('OperList',
+const XorExpression=$.s('XorExpression',
+    $.r('AndExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('BitwiseXor',$.d('^'))),
-            $.r('BitwiseAndExpression'))
+            $.o('Oper',$.s('Xor',$.d('^'))),
+            $.r('AndExpression'))
     )
 )
-const BitwiseOrExpression=$.s('BitwiseOrExpression',
-    $.r('BitwiseXorExpression'),$.l('OperList',
+const OrExpression=$.s('OrExpression',
+    $.r('XorExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('BitwiseOr',$.d('|'))),
-            $.r('BitwiseXorExpression'))
+            $.o('Oper',$.s('Or',$.d('|'))),
+            $.r('XorExpression'))
     )
 )
-const LogicalAndExpression=$.s('LogicalAndExpression',
-    $.r('BitwiseOrExpression'),$.l('OperList',
+const LogicAndExpression=$.s('LogicAndExpression',
+    $.r('OrExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('LogicalAnd',$.d('&&'))),
-            $.r('BitwiseOrExpression'))
+            $.o('Oper',$.s('LogicAnd',$.d('&&'))),
+            $.r('OrExpression'))
     )
 )
-const LogicalOrExpression=$.s('BinaryExpression',
-    $.r('LogicalAndExpression'),$.l('OperList',
+const LogicOrExpression=$.s('BinaryExpression',
+    $.r('LogicAndExpression'),$.l('OperList',
         $.s('OperData',
-            $.o('Oper',$.s('LogicalOr',$.d('||'))),
-            $.r('LogicalAndExpression'))
+            $.o('Oper',$.s('LogicOr',$.d('||'))),
+            $.r('LogicAndExpression'))
     )
 )
 const TernaryExpression=$.s('TernaryExpression',
@@ -151,16 +151,16 @@ export default [
     PrimaryExpression,
     PostfixExpression,
     PrefixExpression,
-    MultiplicativeExpression,
-    AdditiveExpression,
+    MulExpression,
+    AddExpression,
     ShiftExpression,
     RelationalExpression,
-    EqualityExpression,
-    BitwiseAndExpression,
-    BitwiseXorExpression,
-    BitwiseOrExpression,
-    LogicalAndExpression,
-    LogicalOrExpression,
+    EqualExpression,
+    AndExpression,
+    XorExpression,
+    OrExpression,
+    LogicAndExpression,
+    LogicOrExpression,
     TernaryExpression,
     Expression
 ]

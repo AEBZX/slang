@@ -1,4 +1,3 @@
-import {asm_command, asm_pool, HIRTree} from '../data'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool'
 export type asm_factory=(data:PeepholeTree,tool:PeepholeScope)=>void
 export class IR extends PeepholeTool {

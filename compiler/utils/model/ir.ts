@@ -1,4 +1,3 @@
-import {asm_args, asm_command, bin} from '../data'
 import {PeepholeTree} from '../lib/tool'
 export const BinMap=new Map([
     ['mov',0],
@@ -64,29 +63,6 @@ export const ParamOffset=new Map<string,number>([
     ['valuevaluevalue',7]
 ])
 export const Null=0
-export class IRTree extends PeepholeTree{
-    constructor(public id:string) {
-        super()
-    }
-    static isNumber(data:asm_args){
-        return data[0]=='reg'
-    }
-    generate():bin{
-        return null
-    }
-    generate_two(one:asm_args,two:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get(one[0]+two[0])
-    }
-    generate_three(one:asm_args,two:asm_args,three:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get(one[0]+two[0]+three[0])
-    }
-    generate_one(data:asm_args):number{
-        return BinMap.get(this.id)+ParamOffset.get(data[0])
-    }
-    generate_zero():number{
-        return BinMap.get(this.id)
-    }
-}
 export class MOV extends IRTree{
     constructor(public left:asm_args,public right:asm_args) {
         super('mov')
@@ -144,7 +120,6 @@ export class JZ extends IRTree{
     }
 }
 export class CZ extends IRTree{
-    //is_func_call:0=块调用(if/while,压块帧),1=函数调用;retn 靠它弹到函数帧
     constructor(public target:asm_args,public cond:asm_args,public is_func_call:asm_args) {
         super('cz')
     }

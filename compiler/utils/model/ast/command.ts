@@ -4,30 +4,79 @@ import {Type} from './identifier'
 export class Command extends ASTTree{}
 export class BasicCommand extends Command{}
 export class Assign extends BasicCommand{
-    public oper=null
-    public cast=null
-    constructor(public data:Expression,public value:Expression) {
+    public oper:string=null
+    public cast:string=null
+    constructor(public data:Expression,public value:Expression,public op:string) {
         super()
     }
 }
-export class AAssign extends Assign{}
-export class AddAssign extends Assign{}
-export class SubAssign extends Assign{}
-export class MulAssign extends Assign{}
-export class DivAssign extends Assign{}
-export class ModAssign extends Assign{}
-export class BitAndAssign extends Assign{}
-export class BitOrAssign extends Assign{}
-export class BitXorAssign extends Assign{}
-export class BitShlAssign extends Assign{}
-export class BitShrAssign extends Assign{}
-export class VarDeclaration extends BasicCommand{
+export class AAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'')
+    }
+}
+export class AddAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'+')
+    }
+}
+export class SubAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'-')
+    }
+}
+export class MulAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'*')
+    }
+}
+export class DivAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'/')
+    }
+}
+export class ModAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'%')
+    }
+}
+export class AndAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'&&')
+    }
+}
+export class OrAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'||')
+    }
+}
+export class XorAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'^')
+    }
+}
+export class ShlAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'<<')
+    }
+}
+export class ShrAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,">>")
+    }
+}
+export class VarDecl extends BasicCommand{
     constructor(public name:string,public t:Type,public value:Expression) {
         super()
     }
 }
-export class Call extends BasicCommand{
-    constructor(public data:Expression,public await_:boolean) {
+export class Await extends BasicCommand{
+    constructor(public command:Command) {
+        super()
+    }
+}
+export class ExprCommand extends BasicCommand{
+    constructor(public data:Expression) {
         super()
     }
 }
@@ -44,17 +93,7 @@ export class Throw extends BasicCommand{
     }
 }
 export class VM extends BasicCommand{
-    constructor(public data:string) {
-        super()
-    }
-}
-export class Increment extends BasicCommand{
-    constructor(public data:Expression) {
-        super()
-    }
-}
-export class Decrement extends BasicCommand{
-    constructor(public data:Expression) {
+    constructor(public data:string,public param:Expression[]) {
         super()
     }
 }
@@ -75,12 +114,11 @@ export class DoWhileStatement extends BlockCommand{
     }
 }
 export class ForStatement extends BlockCommand{
-    constructor(public init:VarDeclaration[],public condition:Expression,public step:BasicCommand[],public commands:Command) {
+    constructor(public init:VarDecl[],public condition:Expression,public step:BasicCommand[],public commands:Command) {
         super()
     }
 }
 export class ForeachStatement extends BlockCommand{
-    public unwrap:string[]=[]
     constructor(public iden:string,public data:Expression,public commands:Command) {
         super()
     }

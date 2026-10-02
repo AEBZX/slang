@@ -35,76 +35,143 @@ export class LambdaExpression extends PrimaryExpression{
         super()
     }
 }
-export class Postfix{}
-export class IncrementPostfix extends Postfix{}
-export class DecrementPostfix extends Postfix{}
-export class MemberPostfix extends Postfix{
-    constructor(public name:string) {
-        super()
-    }
-}
-export class IndexPostfix extends Postfix{
-    constructor(public index:Expression) {
-        super()
-    }
-}
-export class ArgumentsPostfix extends Postfix{
-    constructor(public generic:Type[],public args:Expression[]) {
-        super()
-    }
-}
 export class PostfixExpression extends Expression{
-    public call_targets:string[]=[]
-    public opers:string[]=[]
-    public casts:string[]=[]
-    constructor(public expr:Expression,public postfix:Postfix[],public types:Type[]=[]) {
+    constructor(public expr:Expression) {
         super()
     }
 }
-export class Prefix{}
-export class IncrementPrefix extends Prefix{}
-export class DecrementPrefix extends Prefix{}
-export class NotPrefix extends Prefix{}
-export class BitNotPrefix extends Prefix{}
-export class MinusPrefix extends Prefix{}
-export class ReferencePrefix extends Prefix{}
-export class AddressPrefix extends Prefix{}
-export class NewPrefix extends Prefix{}
-export class TypePrefix extends Prefix{
-    constructor(public type:Type) {
-        super()
+export class IncrementPostfix extends PostfixExpression{}
+export class DecrementPostfix extends PostfixExpression{}
+export class MemberPostfix extends PostfixExpression{
+    constructor(expr:Expression,public name:string) {
+        super(expr)
+    }
+}
+export class IndexPostfix extends PostfixExpression{
+    constructor(expr:Expression,public index:Expression) {
+        super(expr)
+    }
+}
+export class ArgumentsPostfix extends PostfixExpression{
+    public call_target:string=null
+    constructor(expr:Expression,public generic:Type[],public args:Expression[]) {
+        super(expr)
     }
 }
 export class PrefixExpression extends Expression{
-    public casts:string[]=[]
-    public opers:string[]=[]
-    constructor(public expr:Expression,public prefix:Prefix[],public types:Type[]=[]) {
+    constructor(public expr:Expression) {
         super()
+    }
+}
+export class IncrementPrefix extends PrefixExpression{}
+export class DecrementPrefix extends PrefixExpression{}
+export class NotPrefix extends PrefixExpression{}
+export class BitNotPrefix extends PrefixExpression{}
+export class MinusPrefix extends PrefixExpression{}
+export class ReferencePrefix extends PrefixExpression{}
+export class AddressPrefix extends PrefixExpression{}
+export class NewPrefix extends PrefixExpression{}
+export class TypePrefix extends PrefixExpression{
+    constructor(expr:Expression,public type:Type) {
+        super(expr)
     }
 }
 export class BinaryExpression extends Expression{
-    constructor(public left:Expression,public right:Expression,public oper:string=null) {
+    constructor(public left:Expression,public right:Expression,public op:string) {
         super()
     }
 }
-export class AdditiveExpression extends BinaryExpression{}
-export class SubtractiveExpression extends BinaryExpression{}
-export class MultiplicativeExpression extends BinaryExpression{}
-export class ModExpression extends BinaryExpression{}
-export class DivisionExpression extends BinaryExpression{}
-export class ShiftLeftExpression extends BinaryExpression{}
-export class ShiftRightExpression extends BinaryExpression{}
-export class GreaterExpression extends BinaryExpression{}
-export class LessExpression extends BinaryExpression{}
-export class GreaterEqualExpression extends BinaryExpression{}
-export class LessEqualExpression extends BinaryExpression{}
-export class EqualityExpression extends BinaryExpression{}
-export class InequalityExpression extends BinaryExpression{}
-export class BitwiseAndExpression extends BinaryExpression{}
-export class BitwiseXorExpression extends BinaryExpression{}
-export class BitwiseOrExpression extends BinaryExpression{}
-export class LogicalAndExpression extends BinaryExpression{}
-export class LogicalOrExpression extends BinaryExpression{}
+export class AddExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'+')
+    }
+}
+export class SubExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'-')
+    }
+}
+export class MulExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'*')
+    }
+}
+export class ModExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'%')
+    }
+}
+export class DivExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'/')
+    }
+}
+export class ShlExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'<<')
+    }
+}
+export class ShrExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'>>')
+    }
+}
+export class GreaterExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'>')
+    }
+}
+
+export class LessExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'<')
+    }
+}
+export class GreaterEqualExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,">=")
+    }
+}
+export class LessEqualExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'<=')
+    }
+}
+export class EqualExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'==')
+    }
+}
+export class InequalExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'!=')
+    }
+}
+export class AndExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'&')
+    }
+}
+export class XorExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'^')
+    }
+}
+export class OrExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'|')
+    }
+}
+export class LogicAndExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'&&')
+    }
+}
+export class LogicOrExpression extends BinaryExpression{
+    constructor(left:Expression,right:Expression) {
+        super(left,right,'||')
+    }
+}
 export class TernaryExpression extends Expression{
     constructor(public condition:Expression,public trueExpr:Expression,public falseExpr:Expression) {
         super()
