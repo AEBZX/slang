@@ -46,7 +46,6 @@ import {
     check_async_modifier,
     check_dup,
     check_static_modifier,
-    Default_Modifier,
     fill_modifier,
     slang_check_visitor
 } from './tool'
@@ -110,7 +109,8 @@ const Check_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
 }
 const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     check_async_modifier(ast,scope,'类或接口')
-    ast.modifiers=Default_Modifier.get(ast)
+    //补齐缺省字段但保留显式声明,直接换成默认单例会把用户写的修饰符丢掉
+    ast.modifiers=fill_modifier(ast)
     //implement必须是ClassType
     if(ast.implement!=null&&!(ast.implement instanceof ClassType))
         scope.thr(`类的/接口implement的模块必须是接口,在行${ast.line.join('\n')}`)
@@ -123,7 +123,7 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
         call(i,0)
     for(const i of ast.children){
         if(!(i instanceof Operation||i instanceof Cast||i instanceof Variable||i instanceof Function))
-            scope.thr(`类/接口内部只能是operation/cast/value/function,在行${i.line.join('\n')}`)
+            scope.thr(`类/接口内部只能是operation/cast/variable/function,在行${i.line.join('\n')}`)
         if(ast instanceof Class&&i instanceof Function&&i.commands==null)
             scope.thr(`类内部的function必须实现,在行${i.line.join('\n')}`)
         if(ast instanceof Interface&&i instanceof Function&&i.commands!=null)
@@ -151,11 +151,10 @@ const Check_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
     for(const i of ast.commands)call(i,0)
 }
 const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|ForeachStatement|ForStatement,scope,call)=>{
+    const old=scope.loop
     scope.loop=true
-    scope=scope.enter()
     call(ast.commands,0)
-    scope=scope.leave()
-    scope.loop=false
+    scope.loop=old
     if(ast instanceof WhileStatement||ast instanceof DoWhileStatement)
         call(ast.condition,0)
     if(ast instanceof ForeachStatement)
@@ -171,11 +170,10 @@ const Check_BreakContinue:slang_check_visitor=(ast:Break|Continue, scope, call)=
         scope.thr(`break/continue只能在循环中使用,在行${ast.line.join('\n')}`)
 }
 const Check_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
+    const old=scope.throw
     scope.throw=true
-    scope=scope.enter()
     call(ast.commands,0)
-    scope=scope.leave()
-    scope.throw=false
+    scope.throw=old
     call(ast.catch_.type,0)
     call(ast.catch_.command,0)
     call(ast.finally_,0)

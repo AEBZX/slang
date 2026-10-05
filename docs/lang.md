@@ -45,8 +45,8 @@ Modifiers  ::= { "public" | "private" | "static" | "unstatic" | "async" | "sync"
 BlockData  ::= Module | Class | Interface | Enum | Function | Variable ;
 ```
 
-块的一般形式:`修饰符* 名称 ":" 块定义`。修饰符可任意组合、顺序不限、均可省略
-(缺省 public / unstatic / sync)。
+块的一般形式:`修饰符* 名称 ":" 块定义`。修饰符可任意组合、顺序不限、均可省略;
+缺省值:模块/类/接口/枚举为 static+public,函数/变量为 unstatic+private(即实例成员)。
 
 | 块类型 | 定义 | 说明 |
 |--------|------|------|

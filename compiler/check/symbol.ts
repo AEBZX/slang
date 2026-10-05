@@ -56,15 +56,23 @@ const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     const name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     const module=scope.get(name)
     if(module!=null&&module!==ast&&module instanceof Module){
-        module.children=[...module.children,...ast.children]
+        //同名模块合并:children 收编进先注册的块,注册表始终指向它,新块只构建增量
+        module.children.push(...ast.children)
         scope.set(name,module)
+        scope.global.set(name,module)
+        scope=scope.enter()
+        scope.path=name
+        for(const i of ast.children)
+            call(i,1,scope)
+        scope=scope.leave()
+        return
     }
     scope.set(name,ast)
     scope.global.set(name,ast)
     scope=scope.enter()
     scope.path=name
     for(const i of ast.children)
-        call(i,1)
+        call(i,1,scope)
     scope=scope.leave()
 }
 const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,call)=>{
@@ -75,7 +83,7 @@ const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,cal
     if(ast instanceof Class||ast instanceof Interface)
         scope.operation_cast_oper=new ClassType(name.split('.'),Array.from(ast.generic.values()))
     for(const i of ast.children)
-        call(i,1)
+        call(i,1,scope)
     scope=scope.leave()
 }
 const Build_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
@@ -89,7 +97,7 @@ const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
         ast.value instanceof StringType?'string':
             ast.value instanceof BooleanType?'boolean':null
     for(let i of ast.children)
-        call(i,1)
+        call(i,1,scope)
     scope=scope.leave()
 }
 const Build_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
@@ -134,7 +142,7 @@ const Verify_File:slang_check_visitor=(ast:File,scope,call)=>{
         scope.set(i.as,scope.global.get(i.module.join('.')))
     }
     for(const i of ast.children)
-        call(i,2)
+        call(i,2,scope)
     scope=scope.leave()
 }
 const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
@@ -143,15 +151,21 @@ const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.path=full
     const module=scope.get(ast.name)
     if(module!=null&&module!==ast){
+        //同名模块:符号表指向先注册的块,children 在它的那一轮已访问过,这里只对齐注册
         if(!(module instanceof Module))scope.thr(`重复定义了${ast.name},在行${ast.line.join('\n')}`)
-        else ast.children.push(...(<Module>module).children)
+        else{
+            scope.set(ast.name,module)
+            scope.set(full,module)
+        }
+        scope=scope.leave()
+        return
     }
     //裸名与全路径都注册
     scope.set(ast.name,ast)
     scope.set(full,ast)
     scope.set('up',new ASTTree())
     for(const i of ast.children)
-        call(i,2)
+        call(i,2,scope)
     scope=scope.leave()
 }
 const Verify_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
@@ -183,7 +197,7 @@ const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,cal
     scope.set('this',new ASTTree())
     scope.set('up',new ASTTree())
     for(const i of ast.children)
-        call(i,2)
+        call(i,2,scope)
     scope=scope.leave()
 }
 const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
@@ -193,13 +207,15 @@ const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
         if(!(fn instanceof Function))
             scope.thr(`函数${ast.name}不能重名,在行${ast.line.join('\n')}`)
     }
-    //重载注册
+    //重载注册:全路径组给 LambdaType 的名字解析用,裸名组给同作用域直接调用用
+    scope.global.set_overload(full,ast)
     if(!ast.modifiers.unstatic){
-        scope.global.set_overload(full,ast)
         scope.global.set(ast.name,ast)
+        scope.global.set(full,ast)
     }
     scope.set_overload(ast.name,ast)
     scope.set(ast.name,ast)
+    scope.set(full,ast)
     scope=scope.enter()
     scope.path=full
     //generic implement且是否是Interface的是否存在
@@ -207,24 +223,23 @@ const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     for(const [name,i] of ast.generic)
         scope.set_generic(name,i)
     for(const [name,i] of ast.params){
-        call(i,2)
+        call(i,2,scope)
         scope.set(name,new VarDecl(name,i,new NullLiteral(null)))
     }
-    call(ast.return_type,2)
-    call(ast.commands,2)
+    call(ast.return_type,2,scope)
+    call(ast.commands,2,scope)
     scope=scope.leave()
 }
 const Verify_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(name(full,scope,ast))
         scope.thr(`变量${ast.name}不能重名,在行${ast.line.join('\n')}`)
-    if(!ast.modifiers.unstatic){
+    if(!ast.modifiers.unstatic)
         scope.global.set(full,ast)
-        scope.set(ast.name,ast)
-    }
     scope.set(ast.name,ast)
-    call(ast.t,2)
-    call(ast.value,2)
+    scope.set(full,ast)
+    call(ast.t,2,scope)
+    call(ast.value,2,scope)
 }
 const Verify_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     ast.children.forEach(i=>call(i,2))
@@ -241,7 +256,7 @@ const Verify_Await:slang_check_visitor=(ast:Await,scope,call)=>{
 }
 const Verify_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
     scope=scope.enter()
-    ast.commands.forEach(i=>call(i,2))
+    ast.commands.forEach(i=>call(i,2,scope))
     scope=scope.leave()
 }
 const Verify_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
@@ -278,20 +293,21 @@ const Verify_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     call(ast.catch_.type,2)
     scope.set(ast.catch_.iden,new VarDecl(ast.catch_.iden,ast.catch_.type,null))
     call(ast.catch_.command,2)
+    call(ast.finally_,2)
 }
 const Verify_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     scope=scope.enter()
-    ast.init.forEach(i=>call(i,2))
-    call(ast.condition,2)
-    call(ast.commands,2)
-    ast.step.forEach(i=>call(i,2))
+    ast.init.forEach(i=>call(i,2,scope))
+    call(ast.condition,2,scope)
+    call(ast.commands,2,scope)
+    ast.step.forEach(i=>call(i,2,scope))
     scope=scope.leave()
 }
 const Verify_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
     scope=scope.enter()
-    call(ast.data,2)
+    call(ast.data,2,scope)
     scope.set(ast.iden,new VarDecl(ast.iden,null,null))
-    call(ast.commands,2)
+    call(ast.commands,2,scope)
     scope=scope.leave()
 }
 const Verify_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
@@ -328,17 +344,17 @@ const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,ca
     if(new Set(ast.params.keys()).size!=ast.params.size)
         scope.thr(`参数重复声明,在行${ast.line.join('\n')}`)
     for(const i of ast.params.values())
-        call(i,2)
+        call(i,2,scope)
     for(const [i,j] of ast.params)
         scope.set(i,new VarDecl(i,j,null))
     //generic implement且是否是Interface的是否存在
     verify_generics(ast,scope,call)
-    call(ast.body,2)
-    call(ast.ret,2)
+    call(ast.body,2,scope)
+    call(ast.ret,2,scope)
     scope=scope.leave()
 }
 const Verify_MapExpressionOrArrayExpression:slang_check_visitor=(ast:MapExpression|ArrayExpression,scope,call)=>{
-    ast.elements.forEach((i:Expression)=>call(i,1))
+    ast.elements.forEach((i:Expression)=>call(i,2,scope))
 }
 const Verify_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,call)=> {
     call(ast.expr, 2)

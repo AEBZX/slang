@@ -22,7 +22,7 @@ import {
     SubAssign,
     SubExpression, SwitchStatement,
     Throw, TryStatement,
-    VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await
+    VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await, VM
 } from '../utils'
 import {desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
@@ -51,6 +51,10 @@ const D_ExprCommandOrReturn:slang_desugar_visitor=(node:ExprCommand|Return,call)
 }
 const D_Await:slang_desugar_visitor=(node:Await,call)=>{
     node.command=call(node.command)
+    return node
+}
+const D_VM:slang_desugar_visitor=(node:VM,call)=>{
+    node.param=node.param.map(call) as Expression[]
     return node
 }
 const D_Throw:slang_desugar_visitor=(node:Throw,call)=>{
@@ -170,5 +174,7 @@ export default new Map<any,slang_desugar_visitor>([
     [ForStatement,D_ForStatement],
     [ForeachStatement,D_ForeachStatement],
     [TryStatement,D_TryStatement],
-    [ListCommand,D_ListCommand]
+    [ListCommand,D_ListCommand],
+    [Await,D_Await],
+    [VM,D_VM]
 ])

@@ -1,6 +1,7 @@
 import {
     AddExpression,
     AndExpression,
+    ArrayType,
     Assign,
     ASTTree,
     BasicType,
@@ -29,6 +30,7 @@ import {
     LiteralType,
     LogicAndExpression,
     LogicOrExpression,
+    MapType,
     ModExpression,
     Modifier,
     Module,
@@ -68,10 +70,13 @@ export class Scope extends PeepholeScope{
     operation_number=0
     cast_number=0
     loop_(){
-        return this.loop||this.parent.loop||this.global.loop
+        if(this.loop)return true
+        //标志沿作用域链向上找;根作用域 parent 为 null,不能直接解引用
+        return this.parent!=null&&this.parent.loop_()
     }
     throw_(){
-        return this.throw||this.parent.throw||this.global.throw
+        if(this.throw)return true
+        return this.parent!=null&&this.parent.throw_()
     }
     constructor(parent:Scope,global:Scope){
         super(parent,global)
@@ -125,7 +130,10 @@ export class Scope extends PeepholeScope{
         if(this.global)return this.global.get_sym(ast)
     }
     get(name:string):ASTTree{
-        if(name.startsWith('up.'))return this.parent.get(name.slice(3))
+        if(name.startsWith('up.')){
+            if(this.parent==null)return undefined
+            return this.parent.get(name.slice(3))
+        }
         if(this.data.has(name))return this.data.get(name)
         if(this.parent)return this.parent.get(name)
         if(this.global)return this.global.get(name)
@@ -226,8 +234,9 @@ export function fill_modifier(data:Block){
     for(const [k,v] of Default_Modifier)
         if(data instanceof k){def=v;break}
     //未显式指定的字段(null)用默认值补齐,否则 null 会被当成 false(例如 public 方法被当成 static)
-    if(data.modifiers==null)return def
     if(def==null)return data.modifiers
+    //缺省也要给新实例:返回共享单例的话,调用方对 modifiers 的写操作会污染所有同类块
+    if(data.modifiers==null)return new Modifier(def.unstatic,def._async,def._private)
     return new Modifier(
         data.modifiers.unstatic==null?def.unstatic:data.modifiers.unstatic,
         data.modifiers._async==null?def._async:data.modifiers._async,
@@ -236,6 +245,9 @@ export function fill_modifier(data:Block){
 }
 export function type_same(a:Type,b:Type):boolean{
     if(a==null||b==null)return a==b
+    //运算符查找端把操作数包成 PointType,声明侧是裸类型:单侧盒子先解包再比
+    if(a instanceof PointType&&!(b instanceof PointType))return type_same(a.t,b)
+    if(b instanceof PointType&&!(a instanceof PointType))return type_same(a,b.t)
     if(a.constructor!=b.constructor)return false
     if(a instanceof LiteralType)return true
     if(a instanceof ClassType)return (a as ClassType).local.join('.')==(b as ClassType).local.join('.')
@@ -288,8 +300,11 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
     //两个FixType
     if(type1 instanceof FixType&&type2 instanceof FixType){
         if(type1.constructor!=type2.constructor)return new VoidType()
-        type1.t=type_merge(type1.t,type2.t,scope)
-        return type1
+        //合出新区块,不动入参:入参往往是声明处的共享类型实例
+        const inner=type_merge(type1.t,type2.t,scope)
+        if(type1 instanceof ArrayType)return new ArrayType(inner)
+        if(type1 instanceof MapType)return new MapType(inner)
+        return new PointType(inner)
     }
     return new VoidType()
 }
@@ -446,6 +461,8 @@ export function type_(a:Type,b:Type,scope:Scope){
     //Void(无值/未解析)只与 Void 兼容
     if(ra instanceof VoidType||rb instanceof VoidType)
         return ra instanceof VoidType&&rb instanceof VoidType
+    //同型直接通过(结构相等,不要求同一实例),剩下的才看 cast 表
+    if(type_same(ra,rb))return true
     let e_a=new Expression(),e_b=new Expression()
     e_a.type=a
     e_b.type=b
@@ -517,13 +534,20 @@ export function localToName(local:string[]){
 export function nameToLocal(name:string){
     return name.split('.')
 }
+//按位置把类/函数声明的泛型绑定到调用点的实参
+export function bindGenerics(scope:Scope,defGeneric:Map<string,Type>,instGeneric:Type[]){
+    let k=0
+    for(const key of defGeneric.keys()){
+        if(k>=instGeneric.length)break
+        scope.set_generic(key,instGeneric[k++])
+    }
+}
 export function check_static_modifier(ast:Block, scope:Scope, kind: string) {
     ast.modifiers = fill_modifier(ast)
     const line = ast.line.join('\n')
     if (ast.modifiers.unstatic) scope.thr(`${kind}不能是非static的,在行${line}`)
     if (ast.modifiers._private) scope.thr(`${kind}不能是私有的,在行${line}`)
     if (ast.modifiers._async)   scope.thr(`${kind}不能是异步的,在行${line}`)
-    ast.modifiers = Default_Modifier.get(ast)
 }
 export function check_async_modifier(ast:Block, scope:Scope,kind:string){
     ast.modifiers=fill_modifier(ast)
@@ -539,7 +563,7 @@ export function check_dup(keys: Iterable<string>, scope: Scope, label: string, l
 }
 export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {
     for (const i of ast.generic.values()) {
-        call(i, 2)
+        call(i, 2, scope)
         check_implement(i, scope, ast.line)
     }
 }

@@ -12,7 +12,7 @@ import {
     MapExpression, MemberPostfix, ModAssign, Modifier, MulAssign, MulExpression, NumberLiteral,
     PostfixExpression, PrefixExpression, ShlExpression,
     ShrExpression, SubAssign, SubExpression, TernaryExpression,
-    Type, IncrementPostfix, IncrementPrefix, DecrementPostfix, DecrementPrefix, ReferencePrefix
+    Type, IncrementPostfix, IncrementPrefix, DecrementPostfix, DecrementPrefix, ReferencePrefix, NewPrefix
 } from '../utils'
 import {slang_check_visitor} from "../check/tool";
 const D_ArrayOrMapExpression:slang_desugar_visitor=(node:MapExpression|ArrayExpression,call)=>{
@@ -26,29 +26,33 @@ const D_LambdaExpression:slang_desugar_visitor=(node:LambdaExpression,call)=>{
 }
 const D_IncrementOrDecrementPostfixOrPrefix:slang_desugar_visitor=(node:IncrementPostfix|IncrementPrefix|DecrementPostfix|DecrementPrefix,call)=>{
     node.expr=call(node.expr) as Expression
-    expr_desugar(node,node.expr)
-    return node
+    return expr_desugar(node,node.expr)
 }
 const D_MemberPostfix:slang_desugar_visitor=(node:MemberPostfix,call)=>{
     node.expr=call(node.expr) as Expression
-    expr_desugar(node,node.expr)
-    return node
+    return expr_desugar(node,node.expr)
 }
 const D_IndexPostfix:slang_desugar_visitor=(node:IndexPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node.index=call(node.index) as Expression
-    expr_desugar(node,node.expr,node.index)
-    return node
+    return expr_desugar(node,node.expr,node.index)
 }
 const D_ArgumentsPostfix:slang_desugar_visitor=(node:ArgumentsPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node.args=node.args.map(call) as Expression[]
-    expr_desugar(node,node.expr,...node.args)
-    return node
+    if(node.call_target!=null){
+        let expr=null
+        for(const i of node.call_target.split('.'))
+            expr=expr==null?new IdentifierExpr(i):new MemberPostfix(expr,i)
+        return call(new ArgumentsPostfix(expr,node.generic,node.args))
+    }
+    return expr_desugar(node,node.expr,...node.args)
 }
 const D_PrefixExpression:slang_desugar_visitor=(node:PrefixExpression,call)=>{
     node.expr=call(node.expr) as Expression
-    expr_desugar(node,node.expr)
+    node=expr_desugar(node,node.expr)
+    if(node instanceof NewPrefix){
+    }
     return node
 }
 const D_BinaryExpression:slang_desugar_visitor=(node:BinaryExpression,call)=>{
