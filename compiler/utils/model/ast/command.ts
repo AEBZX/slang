@@ -66,6 +66,8 @@ export class ShrAssign extends Assign{
     }
 }
 export class VarDecl extends BasicCommand{
+    public oper:string=null
+    public cast:string=null
     constructor(public name:string,public t:Type,public value:Expression) {
         super()
     }

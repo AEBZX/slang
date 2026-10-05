@@ -8,9 +8,10 @@ const LambdaType=$.s('LambdaType',
     $.c('Generic',$.r('GenericList')),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'))
-const GenericType=$.s('GenericType',TokenType.Identifier)
+const GenericType=$.s('GenericType',$.d('@'),TokenType.Identifier)
 const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
     $.r('BooleanType'),$.r('StringType'),$.r('VoidType'),$.t('(',$.r('Type'),')'),
+    $.s('GenericType'),
     $.s('ClassType',TokenType.Identifier,
         $.l('ClassTypeData',$.s('ClassTypeItem',$.d('.'),TokenType.Identifier)),
         $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.d('>'))))

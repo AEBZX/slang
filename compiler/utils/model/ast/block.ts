@@ -44,6 +44,8 @@ export class Function extends Block{
     }
 }
 export class Variable extends Block{
+    public oper:string=null
+    public cast:string=null
     constructor(modifiers:Modifier,name:string,public t:Type,public value:Expression) {
         super(modifiers,name)
     }

@@ -54,6 +54,8 @@ export class IndexPostfix extends PostfixExpression{
 }
 export class ArgumentsPostfix extends PostfixExpression{
     public call_target:string=null
+    public cons:boolean=false
+    public local:string[]=null
     constructor(expr:Expression,public generic:Type[],public args:Expression[]) {
         super(expr)
     }
@@ -72,7 +74,7 @@ export class ReferencePrefix extends PrefixExpression{}
 export class AddressPrefix extends PrefixExpression{}
 export class NewPrefix extends PrefixExpression{}
 export class TypePrefix extends PrefixExpression{
-    constructor(expr:Expression,public type:Type) {
+    constructor(expr:Expression,public t:Type) {
         super(expr)
     }
 }

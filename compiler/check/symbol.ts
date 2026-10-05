@@ -16,7 +16,7 @@ import {
     WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
     LambdaType, EnumType, LambdaExpression, PostfixExpression, ArgumentsPostfix, Expression, MapExpression,
     ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression, ASTTree,
-    operations, NullLiteral, ExprCommand
+    operations, NullLiteral, ExprCommand, NumberType, StringType, BooleanType
 } from '../utils'
 import {
     build_chain,
@@ -65,6 +65,9 @@ const Build_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
 const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.enter()
     scope.operation_cast_oper=ast.value
+    scope.path=ast.value instanceof NumberType?'number':
+        ast.type instanceof StringType?'string':
+            ast.type instanceof BooleanType?'boolean':null
     for(let i of ast.children)
         call(i,1)
     scope=scope.leave()
@@ -297,7 +300,7 @@ const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,ca
     scope=scope.leave()
 }
 const Verify_MapExpressionOrArrayExpression:slang_check_visitor=(ast:MapExpression|ArrayExpression,scope,call)=>{
-    ast.elements.forEach(i=>call(i,2))
+    ast.elements.forEach((i:Expression)=>call(i,0))
 }
 const Verify_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,call)=> {
     call(ast.expr, 2, scope)

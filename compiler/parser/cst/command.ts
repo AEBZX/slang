@@ -1,16 +1,16 @@
 import {TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
-const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.c(';'))
-const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.c(';'))
-const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.c(';'))
-const MulAssign=$.s('MulAssign',$.r('Expression'),$.d('*='),$.r('Expression'),$.c(';'))
-const DivAssign=$.s('DivAssign',$.r('Expression'),$.d('/='),$.r('Expression'),$.c(';'))
-const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.c(';'))
-const AndAssign=$.s('AndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.c(';'))
-const OrAssign=$.s('OrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.c(';'))
-const XorAssign=$.s('XorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.c(';'))
-const ShlAssign=$.s('ShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.c(';'))
-const ShrAssign=$.s('ShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.c(';'))
+const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.d(';'))
+const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.d(';'))
+const SubAssign=$.s('SubAssign',$.r('Expression'),$.d('-='),$.r('Expression'),$.d(';'))
+const MulAssign=$.s('MulAssign',$.r('Expression'),$.d('*='),$.r('Expression'),$.d(';'))
+const DivAssign=$.s('DivAssign',$.r('Expression'),$.d('/='),$.r('Expression'),$.d(';'))
+const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.d(';'))
+const AndAssign=$.s('AndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.d(';'))
+const OrAssign=$.s('OrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.d(';'))
+const XorAssign=$.s('XorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.d(';'))
+const ShlAssign=$.s('ShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.d(';'))
+const ShrAssign=$.s('ShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.d(';'))
 const Assign=$.o('Assign',
     $.r('AAssign'),
     $.r('AddAssign'),

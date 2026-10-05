@@ -13,7 +13,7 @@ import {
     DecrementPostfix,
     DecrementPrefix, DivAssign, DivExpression,
     Enum,
-    EnumType, EqualExpression,
+    EnumType, EqualExpression, Expression,
     FixType,
     Function,
     GenericType,
@@ -34,7 +34,7 @@ import {
     Operation, OrAssign, OrExpression, PointType,
     ReferencePrefix, ShlAssign, ShlExpression, ShrAssign, ShrExpression, StringType, SubAssign, SubExpression,
     Type,
-    Value,
+    Value, VarDecl,
     Variable,
     VoidType, XorAssign, XorExpression
 } from '../utils'
@@ -56,6 +56,7 @@ export class Scope extends PeepholeScope{
     path:string
     operation_number=0
     cast_number=0
+    qiw:Type
     constructor(parent:Scope,global:Scope){
         super(parent,global)
         this.data=new Map()
@@ -185,7 +186,14 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
     if(iden.length!=real.length)return false
     //每个声明形参都要能接受对应实参
     for(let i=0;i<iden.length;i++)
-        if(!type_is(real[i],iden[i],scope))return false
+        if(!type_is(real_type(real[i],scope),real_type(iden[i],scope),scope))return false
+    return true
+}
+export function generic_is(iden:Type[],param:Map<string,Type>,scope:Scope){
+    const real=Array.from(param.values())
+    if(iden.length!=real.length)return false
+    for(let i=0;i<iden.length;i++)
+        if(!type_is(real_type(real[i],scope),real_type(iden[i],scope),scope))return false
     return true
 }
 export function fill_modifier(data:Block){
@@ -363,28 +371,6 @@ export function overload_resolve(scope:Scope,name:string,arg_types:Type[]):
 export function to_point(a:Type){
     return new PointType(a)
 }
-export function each_oper(scope:Scope,param:Type,ret:any[]):{type:Type,unwarp:string[]}{
-    let unwarp=[]
-    let each=(data:Type)=>{
-        for(let i of scope.get_operation(data)){
-            if(i.oper!=':')continue
-            let type
-            if(ret.map(j=>{
-                type=j
-                let ret=type_merge(i.command.ret,j,scope) instanceof j
-                if(ret)unwarp.push(i.oper)
-                return ret
-            }).includes(true))return type
-        }
-        for(let i of scope.get_operation(data))
-            each(real_type(i.command.ret,scope))
-        return {type:new VoidType(),unwarp:[]}
-    }
-    return {
-        type:each(real_type(param,scope)),
-        unwarp
-    }
-}
 export const Operation_Prefix=new Map([
     [IncrementPrefix,'++'],
     [DecrementPrefix,'--'],
@@ -471,16 +457,10 @@ export function type_(a:Type,b:Type,scope:Scope){
     //Void(无值/未解析)只与 Void 兼容
     if(ra instanceof VoidType||rb instanceof VoidType)
         return ra instanceof VoidType&&rb instanceof VoidType
-    //同构或可合并即兼容
-    if(!(type_merge(ra,rb,scope) instanceof VoidType))return true
-    //'=' 重载:目标类型上的 = 第二个参数接受来源
-    const assign=scope.get_operation(rb).filter(i=>i.oper=='=').filter(i=>{
-        const ps=Array.from(i.command.params.values())
-        return ps.length>=2&&!(type_merge(real_type(ps[1],scope),ra,scope) instanceof VoidType)
-    })
-    if(assign.length>0)return true
-    //cast 放行
-    return cast_best(rb,ra,scope)!=null
+    let e_a=new Expression(),e_b=new Expression()
+    e_a.type=a
+    e_b.type=b
+    return cast(e_a, scope, b) || cast(e_b, scope, a)
 }
 export function generic_name(name:string,scope:Scope){
     return scope.generic.get(name) == null
@@ -549,8 +529,6 @@ export function build_chain(scope:Scope,name:string,block:Class|Interface){
         for(const i of set)cur.add(i)
     }
 }
-export function is_array_or_map(type:Type){
-}
 export function findOper(map: Map<any,string>, node:ASTTree): string {
     for (const [k, v] of map) if (node instanceof k) return v
     return ''
@@ -566,7 +544,7 @@ export function nameToLocal(name:string){
     return name.split('.')
 }
 export function bindGenerics(scope:Scope, defGeneric: Map<string,Type>, instGeneric: Type[]) {
-    let k = 0;
+    let k = 0
     for (const key of defGeneric.keys()) {
         if (k >= instGeneric.length) break
         scope.set_generic(key, instGeneric[k++])
@@ -593,13 +571,44 @@ export function check_dup(keys: Iterable<string>, scope: Scope, label: string, l
         scope.thr(`${label}重复定义,在行${line.join('\n')}`)
 }
 export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {
-    for (let i of ast.generic.values()) {
+    for (const i of ast.generic.values()) {
         call(i, 2, scope)
         check_implement(i, scope, ast.line)
     }
 }
-export function try_cast_to(scope:Scope, type:Type, want: Type){
-    const cast = cast_get(type, scope)
-    const hit = cast.find(i => i.type instanceof want.constructor)
-    return hit ? {id: hit.id, type: hit.type} : null
+export function set_name(ast:Block,scope:Scope){
+    const name=scope.path==''?ast.name:scope.path+'.'+ast.name
+    ast.type=new BlockType(nameToLocal(name))
+    scope.set(ast.name,ast)
+    return name
+}
+//qiw:期望类型
+export function operation(oper:string,ast:Expression|Assign|VarDecl|Variable,scope:Scope,qiw:Type,...param:Type[]){
+    qiw=real_type(qiw,scope)
+    ast.type=real_type(ast.type,scope)
+    const op=oper_best(scope,oper,...param).filter(i=>type_merge(i.command.ret,qiw,scope)==qiw)
+    let op_result:Operation=null
+    if(op.length>2){
+        //返回值最符合的
+        for(const i of op)
+            for(const j of op){
+                if(i==j)continue
+                if(type_(i.command.ret,j.command.ret,scope))op_result=j
+            }
+    }else if(op.length==2)op_result=op[0]
+    if(op_result!=null){
+        ast.oper=`${localToName(op_result.local)}.${op_result.oper}@${op_result.index}`
+        return true
+    }
+    return false
+}
+export function cast(ast:Expression|Assign|VarDecl|Variable,scope:Scope,qiw:Type){
+    qiw=real_type(qiw,scope)
+    ast.type=real_type(ast instanceof Expression?ast.type:ast.value,scope)
+    const cast=cast_best(qiw,ast.type,scope)
+    if(cast!=null){
+        ast.cast=cast.id
+        return true
+    }
+    return false
 }
