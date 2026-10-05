@@ -12,7 +12,7 @@ export class Assign extends BasicCommand{
 }
 export class AAssign extends Assign{
     constructor(data:Expression,value:Expression) {
-        super(data,value,'')
+        super(data,value,'=')
     }
 }
 export class AddAssign extends Assign{

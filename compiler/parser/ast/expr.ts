@@ -15,8 +15,7 @@ import {
     StringLiteral, SubExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
     TypePrefix, Command
 } from '../../utils'
-import {parseGeneric} from './block'
-import {BinaryMap, to_ast_data, to_string, tree_ast} from "./tool";
+import {BinaryMap, to_ast_data, to_string, tree_ast,parseGeneric} from './tool'
 const G_NumberLiteral:slang_ast_generate=(data,tree)=>{
     return new NumberLiteral(to_string(data,0))
 }

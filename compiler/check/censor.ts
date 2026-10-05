@@ -1,22 +1,46 @@
 //round0:无需符号表等的静态检查
 import {
     ArgumentsPostfix,
-    ArrayExpression, Assign, Await, BinaryExpression,
-    BooleanType,
+    ArrayExpression,
+    Assign,
+    Await,
+    BinaryExpression,
     Break,
     Cast,
-    Class, ClassType, Continue, DoWhileStatement,
-    Enum, ExprCommand,
-    File, FixType, ForeachStatement, ForStatement,
-    Function, IfStatement, IndexPostfix,
-    Interface, LambdaExpression, Link,
-    ListCommand, LiteralType, MapExpression,
-    Module, NumberType,
-    Operation, PostfixExpression, PrefixExpression, Return, StringType, SwitchStatement,
-    TernaryExpression, Throw, TryStatement, Type,
-    Value, VarDecl,
-    Variable, VM,
-    VoidType, WhileStatement
+    Class,
+    ClassType,
+    Continue,
+    DoWhileStatement,
+    Enum,
+    ExprCommand,
+    File,
+    FixType,
+    ForeachStatement,
+    ForStatement,
+    Function,
+    IfStatement,
+    IndexPostfix,
+    Interface,
+    LambdaExpression,
+    ListCommand,
+    LiteralType,
+    MapExpression,
+    Module,
+    Operation,
+    PostfixExpression,
+    PrefixExpression,
+    Return,
+    SwitchStatement,
+    TernaryExpression,
+    Throw,
+    TryStatement,
+    Type,
+    Value,
+    VarDecl,
+    Variable,
+    VM,
+    VoidType,
+    WhileStatement
 } from '../utils'
 import {
     check_async_modifier,
@@ -26,6 +50,7 @@ import {
     fill_modifier,
     slang_check_visitor
 } from './tool'
+
 const Check_File:slang_check_visitor=(ast:File,scope,call)=>{
     const lnk_name=ast.links.map(i=>i.as)
     if(new Set(lnk_name).size!=lnk_name.length)
@@ -127,7 +152,9 @@ const Check_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
 }
 const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|ForeachStatement|ForStatement,scope,call)=>{
     scope.loop=true
+    scope=scope.enter()
     call(ast.commands,0)
+    scope=scope.leave()
     scope.loop=false
     if(ast instanceof WhileStatement||ast instanceof DoWhileStatement)
         call(ast.condition,0)
@@ -140,19 +167,21 @@ const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|Foreac
     }
 }
 const Check_BreakContinue:slang_check_visitor=(ast:Break|Continue, scope, call)=>{
-    if(!scope.loop)
+    if(!scope.loop_())
         scope.thr(`break/continue只能在循环中使用,在行${ast.line.join('\n')}`)
 }
 const Check_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     scope.throw=true
+    scope=scope.enter()
     call(ast.commands,0)
+    scope=scope.leave()
     scope.throw=false
     call(ast.catch_.type,0)
     call(ast.catch_.command,0)
     call(ast.finally_,0)
 }
 const Check_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
-    if(!scope.throw)
+    if(!scope.throw_())
         scope.thr(`throw只能在try中使用,在行${ast.line.join('\n')}`)
     call(ast.data,0)
 }
@@ -220,7 +249,7 @@ const Check_PostfixOrPrefixExpression:slang_check_visitor=(ast:PostfixExpression
 }
 const Check_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
     call(ast.left,0)
-    call(ast.right,1)
+    call(ast.right,0)
 }
 const Check_TernaryExpression:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
     call(ast.condition,0)

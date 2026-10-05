@@ -1,79 +1,77 @@
 import {
     AAssign,
     AddAssign,
-    AdditiveExpression, ArgumentsPostfix,
+    AddExpression, ArgumentsPostfix,
     Assign,
-    BitAndAssign,
-    BitOrAssign,
-    BitShlAssign,
-    BitShrAssign,
-    BitwiseAndExpression,
-    BitwiseOrExpression,
-    BitwiseXorExpression,
-    BitXorAssign, BooleanLiteral, BooleanType,
-    Call, Command, Decrement, DoWhileStatement, ForeachStatement, ForStatement, IdentifierExpr, IfStatement,
-    Increment, IndexPostfix, InequalityExpression, LambdaExpression, LambdaType, ListCommand,
+    AndAssign,
+    OrAssign,
+    ShlAssign,
+    ShrAssign,
+    AndExpression,
+    OrExpression,
+    XorExpression,
+    XorAssign, BooleanLiteral, BooleanType,
+    ExprCommand, Command, DoWhileStatement, ForeachStatement, ForStatement, IdentifierExpr, IfStatement,
+    IndexPostfix, InequalExpression, LambdaExpression, LambdaType, ListCommand,
     ModAssign,
     MulAssign,
-    MultiplicativeExpression, NullLiteral, NumberLiteral, NumberType, PostfixExpression,
+    MulExpression, NullLiteral, NumberLiteral, NumberType, PostfixExpression,
     Return,
-    ShiftLeftExpression,
-    ShiftRightExpression,
+    ShlExpression,
+    ShrExpression,
     SubAssign,
-    SubtractiveExpression, SwitchStatement,
+    SubExpression, SwitchStatement,
     Throw, TryStatement,
-    VarDeclaration, VoidType, WhileStatement
+    VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await
 } from '../utils'
 import {desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
-    node.data=call(node.data)
-    node.value=call(node.value)
+    node.data=call(node.data) as Expression
+    node.value=call(node.value) as Expression
     if(node.oper!=null&&node.oper!='')
-        return call(new Call(desugar_oper(node.oper,node.data,node.value),false))
+        return call(new ExprCommand(desugar_oper(node.oper,node.data,node.value)))
     if(node instanceof AAssign)return node
-    if(node instanceof AddAssign)return call(new AAssign(node.data,new AdditiveExpression(node.data,node.value)))
-    if(node instanceof SubAssign)return call(new AAssign(node.data,new SubtractiveExpression(node.data,node.value)))
-    if(node instanceof MulAssign)return call(new AAssign(node.data,new MultiplicativeExpression(node.data,node.value)))
+    if(node instanceof AddAssign)return call(new AAssign(node.data,new AddExpression(node.data,node.value)))
+    if(node instanceof SubAssign)return call(new AAssign(node.data,new SubExpression(node.data,node.value)))
+    if(node instanceof MulAssign)return call(new AAssign(node.data,new MulExpression(node.data,node.value)))
     if(node instanceof ModAssign)return call(new AAssign(node.data,new ModAssign(node.data,node.value)))
-    if(node instanceof BitShlAssign)return call(new AAssign(node.data,new ShiftLeftExpression(node.data,node.value)))
-    if(node instanceof BitShrAssign)return call(new AAssign(node.data,new ShiftRightExpression(node.data,node.value)))
-    if(node instanceof BitAndAssign)return call(new AAssign(node.data,new BitwiseAndExpression(node.data,node.value)))
-    if(node instanceof BitOrAssign)return call(new AAssign(node.data,new BitwiseOrExpression(node.data,node.value)))
-    if(node instanceof BitXorAssign)return call(new AAssign(node.data,new BitwiseXorExpression(node.data,node.value)))
+    if(node instanceof ShlAssign)return call(new AAssign(node.data,new ShlExpression(node.data,node.value)))
+    if(node instanceof ShrAssign)return call(new AAssign(node.data,new ShrExpression(node.data,node.value)))
+    if(node instanceof AndAssign)return call(new AAssign(node.data,new AndExpression(node.data,node.value)))
+    if(node instanceof OrAssign)return call(new AAssign(node.data,new OrExpression(node.data,node.value)))
+    if(node instanceof XorAssign)return call(new AAssign(node.data,new XorExpression(node.data,node.value)))
 }
-const D_VarDeclaration:slang_desugar_visitor=(node:VarDeclaration,call)=>{
-    node.value=call(node.value)
+const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
+    node.value=call(node.value) as Expression
     return node
 }
-const D_CallOrReturn:slang_desugar_visitor=(node:Call|Return,call)=>{
-    node.data=call(node.data)
+const D_ExprCommandOrReturn:slang_desugar_visitor=(node:ExprCommand|Return,call)=>{
+    node.data=call(node.data) as Expression
+    return node
+}
+const D_Await:slang_desugar_visitor=(node:Await,call)=>{
+    node.command=call(node.command)
     return node
 }
 const D_Throw:slang_desugar_visitor=(node:Throw,call)=>{
-    node.data=call(node.data)
+    node.data=call(node.data) as Expression
     return call(
         new ListCommand([
-            new Call(new PostfixExpression(new IdentifierExpr('throw'),[new ArgumentsPostfix(null,[node.data])]),false),
-            new Assign(new IdentifierExpr('throw'),new BooleanLiteral('true'))
+            new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('throw'),[],[node.data])),
+            new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('true'))
         ])
     )
 }
-const D_IncrementOrDecrement:slang_desugar_visitor=(node:Increment|Decrement,call)=>{
-    node.data=call(node.data)
-    if(node.oper!=null&&node.oper!='')
-        return new Call(desugar_oper(node.oper,node.data),false)
-    return node
-}
 const D_IfStatement:slang_desugar_visitor=(node:IfStatement,call)=>{
-    node.condition=no_bool_cond(call(node.condition))
+    node.condition=no_bool_cond(call(node.condition) as Expression)
     node.commands=call(node.commands)
     node.else_=call(node.else_)
     return node
 }
 const D_SwitchStatement:slang_desugar_visitor=(node:SwitchStatement,call)=>{
-    node.condition=call(node.condition)
+    node.condition=call(node.condition) as Expression
     for(let i of node.case_list){
-        i.condition=call(i.condition)
+        i.condition=call(i.condition) as Expression
         i.commands=call(i.commands)
     }
     node.default_=call(node.default_)
@@ -85,13 +83,13 @@ const D_DoWhileStatement:slang_desugar_visitor=(node:DoWhileStatement,call)=>{
         new WhileStatement(node.condition,node.commands)]))
 }
 const D_WhileStatement:slang_desugar_visitor=(node:WhileStatement,call)=>{
-    node.condition=no_bool_cond(call(node.condition))
+    node.condition=no_bool_cond(call(node.condition) as Expression)
     node.commands=call(node.commands)
     return node
 }
 const D_ForStatement:slang_desugar_visitor=(node:ForStatement,call)=>{
-    node.init=node.init.map(i=>call(i)) as VarDeclaration[]
-    node.condition=call(node.condition)
+    node.init=node.init.map(i=>call(i)) as VarDecl[]
+    node.condition=call(node.condition) as Expression
     node.step=node.step.map(i=>call(i))
     node.commands=call(node.commands)
     return call(new ListCommand([
@@ -100,19 +98,19 @@ const D_ForStatement:slang_desugar_visitor=(node:ForStatement,call)=>{
     ]))
 }
 const D_ForeachStatement:slang_desugar_visitor=(node:ForeachStatement,call)=>{
-    for(let i of node.unwrap)
-        node.data=desugar_oper(i,node.data)
+    node.data=call(node.data) as Expression
+    node.commands=call(node.commands)
     return call(
         new ForStatement(
             [
-                new VarDeclaration('for',new NumberType(),new NumberLiteral('0')),
-                new VarDeclaration(node.iden,null,new NullLiteral(''))
+                new VarDecl('for',new NumberType(),new NumberLiteral('0')),
+                new VarDecl(node.iden,null,new NullLiteral(''))
             ],
-            new InequalityExpression(new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('for'))]),
+            new InequalExpression(new IndexPostfix(node.data,new IdentifierExpr('for')),
                 new NullLiteral('')),
-            [new Increment(new IdentifierExpr('for'))],
+            [new ExprCommand(new IncrementPostfix(new IdentifierExpr('for')))],
             new ListCommand([
-                new AAssign(new IdentifierExpr(node.iden),new PostfixExpression(node.data,[new IndexPostfix(new IdentifierExpr('for'))])),
+                new AAssign(new IdentifierExpr(node.iden),new IndexPostfix(node.data,new IdentifierExpr('for'))),
                 node.commands
             ])
         )
@@ -136,7 +134,7 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
                 command.commands[_if+1]=new IfStatement(
                     new IdentifierExpr('throw'),
                     _do(new ListCommand([
-                        new Assign(new IdentifierExpr('throw'),new BooleanLiteral('false')),
+                        new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('false')),
                         ...command.commands.slice(_if+1)
                     ])),
                     new ListCommand([])
@@ -146,11 +144,11 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
         return command
     }
     return call(new ListCommand([
-        new VarDeclaration('throw',new BooleanType(),new BooleanLiteral('false')),
-        new VarDeclaration('catch',new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])
+        new VarDecl('throw',new BooleanType(),new BooleanLiteral('false')),
+        new VarDecl('catch',new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])
                 ,new VoidType(),false),
             new LambdaExpression(null,new Map([[node.catch_.iden,node.catch_.type]]),new VoidType(),node.catch_.command)),
-        new VarDeclaration('finally',new LambdaType(null,new Map(),new VoidType(),false),
+        new VarDecl('finally',new LambdaType(null,new Map(),new VoidType(),false),
             new LambdaExpression(null,new Map(),new VoidType(),node.finally_)),
         _do(node.commands)
     ]))
@@ -161,12 +159,10 @@ const D_ListCommand:slang_desugar_visitor=(node:ListCommand,call)=>{
 }
 export default new Map<any,slang_desugar_visitor>([
     [Assign,D_Assign],
-    [VarDeclaration,D_VarDeclaration],
-    [Call,D_CallOrReturn],
-    [Return,D_CallOrReturn],
+    [VarDecl,D_VarDecl],
+    [ExprCommand,D_ExprCommandOrReturn],
+    [Return,D_ExprCommandOrReturn],
     [Throw,D_Throw],
-    [Increment,D_IncrementOrDecrement],
-    [Decrement,D_IncrementOrDecrement],
     [IfStatement,D_IfStatement],
     [SwitchStatement,D_SwitchStatement],
     [DoWhileStatement,D_DoWhileStatement],

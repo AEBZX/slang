@@ -1,28 +1,80 @@
 //round:类型检查
 import {
-    AddressPrefix, File, Function,
-    ArgumentsPostfix, ArrayExpression, Assign, BinaryExpression, BitNotPrefix,
-    BlockType, BooleanLiteral, BooleanType, Class,
-    ClassType, DecrementPostfix, DecrementPrefix, DoWhileStatement,
-    Enum, EnumType, FixType, ForeachStatement,
-    ForStatement, IdentifierExpr, IfStatement, IncrementPostfix, IncrementPrefix, IndexPostfix,
-    Interface, LambdaExpression,
-    LambdaType, ListCommand, MapExpression, MemberPostfix, MinusPrefix,
-    Module, NewPrefix, NotPrefix,
-    NullLiteral, NumberLiteral, NumberType, PostfixExpression,
-    PrefixExpression, ReferencePrefix, Return, StringLiteral, StringType, SwitchStatement, TernaryExpression, Throw,
-    TryStatement, Type, TypePrefix, Variable,
-    VoidType, WhileStatement, VarDecl, ExprCommand, MapType, ArrayType, Block, PointType
+    AddressPrefix,
+    ArgumentsPostfix,
+    ArrayExpression,
+    ArrayType,
+    Assign,
+    Await,
+    BinaryExpression,
+    BitNotPrefix,
+    Block,
+    BlockType, BooleanLiteral,
+    BooleanType,
+    Class,
+    ClassType,
+    DecrementPostfix,
+    DecrementPrefix,
+    DoWhileStatement,
+    Enum,
+    EnumType,
+    ExprCommand,
+    File,
+    FixType,
+    ForeachStatement,
+    ForStatement,
+    Function,
+    IdentifierExpr,
+    IfStatement,
+    IncrementPostfix,
+    IncrementPrefix,
+    IndexPostfix,
+    Interface,
+    LambdaExpression,
+    LambdaType,
+    ListCommand, Literal,
+    MapExpression,
+    MapType,
+    MemberPostfix,
+    Module,
+    NewPrefix,
+    NotPrefix,
+    NullLiteral, NumberLiteral,
+    NumberType,
+    PointType,
+    PostfixExpression,
+    PrefixExpression,
+    ReferencePrefix,
+    Return, StringLiteral,
+    StringType,
+    SwitchStatement,
+    TernaryExpression,
+    Throw,
+    TryStatement,
+    Type,
+    TypePrefix,
+    VarDecl,
+    Variable, VM,
+    VoidType,
+    WhileStatement
 } from '../utils'
 import {
     cast,
-    cast_best,
-    cast_get, findOper, generic_is, generic_name, localToName, nameToLocal,
-    oper_best, operation,
-    Operation_Assign, Operation_Binary, Operation_Postfix, Operation_Prefix, overload_resolve, param_is, real_type,
+    cast_get,
+    generic_is,
+    generic_name,
+    localToName,
+    nameToLocal,
+    operation,
+    Operation_Binary,
+    param_is,
+    pick_best,
+    real_type,
     set_name,
     slang_check_visitor,
-    to_point, type_, type_merge, verify_generics
+    to_point,
+    type_,
+    type_merge
 } from './tool'
 //round3:类型标注和检查
 const Label_File:slang_check_visitor=(ast:File,scope,call)=>{
@@ -39,6 +91,8 @@ const Label_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.path=name
     scope.set('up',new BlockType(name.split('.'),true))
     for(const i of ast.children)
+        scope.set(i.name,i)
+    for(const i of ast.children)
         call(i,3)
     scope=scope.leave()
 }
@@ -46,6 +100,8 @@ const Label_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
     const name=set_name(ast,scope)
     scope=scope.enter()
     scope.path=name
+    for(const i of ast.children.filter(i=>!i.modifiers.unstatic))
+        scope.set(i.name,i)
     for(const i of ast.children.filter(i=>!i.modifiers.unstatic))
         call(i,3)
     for(const [k,v] of ast.generic){
@@ -97,6 +153,9 @@ const Label_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     if(cast(ast,scope,ast.t))return
     scope.thr(`赋值类型错误在行${ast.line.join('\n')}`)
 }
+const Label_Await:slang_check_visitor=(ast:Await,scope,call)=>{
+    call(ast.command,3)
+}
 const Label_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
     scope=scope.enter()
     for(const i of ast.commands)
@@ -110,7 +169,7 @@ const Label_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     if(ast.data instanceof ReferencePrefix||ast.data instanceof IdentifierExpr||ast.data instanceof IndexPostfix||
         ast.data instanceof MemberPostfix)
         is_left=true
-    if(operation('=',ast.data,scope,to_point(ast.data.type),to_point(ast.value.type)))return
+    if(operation(ast.op,ast.data,scope,to_point(ast.data.type),to_point(ast.value.type)))return
     if(!is_left)scope.thr(`赋值的左侧不是可赋值的左值,在行${ast.line.join('\n')}`)
     if(type_(ast.value.type,ast.data.type,scope))return
     if(cast(ast,scope,ast.data.type))return
@@ -207,6 +266,10 @@ const Label_TryStatement:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     call(ast.finally_,3)
     scope=scope.leave()
 }
+const Label_VM:slang_check_visitor=(ast:VM,scope,call)=>{
+    for(const i of ast.param)
+        call(i,3)
+}
 const Label_TernaryExpression:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
     call(ast.condition,3)
     call(ast.trueExpr,3)
@@ -226,8 +289,15 @@ const Label_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,cal
     const number_oper=['+','-','*','/','%','&','|','^','>>','<<']
     const is_number=number_oper.includes(oper)
     ast.type=is_number?new NumberType():new BooleanType()
-    if(!(ast.left.type.constructor==ast.type.constructor))cast(ast.left,scope,ast.type)
-    if(!(ast.right.type.constructor==ast.type.constructor))cast(ast.right,scope,ast.type)
+    if(!(ast.left.type.constructor==ast.type.constructor)){
+        cast(ast.left,scope,ast.type)
+        return
+    }
+    if(!(ast.right.type.constructor==ast.type.constructor)){
+        cast(ast.right,scope,ast.type)
+        return
+    }
+    scope.thr(`二元运算符${oper}的类型错误在行${ast.line.join('\n')}`)
 }
 const Label_IncrementOrDecrementPostfixOrPrefix:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix|IncrementPrefix|DecrementPrefix,scope,call)=>{
     call(ast.expr,3)
@@ -255,12 +325,14 @@ const Label_MemberPostfix:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
         if(block instanceof Module||block instanceof Class||block instanceof Interface&&
             block.children.find(i=>i.name==ast.name&&i.modifiers.unstatic&&(type._this||!i.modifiers._private)))
             ast.type=new BlockType([...type.local,ast.name])
+        return
     }
     if(type instanceof ClassType){
         const block=scope.get(localToName(type.local)) as Class|Interface
         const field=block.children.find(i=>i.name==ast.name&&i.modifiers.unstatic&&
             (type._this||!i.modifiers._private))
         if(field!=null)ast.type=field.type
+        return
     }
     scope.thr(`${ast.name}不存在,在行${ast.line.join('\n')}`)
 }
@@ -268,7 +340,7 @@ const Label_IndexPostfix:slang_check_visitor=(ast:IndexPostfix,scope,call)=>{
     call(ast.expr,3)
     call(ast.index,3)
     const expr_type=real_type(ast.expr.type,scope)
-    const index_type=real_type(ast.index,scope)
+    const index_type=real_type(ast.index.type,scope)
     if(operation('[]',ast,scope,new VoidType(),to_point(expr_type),to_point(index_type)))return
     const expr_cast_map=cast(ast.expr,scope,new MapType(new VoidType()))
     const expr_cast_string=cast(ast.expr,scope,new StringType())
@@ -306,17 +378,17 @@ const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,cal
     for(const i of ast.args)
         call(i,3)
     if(operation('()',ast,scope,new VoidType(),to_point(ast.expr.type),...ast.args.map(i=>i.type)))return
+    if(ast.expr.type instanceof BlockType){
+        ast.expr=new IdentifierExpr(ast.expr.type.local[0])
+        for(let i=1;i<ast.expr.type['local'].length;i++)
+            ast.expr=new MemberPostfix(ast.expr,ast.expr.type['local'][i])
+        ast.expr=new MemberPostfix(ast.expr,'constructor')
+        ast.cons=true
+        ast.local=ast.expr.type['local']
+        call(ast,3)
+        return
+    }
     if(ast.expr.type instanceof LambdaType){
-        if(ast.expr.type instanceof ClassType){
-            ast.expr=new IdentifierExpr(ast.expr.type.local[0])
-            for(let i=1;i<ast.expr.type['local'].length;i++)
-                ast.expr=new MemberPostfix(ast.expr,ast.expr.type['local'][i])
-            ast.expr=new MemberPostfix(ast.expr,'constructor')
-            ast.cons=true
-            ast.local=ast.expr.type['local']
-            call(ast,3)
-            return
-        }
         if(!ast.expr.type.overload){
             if(!generic_is(ast.generic,ast.expr.type.generic,scope))
                 scope.thr(`generic参数类型错误,在行${ast.line.join('\n')}`)
@@ -329,22 +401,25 @@ const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,cal
             .filter(i=>param_is(ast.args.map(i=>i.type),i.params,scope))
             .filter(i=>generic_is(ast.generic,i.generic,scope))
         if(func.length==0)scope.thr(`名称为${ast.expr.type.name}的函数没有符合generic和param的重载在行${ast.line.join('\n')}`)
-        if(func.length>1)scope.thr(`名称为${ast.expr.type.name}的函数有多个符合generic和param的重载在行${ast.line.join('\n')}`)
+        if(func.length>1)
+            func[0]=func[pick_best(scope,func.map(i=>Array.from(i.params.values())),ast.args.map(i=>i.type))]
         ast.type=func[0].return_type
         ast.call_target=ast.expr.type.name+'@'+func[0].index
+        return
     }
     const cast_=cast_get(ast.expr.type,scope)
         .filter(i=>i.type instanceof LambdaType&&
         param_is(ast.args.map(i=>i.type),i.type.params,scope)&&
         generic_is(ast.generic,i.type.generic,scope))
     if(cast_.length==0)scope.thr(`没有符合generic和param的Lambda类型转换`)
-    if(cast_.length>1)scope.thr(`有多个符合generic和param的Lambda类型转换`)
+    if(cast_.length>1)
+        cast_[0]=cast_[pick_best(scope,cast_.map(i=>Array.from((<LambdaType>i.type).params.values())),ast.args.map(i=>i.type))]
     ast.expr.cast=cast_[0].id
     ast.type=(<LambdaType>cast_[0].type).returnType
 }
 const Label_ReferencePrefix:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
     call(ast.expr,3)
-    if(operation('&',ast,scope,new VoidType(),to_point(ast.expr.type)))return
+    if(operation('*',ast,scope,new VoidType(),to_point(ast.expr.type)))return
     if(real_type(ast.expr.type,scope) instanceof PointType)return
     if(cast(ast.expr,scope,new PointType(new VoidType())))return
     ast.type=(<PointType>real_type(ast.expr.type,scope)).t
@@ -352,7 +427,7 @@ const Label_ReferencePrefix:slang_check_visitor=(ast:ReferencePrefix,scope,call)
 }
 const Label_AddressPrefix:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
     call(ast.expr,3)
-    if(operation('*',ast,scope,new VoidType(),to_point(ast.expr.type)))return
+    if(operation('&',ast,scope,new VoidType(),to_point(ast.expr.type)))return
     ast.type=new PointType(ast.expr.type)
 }
 const Label_BitNotPrefix:slang_check_visitor=(ast:BitNotPrefix,scope,call)=>{
@@ -419,7 +494,14 @@ const Label_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,cal
     for(const v of ast.params.values())call(v,3)
     call(ast.body,3)
     call(ast.ret,3)
+    ast.type=new LambdaType(ast.generic,ast.params,ast.ret)
     scope=scope.leave()
+}
+const Label_Literal:slang_check_visitor=(ast:Literal,scope,call)=>{
+    if(ast instanceof NumberLiteral)ast.type=new NumberType()
+    if(ast instanceof StringLiteral)ast.type=new StringType()
+    if(ast instanceof BooleanLiteral)ast.type=new BooleanType()
+    if(ast instanceof NullLiteral)ast.type=new VoidType()
 }
 const Label_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
     call(ast.t,3)
@@ -481,4 +563,7 @@ export const Round3=new Map<any,slang_check_visitor>([
     [ForeachStatement,Label_ForeachStatement],
     [TernaryExpression,Label_TernaryExpression],
     [BinaryExpression,Label_BinaryExpression],
+    [Await,Label_Await],
+    [Literal,Label_Literal],
+    [VM,Label_VM]
 ])

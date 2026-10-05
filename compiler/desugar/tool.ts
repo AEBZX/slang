@@ -2,57 +2,42 @@ import {
     AddressPrefix,
     ArgumentsPostfix,
     ASTTree, BooleanType, ClassType, Command,
-    Expression, IdentifierExpr, InequalityExpression, ListCommand, LiteralType, MemberPostfix, NullLiteral,
+    Expression, IdentifierExpr, InequalExpression, ListCommand, LiteralType, MemberPostfix, NullLiteral,
     NumberType,
-    Postfix,
     PostfixExpression,
-    Prefix,
     PrefixExpression,
     StringType, Throw, Type
 } from '../utils'
 
 export type slang_desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
-export function addFix(node:Expression,...fix:Prefix[]|Postfix[]){
-    if(node instanceof PostfixExpression&&fix[0] instanceof Postfix){
-        node.postfix.push(fix)
-        return node
-    }
-    if(node instanceof PrefixExpression&&fix[0] instanceof Prefix){
-        node.prefix.push(fix)
-        return node
-    }
-    if(fix[0] instanceof Prefix)return new PrefixExpression(node,fix)
-    if(fix[0] instanceof Postfix)return new PostfixExpression(node,fix)
-}
 export const LiteralToConst=new Map<any,string>([
     [NumberType,'number'],
     [StringType,'string'],
     [BooleanType,'boolean']
 ])
-export function desugar_cast(cast:string,data:Expression,append:Postfix){
-    let _postfix=[]
-    let member=cast.split('.').map(i=>new MemberPostfix(i))
-    const call_iden=member[0].name
-    member.pop()
-    _postfix.push(member)
-    _postfix.push(new ArgumentsPostfix(null,[data]))
-    _postfix.push(append)
-    return new PostfixExpression(new IdentifierExpr(call_iden),_postfix)
+export function desugar_cast(cast:string,data:Expression){
+    let expr=null
+    for(const i of cast.split('.'))
+        expr=expr==null?new IdentifierExpr(i):new MemberPostfix(expr,i)
+    return new ArgumentsPostfix(expr,[],[data])
 }
 export function desugar_oper(oper:string,...param:Expression[]){
-    let _postfix=[]
-    let member=oper.split('.').map(i=>new MemberPostfix(i))
-    const call_iden=member[0].name
-    member.pop()
-    _postfix.push(member)
-    _postfix.push(new ArgumentsPostfix(null,param.map(address)))
-    return new PostfixExpression(new IdentifierExpr(call_iden),_postfix)
+    let expr=null
+    for(const i of oper.split('.'))
+        expr=expr==null?new IdentifierExpr(i):new MemberPostfix(expr,i)
+    return new ArgumentsPostfix(expr,[],param.map(address))
+}
+export function expr_desugar(node:Expression,...param:Expression[]){
+    if(node.oper!=null&&node.oper!='')
+        return desugar_oper(node.oper,...param)
+    if(node.cast!=null&&node.cast!='')
+        return desugar_cast(node.cast,node)
 }
 export function address(expr:Expression){
-    return addFix(expr,new AddressPrefix())
+    return new AddressPrefix(expr)
 }
 export function no_bool_cond(expr:Expression){
     if(!(expr.type instanceof BooleanType))
-        return new InequalityExpression(expr,new NullLiteral(''))
+        return new InequalExpression(expr,new NullLiteral(''))
     return expr
 }

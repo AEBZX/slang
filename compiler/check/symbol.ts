@@ -1,32 +1,52 @@
 //round:符号表构建和相关检查
 import {
-    Function,
-    Link,
-    File,
-    Module,
+    ArgumentsPostfix,
+    ArrayExpression,
+    Assign,
+    ASTTree,
+    Await,
+    BinaryExpression,
     BlockType,
-    Class,
-    Interface,
-    Enum,
-    Value,
-    ClassType,
-    Operation,
+    BooleanType,
     Cast,
-    Variable, VarDecl, VoidType, ListCommand, Assign, Throw, Return, IfStatement,
-    WhileStatement, DoWhileStatement, SwitchStatement, TryStatement, ForStatement, ForeachStatement, GenericType,
-    LambdaType, EnumType, LambdaExpression, PostfixExpression, ArgumentsPostfix, Expression, MapExpression,
-    ArrayExpression, IndexPostfix, PrefixExpression, TypePrefix, BinaryExpression, TernaryExpression, ASTTree,
-    operations, NullLiteral, ExprCommand, NumberType, StringType, BooleanType
+    Class,
+    ClassType,
+    DoWhileStatement,
+    Enum,
+    EnumType,
+    ExprCommand,
+    Expression,
+    File,
+    ForeachStatement,
+    ForStatement,
+    Function,
+    GenericType,
+    IfStatement,
+    IndexPostfix,
+    Interface,
+    LambdaExpression,
+    LambdaType,
+    ListCommand,
+    MapExpression,
+    Module,
+    NullLiteral,
+    NumberType,
+    Operation,
+    PostfixExpression,
+    PrefixExpression,
+    Return,
+    StringType,
+    SwitchStatement,
+    TernaryExpression,
+    Throw,
+    TryStatement,
+    TypePrefix,
+    Value,
+    VarDecl,
+    Variable,
+    WhileStatement
 } from '../utils'
-import {
-    build_chain,
-    check_dup,
-    check_implement,
-    name,
-    resolve_named,
-    slang_check_visitor,
-    verify_generics
-} from './tool'
+import {build_chain, name, resolve_named, slang_check_visitor, verify_generics} from './tool'
 //round1:Build不做任何检查,搭建全局static符号表
 const Build_File:slang_check_visitor=(ast:File, scope, call)=>{
     for(const i of ast.children)
@@ -66,8 +86,8 @@ const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.enter()
     scope.operation_cast_oper=ast.value
     scope.path=ast.value instanceof NumberType?'number':
-        ast.type instanceof StringType?'string':
-            ast.type instanceof BooleanType?'boolean':null
+        ast.value instanceof StringType?'string':
+            ast.value instanceof BooleanType?'boolean':null
     for(let i of ast.children)
         call(i,1)
     scope=scope.leave()
@@ -134,11 +154,19 @@ const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
         call(i,2)
     scope=scope.leave()
 }
+const Verify_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
+    const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    if(name(full,scope,ast))
+        scope.thr(`枚举${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    scope.set(ast.name,ast)
+    scope.set(full,ast)
+    if(ast.children.length!=new Set(ast.children).size)
+        scope.thr(`枚举${ast.name}有重复的成员,在行${ast.line.join('\n')}`)
+}
 const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(name(full,scope,ast))
         scope.thr(`类/接口${ast.name}不能重名,在行${ast.line.join('\n')}`)
-    //implement检查,并填充实现链到root.chain
     if(ast.implement instanceof ClassType){
         build_chain(scope,full,ast)
         call(ast.implement,2)
@@ -166,7 +194,10 @@ const Verify_Function:slang_check_visitor=(ast:Function,scope,call)=>{
             scope.thr(`函数${ast.name}不能重名,在行${ast.line.join('\n')}`)
     }
     //重载注册
-    scope.global.set_overload(full,ast)
+    if(!ast.modifiers.unstatic){
+        scope.global.set_overload(full,ast)
+        scope.global.set(ast.name,ast)
+    }
     scope.set_overload(ast.name,ast)
     scope.set(ast.name,ast)
     scope=scope.enter()
@@ -187,6 +218,10 @@ const Verify_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(name(full,scope,ast))
         scope.thr(`变量${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    if(!ast.modifiers.unstatic){
+        scope.global.set(full,ast)
+        scope.set(ast.name,ast)
+    }
     scope.set(ast.name,ast)
     call(ast.t,2)
     call(ast.value,2)
@@ -199,6 +234,9 @@ const Verify_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
 }
 const Verify_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     call(ast.t,2)
+    call(ast.command,2)
+}
+const Verify_Await:slang_check_visitor=(ast:Await,scope,call)=>{
     call(ast.command,2)
 }
 const Verify_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
@@ -300,13 +338,13 @@ const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,ca
     scope=scope.leave()
 }
 const Verify_MapExpressionOrArrayExpression:slang_check_visitor=(ast:MapExpression|ArrayExpression,scope,call)=>{
-    ast.elements.forEach((i:Expression)=>call(i,0))
+    ast.elements.forEach((i:Expression)=>call(i,1))
 }
 const Verify_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,call)=> {
-    call(ast.expr, 2, scope)
+    call(ast.expr, 2)
     if (ast instanceof ArgumentsPostfix)
         for (const i of ast.args)
-            call(i, 2, scope)
+            call(i, 2)
     if(ast instanceof IndexPostfix)
         call(ast.index,2)
 }
@@ -329,7 +367,7 @@ export const Round2=new Map<any,slang_check_visitor>([
     [Module,Verify_Module],
     [Class,Verify_ClassOrInterface],
     [Interface,Verify_ClassOrInterface],
-    [Enum,Verify_Value],
+    [Enum,Verify_Enum],
     [Value,Verify_Value],
     [Operation,Verify_Operation],
     [Cast,Verify_Cast],
@@ -360,4 +398,5 @@ export const Round2=new Map<any,slang_check_visitor>([
     [PrefixExpression,Verify_PrefixExpression],
     [BinaryExpression,Verify_BinaryExpression],
     [TernaryExpression,Verify_TernaryExpression],
+    [Await,Verify_Await]
 ])

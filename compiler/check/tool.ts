@@ -1,44 +1,55 @@
 import {
-    AAssign, AddAssign, AddExpression,
-    AddressPrefix, AndAssign, AndExpression,
-    ArgumentsPostfix, Assign,
+    AddExpression,
+    AndExpression,
+    Assign,
     ASTTree,
     BasicType,
-    BinaryExpression, BitNotPrefix,
     Block,
-    BlockType, BooleanType,
+    BlockType,
+    BooleanType,
     Cast,
     Class,
     ClassType,
-    DecrementPostfix,
-    DecrementPrefix, DivAssign, DivExpression,
+    DivExpression,
     Enum,
-    EnumType, EqualExpression, Expression,
+    EnumType,
+    EqualExpression,
+    Expression,
     FixType,
     Function,
     GenericType,
     GreaterEqualExpression,
     GreaterExpression,
-    IncrementPostfix,
-    IncrementPrefix,
-    IndexPostfix, InequalExpression,
-    Interface, LambdaExpression, LambdaType, LessEqualExpression,
+    InequalExpression,
+    Interface,
+    LambdaExpression,
+    LambdaType,
+    LessEqualExpression,
     LessExpression,
-    LiteralType, LogicAndExpression, LogicOrExpression,
-    MinusPrefix, ModAssign,
+    LiteralType,
+    LogicAndExpression,
+    LogicOrExpression,
     ModExpression,
     Modifier,
-    Module, MulAssign, MulExpression,
-    NotPrefix,
+    Module,
+    MulExpression,
     NumberType,
-    Operation, OrAssign, OrExpression, PointType,
-    ReferencePrefix, ShlAssign, ShlExpression, ShrAssign, ShrExpression, StringType, SubAssign, SubExpression,
+    Operation,
+    OrExpression,
+    PointType,
+    ShlExpression,
+    ShrExpression,
+    StringType,
+    SubExpression,
     Type,
-    Value, VarDecl,
+    Value,
+    VarDecl,
     Variable,
-    VoidType, XorAssign, XorExpression
+    VoidType,
+    XorExpression
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
+
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
@@ -56,7 +67,12 @@ export class Scope extends PeepholeScope{
     path:string
     operation_number=0
     cast_number=0
-    qiw:Type
+    loop_(){
+        return this.loop||this.parent.loop||this.global.loop
+    }
+    throw_(){
+        return this.throw||this.parent.throw||this.global.throw
+    }
     constructor(parent:Scope,global:Scope){
         super(parent,global)
         this.data=new Map()
@@ -161,13 +177,22 @@ export class Scope extends PeepholeScope{
         this.global.error.push(msg)
     }
 }
-export function name(name:string,scope:Scope,ast:ASTTree=null,func=false){
-    const exist=scope.get(name)
+function m_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
+    const exist=scope.global.get(name)
     //未定义或就是自身:不算冲突
     if(exist==null||exist==ast)return false
     //函数重载允许同名
     return !(func && exist instanceof Function)
-
+}
+function c_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
+    const exist=scope.data.get(name)
+    //未定义或就是自身:不算冲突
+    if(exist==null||exist==ast)return false
+    //函数重载允许同名
+    return !(func && exist instanceof Function)
+}
+export function name(name:string,scope:Scope,ast:ASTTree=null,func=false){
+    return m_name(name,scope,ast,func) && c_name(name,scope,ast,func)
 }
 export const Default_Modifier=new Map<any,Modifier>([
     [Module,new Modifier(false,false,false)],
@@ -358,34 +383,9 @@ export function pick_best(scope:Scope,param_sets:Type[][],arg_types:Type[]):numb
     if(best.length==1)return best[0]
     return -1   //并列歧义
 }
-//重载决议结果:best=唯一最优;ambiguous=并列最符合(需报错);none=无签名匹配
-export function overload_resolve(scope:Scope,name:string,arg_types:Type[]):
-    {kind:'best',fn:Function}|{kind:'ambiguous'}|{kind:'none'}{
-    let fns=scope.get_overload(name)
-    let sets:Type[][]=fns.map((f:Function)=>Array.from(f.params.values()).map(i=>real_type(i,scope)))
-    let idx=pick_best(scope,sets,arg_types.map(i=>real_type(i,scope)))
-    if(idx==-1)return {kind:'ambiguous'}
-    if(idx==null)return {kind:'none'}
-    return {kind:'best',fn:fns[idx]}
-}
 export function to_point(a:Type){
     return new PointType(a)
 }
-export const Operation_Prefix=new Map([
-    [IncrementPrefix,'++'],
-    [DecrementPrefix,'--'],
-    [NotPrefix,'!'],
-    [MinusPrefix,'-'],
-    [BitNotPrefix,'~'],
-    [ReferencePrefix,'*'],
-    [AddressPrefix,'&']
-])
-export const Operation_Postfix=new Map<any,string>([
-    [IncrementPostfix,'++'],
-    [DecrementPostfix,'--'],
-    [ArgumentsPostfix,'()'],
-    [IndexPostfix,'[]']
-])
 export const Operation_Binary=new Map<any,string>([
     [AddExpression,'+'],
     [MulExpression,'*'],
@@ -406,33 +406,20 @@ export const Operation_Binary=new Map<any,string>([
     [LogicAndExpression,'&&'],
     [LogicOrExpression,'||'],
 ])
-export const Operation_Assign=new Map<any,string>([
-    [AAssign,''],
-    [AddAssign,'+'],
-    [SubAssign,'-'],
-    [MulAssign,'*'],
-    [DivAssign,'/'],
-    [ModAssign,'%'],
-    [AndAssign,'&'],
-    [OrAssign,'|'],
-    [XorAssign,'^'],
-    [ShlAssign,'<<'],
-    [ShrAssign,'>>']
-])
 export function check_implement(i:Type,scope:Scope,line:string[]){
     const ls=real_type(i,scope)
     if(!(ls instanceof ClassType)){
-        scope.thr(`generic implement的类型不是ClassType,在行${line}`)
+        scope.thr(`generic implement的类型不是ClassType,在行${line.join('\n')}`)
         return
     }
     const name=ls.local.join('.')
     const implement=resolve_named(scope,name)
     if(implement==null){
-        scope.thr(`generic implement的类型${name}不存在,在行${line}`)
+        scope.thr(`generic implement的类型${name}不存在,在行${line.join('\n')}`)
         return
     }
     if(!(implement instanceof Interface))
-        scope.thr(`generic implement的类型${name}不是Interface,在行${line}`)
+        scope.thr(`generic implement的类型${name}不是Interface,在行${line.join('\n')}`)
 }
 export function cast_best(result:Type,_cast:Type,scope:Scope):{id:string,type:Type}{
     let cast=cast_get(real_type(_cast,scope),scope)
@@ -451,8 +438,10 @@ export function cast_best(result:Type,_cast:Type,scope:Scope):{id:string,type:Ty
 export function type_(a:Type,b:Type,scope:Scope){
     if(a==null)return b==null||real_type(b,scope) instanceof VoidType
     if(b==null)return false
+    if(a==b)return true
     const ra=real_type(a,scope)
     const rb=real_type(b,scope)
+    if(ra==rb)return true
     if(ra==null||rb==null)return false
     //Void(无值/未解析)只与 Void 兼容
     if(ra instanceof VoidType||rb instanceof VoidType)
@@ -492,13 +481,6 @@ export function real_type(type:Type,scope:Scope){
     }
     return type
 }
-export function get_field(type:Class|Interface,scope:Scope){
-    let field=type.children
-    let ret=new Map<string,Type>()
-    for(let i of field)
-        ret.set(i.name,real_type(i.type,scope))
-    return ret
-}
 //按名解析符号:本地作用域优先,其次全局,最后按当前路径补全
 export function resolve_named(scope:Scope,name:string):ASTTree{
     let data=scope.get(name)
@@ -529,26 +511,11 @@ export function build_chain(scope:Scope,name:string,block:Class|Interface){
         for(const i of set)cur.add(i)
     }
 }
-export function findOper(map: Map<any,string>, node:ASTTree): string {
-    for (const [k, v] of map) if (node instanceof k) return v
-    return ''
-}
-export function findCastBy(scope:Scope, from:Type, pred: (t:Type)=>boolean){
-    const cast=cast_get(from,scope)
-    return cast.filter(i=>pred(i.type))[0]
-}
 export function localToName(local:string[]){
     return local.join('.')
 }
 export function nameToLocal(name:string){
     return name.split('.')
-}
-export function bindGenerics(scope:Scope, defGeneric: Map<string,Type>, instGeneric: Type[]) {
-    let k = 0
-    for (const key of defGeneric.keys()) {
-        if (k >= instGeneric.length) break
-        scope.set_generic(key, instGeneric[k++])
-    }
 }
 export function check_static_modifier(ast:Block, scope:Scope, kind: string) {
     ast.modifiers = fill_modifier(ast)
@@ -572,7 +539,7 @@ export function check_dup(keys: Iterable<string>, scope: Scope, label: string, l
 }
 export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {
     for (const i of ast.generic.values()) {
-        call(i, 2, scope)
+        call(i, 2)
         check_implement(i, scope, ast.line)
     }
 }
@@ -586,16 +553,13 @@ export function set_name(ast:Block,scope:Scope){
 export function operation(oper:string,ast:Expression|Assign|VarDecl|Variable,scope:Scope,qiw:Type,...param:Type[]){
     qiw=real_type(qiw,scope)
     ast.type=real_type(ast.type,scope)
-    const op=oper_best(scope,oper,...param).filter(i=>type_merge(i.command.ret,qiw,scope)==qiw)
+    const op=oper_best(scope,oper,...param).filter(i=>
+        type_merge(i.command.ret,qiw,scope).constructor==qiw.constructor)
     let op_result:Operation=null
-    if(op.length>2){
-        //返回值最符合的
-        for(const i of op)
-            for(const j of op){
-                if(i==j)continue
-                if(type_(i.command.ret,j.command.ret,scope))op_result=j
-            }
-    }else if(op.length==2)op_result=op[0]
+    if(op.length>1){
+        const param_sets:Type[][]=op.map(i=>Array.from(i.command.params.values()))
+        op_result=op[pick_best(scope,param_sets,param)]
+    }else if(op.length==1)op_result=op[0]
     if(op_result!=null){
         ast.oper=`${localToName(op_result.local)}.${op_result.oper}@${op_result.index}`
         return true

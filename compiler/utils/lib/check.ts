@@ -28,16 +28,13 @@ export default class Check extends PeepholeTool{
     }
     run(ast:PeepholeTree[]){
         let scope=this.create(ast)
-        //按轮次升序,逐根节点派发;visitor 的 call 会把当前 scope 一并下传
         let rounds=[...this.ref.keys()].sort((a,b)=>a-b)
-        let g=(node:PeepholeTree,round:number,current?:PeepholeScope)=>{
-            let sc=current??scope
+        let dispatch=(node:PeepholeTree,round:number,cur:PeepholeScope)=>{
             for(let [k,v] of (this.ref.get(round)??[]))
                 if(node instanceof k)
-                    v(node,sc,g)
+                    v(node,cur,(child,r,explicit?)=>dispatch(child,r,explicit??cur))
         }
-        for(let r of rounds)
-            ast.forEach(node=>g(node,r))
+        for(let r of rounds) ast.forEach(node=>dispatch(node,r,scope))
         return scope
     }
 }
