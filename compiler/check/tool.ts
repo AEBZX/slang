@@ -463,10 +463,9 @@ export function type_(a:Type,b:Type,scope:Scope){
         return ra instanceof VoidType&&rb instanceof VoidType
     //同型直接通过(结构相等,不要求同一实例),剩下的才看 cast 表
     if(type_same(ra,rb))return true
-    let e_a=new Expression(),e_b=new Expression()
+    let e_a=new Expression()
     e_a.type=a
-    e_b.type=b
-    return cast(e_a, scope, b) || cast(e_b, scope, a)
+    return cast(e_a, scope, b)
 }
 export function generic_name(name:string,scope:Scope){
     return scope.generic.get(name) == null
@@ -577,14 +576,19 @@ export function set_name(ast:Block,scope:Scope){
 export function operation(oper:string,ast:Expression|Assign|VarDecl|Variable,scope:Scope,qiw:Type,...param:Type[]){
     qiw=real_type(qiw,scope)
     ast.type=real_type(ast.type,scope)
+    //qiw 是 Void 表示调用方不预设结果类型,ret 过滤跳过;PointType 包装由 type_same 解包
     const op=oper_best(scope,oper,...param).filter(i=>
-        type_merge(i.command.ret,qiw,scope).constructor==qiw.constructor)
+        qiw instanceof VoidType||type_same(real_type(i.command.ret,scope),qiw))
     let op_result:Operation=null
     if(op.length>1){
         const param_sets:Type[][]=op.map(i=>Array.from(i.command.params.values()))
-        op_result=op[pick_best(scope,param_sets,param)]
+        const best=pick_best(scope,param_sets,param)
+        //歧义按无匹配处理,交给调用方的内建/报错链
+        if(best!=null&&best!=-1)op_result=op[best]
     }else if(op.length==1)op_result=op[0]
     if(op_result!=null){
+        //命中用户运算符:表达式类型就是运算符的返回值
+        ast.type=real_type(op_result.command.ret,scope)
         ast.oper=`${localToName(op_result.local)}.${op_result.oper}@${op_result.index}`
         return true
     }
@@ -596,6 +600,7 @@ export function cast(ast:Expression|Assign|VarDecl|Variable,scope:Scope,qiw:Type
     const cast=cast_best(qiw,ast.type,scope)
     if(cast!=null){
         ast.cast=cast.id
+        ast.type=cast.type
         return true
     }
     return false

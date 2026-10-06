@@ -29,9 +29,11 @@ export function desugar_oper(oper:string,...param:Expression[]){
 }
 export function expr_desugar(node:Expression,...param:Expression[]){
     if(node.oper!=null&&node.oper!='')
-        return desugar_oper(node.oper,...param)
+        return desugar_oper(node.oper,...param)||node
     if(node.cast!=null&&node.cast!='')
-        return desugar_cast(node.cast,node)
+        return desugar_cast(node.cast,node)||node
+    //普通节点:无 oper/cast 也要回落原节点,返回 undefined 会毁掉整棵树
+    return node
 }
 export function address(expr:Expression){
     return new AddressPrefix(expr)

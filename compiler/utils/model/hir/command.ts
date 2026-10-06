@@ -6,20 +6,10 @@ export class HAssign extends HCommand{
         super()
     }
 }
-export class HCall extends HCommand{
-    constructor(public data:HExpr,public args:HExpr[]) {
-        super()
-    }
-}
-export class HThread extends HCommand{
-    constructor(public data:HExpr,public args:HExpr[]) {
-        super()
-    }
-}
 export class HBreak extends HCommand{}
 export class HContinue extends HCommand{}
 export class HVM extends HCommand{
-    constructor(public data:string) {
+    constructor(public data:string,public param:HExpr[]) {
         super()
     }
 }
@@ -37,6 +27,12 @@ export class HWhileStatement extends HCommand{
     constructor(public condition:HExpr,public commands:HCommand) {
         super()
     }
+}
+export class HAwait extends HCommand{
+    constructor(public command:HCommand) {
+        super()
+    }
+
 }
 export class HListCommand extends HCommand{
     constructor(public commands:HCommand[]) {

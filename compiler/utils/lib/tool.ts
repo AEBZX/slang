@@ -19,4 +19,5 @@ export class PeepholeScope{
     }
 }
 export type init_peephole=(param:any)=>PeepholeScope
+export type process=(param:any,scope:PeepholeScope)=>PeepholeTree
 export class PeepholeTree{}

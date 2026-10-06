@@ -149,7 +149,7 @@ const Verify_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope=scope.enter()
     const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     scope.path=full
-    const module=scope.get(ast.name)
+    const module=scope.get(ast.name)??scope.get(full)
     if(module!=null&&module!==ast){
         //同名模块:符号表指向先注册的块,children 在它的那一轮已访问过,这里只对齐注册
         if(!(module instanceof Module))scope.thr(`重复定义了${ast.name},在行${ast.line.join('\n')}`)
@@ -341,6 +341,8 @@ const Verify_GenericType:slang_check_visitor=(ast:GenericType,scope,call)=>{
 }
 const Verify_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
     scope=scope.enter()
+    for(const [k,v] of ast.generic)
+        scope.set_generic(k,v)
     if(new Set(ast.params.keys()).size!=ast.params.size)
         scope.thr(`参数重复声明,在行${ast.line.join('\n')}`)
     for(const i of ast.params.values())

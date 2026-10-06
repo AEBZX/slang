@@ -64,8 +64,9 @@ const G_Function:slang_ast_generate=(data,tree)=>{
     const ParamIdentifier=to_ast_data(data,1+off)
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
+            //ParamData 的槽位:0=名称,1=':' 字面量占槽,2=类型
             params.set(to_string(v,0),
-                       tree_ast(data,2,tree))
+                       tree_ast(v,2,tree))
     const _implement=typeof data.children.get(2+off)=='object'
     return new Function(null,null,generic.data,params,tree_ast(data,off,tree),
                        _implement?tree_ast(data,2+off,tree):null)

@@ -6,8 +6,13 @@ export class HScope extends PeepholeScope{
     symbol:Map<string,number>
     index:number
     link:Map<number,number>
-    link_target:Map<string,string>  // link 别名目标路径(如 io→std.io)
+    link_target:Map<string,string>//link别名目标路径
     entry:boolean
+    path:string
+    path_(name:string){
+        this.path=this.path==''?name:this.path+'.'+name
+        return this.path
+    }
     constructor(public parent:HScope,public global:HScope){
         super(parent,global)
         this.index=1
@@ -15,6 +20,7 @@ export class HScope extends PeepholeScope{
         this.link=new Map()
         this.link_target=new Map()
         this.entry=false
+        this.path=this.parent.path||this.global.path||''
     }
     lnk(id:number,data:number){
         this.link.set(id,data)
@@ -37,7 +43,9 @@ export class HScope extends PeepholeScope{
             return this.symbol.get(name)
         if(this.parent!=null)
             return this.parent.get(name)
-        return null
+        const id=this.id()
+        this.set(name,id)
+        return id
     }
     set(name:string,value:number){
         this.symbol.set(name,value)

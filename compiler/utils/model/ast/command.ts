@@ -121,6 +121,7 @@ export class ForStatement extends BlockCommand{
     }
 }
 export class ForeachStatement extends BlockCommand{
+    public iden_type:Type
     constructor(public iden:string,public data:Expression,public commands:Command) {
         super()
     }

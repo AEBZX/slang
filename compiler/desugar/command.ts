@@ -22,7 +22,8 @@ import {
     SubAssign,
     SubExpression, SwitchStatement,
     Throw, TryStatement,
-    VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await, VM
+    VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await, VM, ModExpression, DivExpression, DivAssign,
+    ArrayType, MapType
 } from '../utils'
 import {desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
@@ -34,7 +35,8 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     if(node instanceof AddAssign)return call(new AAssign(node.data,new AddExpression(node.data,node.value)))
     if(node instanceof SubAssign)return call(new AAssign(node.data,new SubExpression(node.data,node.value)))
     if(node instanceof MulAssign)return call(new AAssign(node.data,new MulExpression(node.data,node.value)))
-    if(node instanceof ModAssign)return call(new AAssign(node.data,new ModAssign(node.data,node.value)))
+    if(node instanceof DivAssign)return call(new AAssign(node.data,new DivExpression(node.data,node.value)))
+    if(node instanceof ModAssign)return call(new AAssign(node.data,new ModExpression(node.data,node.value)))
     if(node instanceof ShlAssign)return call(new AAssign(node.data,new ShlExpression(node.data,node.value)))
     if(node instanceof ShrAssign)return call(new AAssign(node.data,new ShrExpression(node.data,node.value)))
     if(node instanceof AndAssign)return call(new AAssign(node.data,new AndExpression(node.data,node.value)))
@@ -43,7 +45,10 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
 }
 const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
     node.value=call(node.value) as Expression
-    return node
+    let _call=new AAssign(new IdentifierExpr(node.name),node.value)
+    _call.oper=node.oper
+    _call.cast=node.cast
+    return call(_call)
 }
 const D_ExprCommandOrReturn:slang_desugar_visitor=(node:ExprCommand|Return,call)=>{
     node.data=call(node.data) as Expression
@@ -108,7 +113,7 @@ const D_ForeachStatement:slang_desugar_visitor=(node:ForeachStatement,call)=>{
         new ForStatement(
             [
                 new VarDecl('for',new NumberType(),new NumberLiteral('0')),
-                new VarDecl(node.iden,null,new NullLiteral(''))
+                new VarDecl(node.iden,node.iden_type,new NullLiteral(''))
             ],
             new InequalExpression(new IndexPostfix(node.data,new IdentifierExpr('for')),
                 new NullLiteral('')),
@@ -121,32 +126,38 @@ const D_ForeachStatement:slang_desugar_visitor=(node:ForeachStatement,call)=>{
     )
 }
 const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
-    node.commands=call(node.commands)
-    node.catch_.command=call(node.catch_.command)
-    node.finally_=call(node.finally_)
+    //先按 Throw 切分包裹、再脱糖:call 之后的树上 Throw 已被 D_Throw 换成 ListCommand,instanceof 扫不到
     const _do=(command:Command)=>{
         if(command instanceof ListCommand){
             let index=0
             let _if=-1
             for(let i of command.commands){
-                //之后的都要放进if
-                if(i instanceof Throw)
+                //第一个 throw 之后的语句都要包进 if(throw);嵌套块交给递归
+                if(i instanceof Throw){
                     _if=index
+                    break
+                }
+                if(i instanceof Await)_do(i.command)
+                if(i instanceof ListCommand)_do(i)
                 index++
             }
             if(_if>-1){
-                command.commands[_if+1]=new IfStatement(
-                    new IdentifierExpr('throw'),
-                    _do(new ListCommand([
-                        new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('false')),
-                        ...command.commands.slice(_if+1)
-                    ])),
-                    new ListCommand([])
-                )
+                //throw 本身留在原位脱糖,其后语句截断进 if(throw){throw=false;...},不然会执行两遍
+                const tail=command.commands.slice(_if+1)
+                const cond=new IdentifierExpr('throw')
+                cond.type=new BooleanType()
+                command.commands.length=_if+1
+                command.commands.push(new IfStatement(cond,
+                    _do(new ListCommand([new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('false')),...tail])),
+                    new ListCommand([])))
             }
         }
         return command
     }
+    _do(node.commands)
+    node.commands=call(node.commands)
+    node.catch_.command=call(node.catch_.command)
+    node.finally_=call(node.finally_)
     return call(new ListCommand([
         new VarDecl('throw',new BooleanType(),new BooleanLiteral('false')),
         new VarDecl('catch',new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])
@@ -154,7 +165,7 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
             new LambdaExpression(null,new Map([[node.catch_.iden,node.catch_.type]]),new VoidType(),node.catch_.command)),
         new VarDecl('finally',new LambdaType(null,new Map(),new VoidType(),false),
             new LambdaExpression(null,new Map(),new VoidType(),node.finally_)),
-        _do(node.commands)
+        node.commands
     ]))
 }
 const D_ListCommand:slang_desugar_visitor=(node:ListCommand,call)=>{

@@ -11,7 +11,7 @@ const LambdaType=$.s('LambdaType',
 const GenericType=$.s('GenericType',$.d('@'),TokenType.Identifier)
 const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
     $.r('BooleanType'),$.r('StringType'),$.r('VoidType'),$.t('(',$.r('Type'),')'),
-    $.s('GenericType'),
+    $.r('GenericType'),
     $.s('ClassType',TokenType.Identifier,
         $.l('ClassTypeData',$.s('ClassTypeItem',$.d('.'),TokenType.Identifier)),
         $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.d('>'))))

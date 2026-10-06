@@ -46,7 +46,7 @@ export class HIndexExpr extends HFixExpr{
     }
 }
 export class HMemberExpr extends HFixExpr{
-    constructor(public target:HExpr,public member:HExpr) {
+    constructor(public target:HExpr,public member:number) {
         super()
     }
 }
@@ -75,23 +75,12 @@ export class HArgumentsExpr extends HFixExpr{
         super()
     }
 }
-//new 表达式:对象分配+this参数传递(此前 NewPrefix 被忽略,new 降级为普通调用,无对象)
-export class HNewExpr extends HExpr{
-    constructor(public target:HExpr,public args:HExpr[]) {
-        super()
-    }
-}
 export class HNotExpr extends HFixExpr{
     constructor(public target:HExpr) {
         super()
     }
 }
 export class HBitNotExpr extends HFixExpr{
-    constructor(public target:HExpr) {
-        super()
-    }
-}
-export class HMinusExpr extends HFixExpr{
     constructor(public target:HExpr) {
         super()
     }

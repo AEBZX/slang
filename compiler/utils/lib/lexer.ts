@@ -31,19 +31,7 @@ class CharStream{
     }
 }
 let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
-    //考虑+-
-    if(stream.now()=='+'||stream.now()=='-'){
-        //前一个字符是标识符/数字/闭括号时,+/- 是二元操作符而非数字符号(如 a+1)
-        let prev=stream.code[stream.index-1]
-        if(prev!=undefined&&(identifier_continue_white_list.includes(prev)||prev==')'||prev==']'||prev=='}'))
-            return [false,'',TokenType.Number]
-        let sign=stream.next()
-        let ret=number_match(stream)
-        if(ret[0])
-            return [true,sign+ret[1],TokenType.Number]
-        stream.index--
-        return [false,'',TokenType.Number]
-    }
+    //数字不带符号:负数由前缀 - 表达式表达,词法级 '+'/'-' 一律是运算符
     if(stream.now()=='0'){
         stream.next()
         if(number_radix.includes(stream.now())){

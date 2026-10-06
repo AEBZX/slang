@@ -54,6 +54,7 @@ import {
     Type,
     TypePrefix,
     VarDecl,
+    MinusPrefix,
     Variable, VM,
     VoidType,
     WhileStatement
@@ -61,6 +62,7 @@ import {
 import {
     bindGenerics,
     cast,
+    cast_best,
     cast_get,
     generic_is,
     generic_name,
@@ -71,6 +73,7 @@ import {
     param_is,
     pick_best,
     real_type,
+    resolve_named,
     set_name,
     slang_check_visitor,
     to_point,
@@ -88,7 +91,8 @@ const Label_File:slang_check_visitor=(ast:File,scope,call)=>{
     scope=scope.leave()
 }
 const Label_Module:slang_check_visitor=(ast:Module,scope,call)=>{
-    const exist=scope.get(ast.name)
+    const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
+    const exist=scope.get(full)
     if(exist!=null&&exist!==ast&&exist instanceof Module)return
     const name=set_name(ast,scope)
     scope=scope.enter()
@@ -252,6 +256,7 @@ const Label_ForeachStatement:slang_check_visitor=(ast:ForeachStatement,scope,cal
     cast(vd,scope,new ArrayType(new VoidType()))
     if(vd.t instanceof VoidType)cast(vd,scope,new MapType(new VoidType()))
     scope.set(ast.iden,vd)
+    ast.iden_type=vd.t
     call(ast.commands,3,scope)
     scope=scope.leave()
 }
@@ -281,9 +286,16 @@ const Label_TernaryExpression:slang_check_visitor=(ast:TernaryExpression,scope,c
     call(ast.trueExpr,3)
     call(ast.falseExpr,3)
     const merge=type_merge(real_type(ast.trueExpr.type,scope),real_type(ast.falseExpr.type,scope),scope)
-    //falseExpr能不能期望到trueExpr
-    if(merge instanceof VoidType&&!cast(ast.falseExpr,scope,ast.trueExpr.type))
-        scope.thr(`三元运算符的true/false表达式不是同一类型,在行${ast.line.join('\n')}`)
+    if(merge instanceof VoidType){
+        //falseExpr能不能期望到trueExpr
+        if(!cast(ast.falseExpr,scope,ast.trueExpr.type)){
+            scope.thr(`三元运算符的true/false表达式不是同一类型,在行${ast.line.join('\n')}`)
+            return
+        }
+        ast.type=ast.trueExpr.type
+        return
+    }
+    ast.type=merge
 }
 const Label_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
     call(ast.left,3)
@@ -355,29 +367,37 @@ const Label_IndexPostfix:slang_check_visitor=(ast:IndexPostfix,scope,call)=>{
     const expr_cast_array=cast(ast.expr,scope,new ArrayType(new VoidType()))
     const index_cast_string=cast(ast.index,scope,new StringType())
     const index_cast_number=cast(ast.index,scope,new NumberType())
-    if(expr_type instanceof StringType||expr_type instanceof ArrayType){
-        if(index_type instanceof NumberType)return
-        if(index_cast_number)return
-        scope.thr(`string/array的索引只能是number在行${ast.line.join('\n')}`)
+    if(expr_type instanceof StringType){
+        if(index_type instanceof NumberType||index_cast_number){
+            ast.type=new StringType()
+            return
+        }
+        scope.thr(`string的索引只能是number在行${ast.line.join('\n')}`)
+        return
+    }
+    if(expr_type instanceof ArrayType){
+        if(index_type instanceof NumberType||index_cast_number){
+            ast.type=expr_type.t
+            return
+        }
+        scope.thr(`array的索引只能是number在行${ast.line.join('\n')}`)
+        return
     }
     if(expr_type instanceof MapType){
-        if(index_type instanceof StringType)return
-        if(index_cast_string)return
+        if(index_type instanceof StringType||index_cast_string){
+            ast.type=expr_type.t
+            return
+        }
         scope.thr(`map的索引只能是string在行${ast.line.join('\n')}`)
+        return
     }
-    if(index_type instanceof NumberType){
-        if(expr_cast_array)return
-        if(expr_cast_string)return
-        scope.thr(`number类型的索引只能用于string/array在行${ast.line.join('\n')}`)
-    }
-    if(index_type instanceof StringType){
-        if(expr_cast_map)return
-        scope.thr(`string类型的索引只能用于map在行${ast.line.join('\n')}`)
-    }
+    if(index_type instanceof NumberType&&(expr_cast_array||expr_cast_string))return
+    if(index_type instanceof StringType&&expr_cast_map)return
     //两个不知名奇葩类型,需要尝试组合
     if(expr_cast_map&&index_cast_string)return
     if(expr_cast_array&&index_cast_number)return
     if(expr_cast_string&&index_cast_number)return
+    scope.thr(`不支持的索引类型组合在行${ast.line.join('\n')}`)
 }
 const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
     call(ast.expr,3)
@@ -454,12 +474,30 @@ const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,cal
     ast.expr.cast=cast_[0].id
     ast.type=(<LambdaType>cast_[0].type).returnType
 }
+const Label_MinusPrefix:slang_check_visitor=(ast:MinusPrefix,scope,call)=>{
+    call(ast.expr,3)
+    ast.type=new NumberType()
+    if(operation('-',ast,scope,new VoidType(),to_point(ast.expr.type)))return
+    if(real_type(ast.expr.type,scope) instanceof NumberType)return
+    if(cast(ast.expr,scope,new NumberType()))return
+    scope.thr(`负号只能用于number类型在行${ast.line.join('\n')}`)
+}
 const Label_ReferencePrefix:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
     call(ast.expr,3)
     if(operation('*',ast,scope,new VoidType(),to_point(ast.expr.type)))return
-    if(real_type(ast.expr.type,scope) instanceof PointType)return
-    if(cast(ast.expr,scope,new PointType(new VoidType())))return
-    ast.type=(<PointType>real_type(ast.expr.type,scope)).t
+    const pt=real_type(ast.expr.type,scope)
+    //解引用:*T 的类型就是 T
+    if(pt instanceof PointType){
+        ast.type=pt.t
+        return
+    }
+    //不是指针:有能转到指针的 cast 就借用 cast 目标的目标类型
+    const c=cast_best(new PointType(new VoidType()),pt,scope)
+    if(c!=null){
+        ast.expr.cast=c.id
+        ast.type=c.type instanceof PointType?c.type.t:new VoidType()
+        return
+    }
     scope.thr(`引用操作符只能用于指针类型在行${ast.line.join('\n')}`)
 }
 const Label_AddressPrefix:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
@@ -551,8 +589,8 @@ const Label_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
     call(ast.t,3)
 }
 const Label_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
-    //generic和定义范围是否兼容
-    const block=scope.get(ast.local.join('.'))
+    //generic和定义范围是否兼容;跨模块裸类型名靠 resolve_named 的路径补全
+    const block=resolve_named(scope,ast.local.join('.'))
     if(block==null||!(block instanceof Class||block instanceof Interface)){
         scope.thr(`类/接口${ast.local.join('.')}不存在,在行${ast.line.join('\n')}`)
         return
@@ -561,8 +599,8 @@ const Label_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
         scope.thr(`generic参数类型错误,在行${ast.line.join('\n')}`)
 }
 const Label_EnumType:slang_check_visitor=(ast:EnumType,scope,call)=>{
-    const block=scope.get(ast.local.join('.'))
-    if(!(block instanceof Enum))scope.thr(`未定义的枚举${ast.local.join('.')}`)
+    const block=resolve_named(scope,ast.local.join('.'))
+    if(block==null||!(block instanceof Enum))scope.thr(`未定义的枚举${ast.local.join('.')}`)
 }
 export const Round3=new Map<any,slang_check_visitor>([
     [IdentifierExpr,Label_IdentifierExpression],
@@ -580,6 +618,7 @@ export const Round3=new Map<any,slang_check_visitor>([
     [NotPrefix,Label_NotPrefix],
     [TypePrefix,Label_TypePrefix],
     [NewPrefix,Label_NewPrefix],
+    [MinusPrefix,Label_MinusPrefix],
     [MemberPostfix,Label_MemberPostfix],
     [IndexPostfix,Label_IndexPostfix],
     [IncrementPostfix,Label_IncrementOrDecrementPostfixOrPrefix],

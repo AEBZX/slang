@@ -132,6 +132,7 @@ function parse_or(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stream
             }
         }catch (e) {
             stream.pos=saved
+            if((globalThis as any).__DEBUG_PARSE)console.error('[or]',data.name,'| branch:',typeof i=='object'?i.name:i,'| msg:',(e as Error).message)
         }
     }
     let a=[]
@@ -218,6 +219,7 @@ function parse_loop(data:ast_rule,child_num:number,ref:Map<string,ast_rule>,stre
                 for(let j of (child as ast_data).line)line.add(j)
         }catch (e){
             stream.pos=saved
+            if((globalThis as any).__DEBUG_PARSE)console.error('[loop]',(e as Error).message,'| rule:',data.name)
             break
         }
         param_num++
@@ -245,6 +247,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                 stream.next()
                 return ret
             }
+            if((globalThis as any).__DEBUG_PARSE)console.error('[str fail]',data,'| now:',now&&now.value,'| pos:',stream.pos)
             throw new Error(`无法找到${data}在${now_line(stream)}`)
         }
         case 'object':
@@ -256,6 +259,7 @@ function parse(stream:ParserStream,data:ast_rule_param,ref:Map<string,ast_rule>)
                 stream.next()
                 return ret
             }
+            if((globalThis as any).__DEBUG_PARSE)console.error('[tok fail]',TokenType[data as TokenType],'| now:',now&&now.value)
             throw new Error(`无法找到${TokenType[data as TokenType]}在${now_line(stream)}`)
         }
     }
