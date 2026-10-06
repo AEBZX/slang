@@ -39,3 +39,8 @@ export class HListCommand extends HCommand{
         super()
     }
 }
+export class HExprCommand extends HCommand{
+    constructor(public data:HExpr) {
+        super()
+    }
+}

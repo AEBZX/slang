@@ -66,7 +66,7 @@ const D_Throw:slang_desugar_visitor=(node:Throw,call)=>{
     node.data=call(node.data) as Expression
     return call(
         new ListCommand([
-            new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('throw'),[],[node.data])),
+            new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('catch'),[],[node.data])),
             new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('true'))
         ])
     )
@@ -156,8 +156,9 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
     }
     _do(node.commands)
     node.commands=call(node.commands)
-    node.catch_.command=call(node.catch_.command)
+    node.catch_.command=new ListCommand([node.catch_.command,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('finally'),[],[]))])
     node.finally_=call(node.finally_)
+    node.commands=new ListCommand([node.commands,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('finally'),[],[]))])
     return call(new ListCommand([
         new VarDecl('throw',new BooleanType(),new BooleanLiteral('false')),
         new VarDecl('catch',new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])

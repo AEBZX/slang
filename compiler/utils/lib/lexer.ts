@@ -42,10 +42,9 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
                 stream.index--
                 return [true,'0',TokenType.Number]
             }
-            while(radix_map[radix].includes(stream.now())){
+            while(radix_map[radix].includes(stream.now()))
                 ret+=stream.next()
-            }
-            return [true,ret,TokenType.Number]
+            return [true,'0'+radix+ret,TokenType.Number]
         }
         //0.5:'.'后是数字则作小数
         if(stream.now()=='.'&&stream.code[stream.index+1]>='0'&&stream.code[stream.index+1]<='9'){

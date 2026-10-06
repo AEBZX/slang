@@ -20,7 +20,8 @@ export class HScope extends PeepholeScope{
         this.link=new Map()
         this.link_target=new Map()
         this.entry=false
-        this.path=this.parent.path||this.global.path||''
+        //根作用域 parent 为 null,不能直接解引用
+        this.path=this.parent!=null?this.parent.path:''
     }
     lnk(id:number,data:number){
         this.link.set(id,data)

@@ -31,7 +31,7 @@ import {
     IdentifierExpr,
     IncrementPostfix,
     IncrementPrefix,
-    IndexPostfix,
+    HExpr, IndexPostfix,
     LambdaExpression,
     MapExpression,
     MemberPostfix,
@@ -41,12 +41,18 @@ import {
     ReferencePrefix,
     StringLiteral, TernaryExpression
 } from '../utils'
-const H_NumberLiteral:slang_hir_visitor=(node:NumberLiteral, scope, call)=>
-    new HNumberLiteral(
-        node.value.startsWith('\'')||node.value.startsWith('\"')?parseFloat(node.value.slice(1,-1)):
-            parseFloat(node.value))
+const H_NumberLiteral:slang_hir_visitor=(node:NumberLiteral, scope, call)=>{
+    //进制字面量:0x/0b/0o 按各自的进制转,其余十进制
+    const v=node.value
+    const num=v.startsWith('0x')||v.startsWith('0X')?parseInt(v.slice(2),16):
+        v.startsWith('0b')||v.startsWith('0B')?parseInt(v.slice(2),2):
+            v.startsWith('0o')||v.startsWith('0O')?parseInt(v.slice(2),8):
+                parseFloat(v)
+    return new HNumberLiteral(num)
+}
 const H_StringLiteral:slang_hir_visitor=(node:StringLiteral,scope,call)=>
-    new HStringLiteral(node.value.slice(1,-1))
+    //词法器已经去掉引号,这里不能再 slice 一遍
+    new HStringLiteral(node.value)
 const H_BooleanLiteral:slang_hir_visitor=(node:BooleanLiteral,scope,call)=>
     new HBooleanLiteral(node.value=='true')
 const H_NullLiteral:slang_hir_visitor=(node:NullLiteral,scope,call)=>
@@ -65,15 +71,18 @@ const H_MapExpr:slang_hir_visitor=(node:MapExpression,scope,call)=>{
     return new HMapExpr(ret)
 }
 const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
-    scope=scope.enter()
+    //参数注册进扁平注册表;同名遮蔽用快照恢复,内层 lambda 不能污染外层
+    const old=new Map<string,number|undefined>()
+    for(const [k,v] of node.params)old.set(k,scope.symbol.get(k))
     let params=[]
-    let id=0
     for(const param of node.params.keys()){
-        id=scope.id()
+        const id=scope.id()
         scope.set(param,id)
         params.push(new HIdentifierExpr(id))
     }
-    return new HLambdaExpr(params,call(node.body))
+    const body=call(node.body)
+    for(const [k,v] of old)v==null?scope.symbol.delete(k):scope.symbol.set(k,v)
+    return new HLambdaExpr(params,body)
 }
 const H_IndexExpr:slang_hir_visitor=(node:IndexPostfix,scope,call)=>
     new HIndexExpr(call(node.expr), call(node.index))
@@ -91,19 +100,22 @@ const H_MemberExpr:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     if(is_link(node)){
         name_get(node)
         name.reverse()
-        //是否有link
+        //是否有link:截掉别名前缀,剩下的段逐个解析成成员 id,重建 HIR 链
         let lnk_name=null
-        for(let i=0;i<name.length;i++)
-            //截断
-            if(scope.link_target.get(name.slice(0,i).join('.'))){
-                lnk_name=scope.get(scope.link_target.get(name.slice(0,i).join('.')))
+        let lnk_path=''
+        for(let i=0;i<name.length;i++){
+            const target=scope.link_target.get(name.slice(0,i).join('.'))
+            if(target){
+                lnk_name=scope.get(target)
+                lnk_path=target
                 name=name.slice(i)
                 break
             }
+        }
         if(lnk_name!=null){
-            let _node=new IdentifierExpr(lnk_name)
-            for(const n of name)node=new MemberPostfix(_node,n)
-            return call(_node)
+            let _node:HExpr=new HIdentifierExpr(lnk_name)
+            for(const n of name)_node=new HMemberExpr(_node,scope.get(lnk_path+'.'+n))
+            return _node
         }
     }
     if(node.expr.type instanceof ClassType||node.expr.type instanceof BlockType)
@@ -125,9 +137,9 @@ const H_NotExpr:slang_hir_visitor=(node:NotPrefix,scope,call)=>
 const H_BitNotExpr:slang_hir_visitor=(node:BitNotPrefix,scope,call)=>
     new HBitNotExpr(call(node.expr))
 const H_AddressExpr:slang_hir_visitor=(node:AddressPrefix,scope,call)=>
-    new HAddressExpr(node.expr)
+    new HAddressExpr(call(node.expr))
 const H_ReferenceExpr:slang_hir_visitor=(node:ReferencePrefix,scope,call)=>
-    new HReferenceExpr(node.expr)
+    new HReferenceExpr(call(node.expr))
 const H_BinaryExpr:slang_hir_visitor=(node:BinaryExpression,scope,call)=>
     new HBinaryExpr(call(node.left),node.op,call(node.right))
 const H_TernaryExpr:slang_hir_visitor=(node:TernaryExpression,scope,call)=>
