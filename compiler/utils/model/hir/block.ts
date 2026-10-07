@@ -7,7 +7,7 @@ export class HModule extends HBlock{
     }
 }
 export class HVariable extends HBlock{
-    constructor(public name:number,public value:HExpr,public entry:boolean=false) {
+    constructor(public name:number,public value:HExpr,public entry:boolean=false,public _static:boolean=false) {
         super()
     }
 }

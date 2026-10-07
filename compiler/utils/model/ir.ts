@@ -42,7 +42,7 @@ export class CMP extends IRTree{
     }
 }
 export class ControlStream extends IRTree{
-    //frame=0:块帧,frame=1:函数帧
+    //frame=0:块帧,frame=1:函数帧,frame=2:循环帧
     constructor(public target:IRArgs,public frame:IRArgs) {
         super()
     }
@@ -124,7 +124,7 @@ export class DELETE extends IRTree{
     }
 }
 export class BLOCK_START extends IRTree{
-    constructor(public name:IRArgs) {
+    constructor(public name:number) {
         super()
     }
 }

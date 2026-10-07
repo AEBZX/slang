@@ -253,6 +253,7 @@ const Label_ForeachStatement:slang_check_visitor=(ast:ForeachStatement,scope,cal
     const type=real_type(ast.data==null?null:ast.data.type,scope)
     const vd=new VarDecl(ast.iden,new VoidType(),new NullLiteral(null))
     if(type instanceof MapType||type instanceof ArrayType)vd.t=type.t
+    if(type instanceof StringType)vd.t=new StringType()
     cast(vd,scope,new ArrayType(new VoidType()))
     if(vd.t instanceof VoidType)cast(vd,scope,new MapType(new VoidType()))
     scope.set(ast.iden,vd)
@@ -416,6 +417,11 @@ const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,cal
             ast.generic=[]
         }
     }
+    //裸类名 callee 的类型是 BlockType:解析回块,是类就转成 ClassType 走构造
+    if(ast.expr.type instanceof BlockType){
+        const block=scope.get(localToName(ast.expr.type.local))
+        if(block instanceof Class)ast.expr.type=new ClassType(ast.expr.type.local,Array.from(block.generic.values()))
+    }
     if(ast.expr.type instanceof ClassType){
         const local=ast.expr.type.local
         ast.expr=new IdentifierExpr(local[0])
@@ -503,6 +509,11 @@ const Label_ReferencePrefix:slang_check_visitor=(ast:ReferencePrefix,scope,call)
 const Label_AddressPrefix:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
     call(ast.expr,3)
     if(operation('&',ast,scope,new VoidType(),to_point(ast.expr.type)))return
+    let is_left=false
+    if(ast.expr instanceof ReferencePrefix||ast.expr instanceof IdentifierExpr||ast.expr instanceof IndexPostfix||
+        ast.expr instanceof MemberPostfix)
+        is_left=true
+    if(!is_left)scope.thr(`取地址操作符只能用于左值在行${ast.line.join('\n')}`)
     ast.type=new PointType(ast.expr.type)
 }
 const Label_BitNotPrefix:slang_check_visitor=(ast:BitNotPrefix,scope,call)=>{
@@ -591,10 +602,14 @@ const Label_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
 const Label_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
     //generic和定义范围是否兼容;跨模块裸类型名靠 resolve_named 的路径补全
     const block=resolve_named(scope,ast.local.join('.'))
-    if(block==null||!(block instanceof Class||block instanceof Interface)){
+    if(block==null||!(block instanceof Class||block instanceof Interface||block instanceof Enum)){
         scope.thr(`类/接口${ast.local.join('.')}不存在,在行${ast.line.join('\n')}`)
         return
     }
+    //枚举没有泛型,跳过实参绑定
+    if(block instanceof Enum)return
+    //泛型实参绑定到形参,后面的 param_is 才能解析到 T
+    bindGenerics(scope,block.generic,ast.generic)
     if(!param_is(ast.generic,block.generic,scope))
         scope.thr(`generic参数类型错误,在行${ast.line.join('\n')}`)
 }

@@ -88,35 +88,34 @@ const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
 const H_IndexExpr:slang_hir_visitor=(node:IndexPostfix,scope,call)=>
     new HIndexExpr(call(node.expr), call(node.index))
 const H_MemberExpr:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
-    let name=[]
-    const is_link=(node:MemberPostfix)=>{
-        if(node.expr instanceof IdentifierExpr)return true
-        if(node.expr instanceof MemberPostfix)return is_link(node.expr)
+    const is_link=(n:MemberPostfix)=>{
+        if(n.expr instanceof IdentifierExpr)return true
+        if(n.expr instanceof MemberPostfix)return is_link(n.expr)
         return false
     }
-    const name_get=(node:MemberPostfix|IdentifierExpr)=>{
-        name.push(node.name)
-        if(node instanceof MemberPostfix)name_get(node.expr as MemberPostfix|IdentifierExpr)
+    let name:string[]=[]
+    const set_name=(n:MemberPostfix)=>{
+        name.push(n.name)
+        if(n.expr instanceof MemberPostfix)set_name(n.expr)
+        if(n.expr instanceof IdentifierExpr)name.push(n.expr.name)
     }
     if(is_link(node)){
-        name_get(node)
-        name.reverse()
-        //是否有link:截掉别名前缀,剩下的段逐个解析成成员 id,重建 HIR 链
-        let lnk_name=null
-        let lnk_path=''
-        for(let i=0;i<name.length;i++){
-            const target=scope.link_target.get(name.slice(0,i).join('.'))
-            if(target){
-                lnk_name=scope.get(target)
-                lnk_path=target
-                name=name.slice(i)
+        set_name(node)
+        let lnk_index:number=-1
+        let lnk_name:string=null
+        name=name.reverse()
+        for(const [index,n] of name.entries())
+            if(scope.link_target.get(name.slice(0,index).join('.'))){
+                lnk_index=index
+                lnk_name=n
                 break
             }
-        }
         if(lnk_name!=null){
-            let _node:HExpr=new HIdentifierExpr(lnk_name)
-            for(const n of name)_node=new HMemberExpr(_node,scope.get(lnk_path+'.'+n))
-            return _node
+            const postfix=name.slice(lnk_index)
+            let ret:HExpr=new HIdentifierExpr(scope.get(scope.link_target.get(lnk_name)))
+            for(const [index,i] of postfix.entries())
+                ret=new HMemberExpr(ret,scope.get(lnk_name+'.'+postfix.slice(0,index)+i))
+            return ret
         }
     }
     if(node.expr.type instanceof ClassType||node.expr.type instanceof BlockType)

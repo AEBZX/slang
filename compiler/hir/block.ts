@@ -24,7 +24,7 @@ const H_Variable:slang_hir_visitor=(node:Variable,scope,call)=>{
     const old=scope.path
     node.name=scope.path_(node.name)
     scope.set(node.name,id)
-    const ret=new HVariable(id,call(node.value),node.name.split('.').pop()!.split('@')[0]=='main')
+    const ret=new HVariable(id,call(node.value),node.name.split('.').pop()!.split('@')[0]=='main',!node.modifiers.unstatic)
     scope.path=old
     return ret
 }

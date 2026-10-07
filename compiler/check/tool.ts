@@ -248,9 +248,24 @@ export function type_same(a:Type,b:Type):boolean{
     //运算符查找端把操作数包成 PointType,声明侧是裸类型:单侧盒子先解包再比
     if(a instanceof PointType&&!(b instanceof PointType))return type_same(a.t,b)
     if(b instanceof PointType&&!(a instanceof PointType))return type_same(a,b.t)
-    if(a.constructor!=b.constructor)return false
+    if(a.constructor!=b.constructor){
+        //枚举作类型标注:书写名是 ClassType,值侧是 EnumType,点分后缀一致即同一
+        if(a instanceof EnumType&&b instanceof ClassType){
+            const la=(a as EnumType).local.join('.'),lb=(b as ClassType).local.join('.')
+            return la==lb||lb.endsWith('.'+la)||la.endsWith('.'+lb)
+        }
+        if(a instanceof ClassType&&b instanceof EnumType){
+            const la=(a as ClassType).local.join('.'),lb=(b as EnumType).local.join('.')
+            return la==lb||lb.endsWith('.'+la)||la.endsWith('.'+lb)
+        }
+        return false
+    }
     if(a instanceof LiteralType)return true
-    if(a instanceof ClassType)return (a as ClassType).local.join('.')==(b as ClassType).local.join('.')
+    if(a instanceof ClassType||a instanceof EnumType){
+        //书写名(裸名)与全名点分后缀一致即同一类型(如 Item 与 m.Item)
+        const la=(a as any).local.join('.'),lb=(b as any).local.join('.')
+        return la==lb||lb.endsWith('.'+la)||la.endsWith('.'+lb)
+    }
     if(a instanceof FixType&&b instanceof FixType)
         return type_same(a.t,b.t)
     if(a instanceof GenericType)return (a as GenericType).generic==(b as GenericType).generic
@@ -277,8 +292,8 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
-            //同名即同一类型
-            if(name1==name2)return type1
+            //同名即同一类型:书写名(裸名)与全名点分后缀一致也算
+            if(name1==name2||name2.endsWith('.'+name1)||name1.endsWith('.'+name2))return type1
             //实现链:type2 的实现链中含 type1 则 type2 是 type1 的子类型,取 type1
             let chain=scope.root().chain
             let _t1=scope.get(name1)
@@ -463,6 +478,7 @@ export function type_(a:Type,b:Type,scope:Scope){
         return ra instanceof VoidType&&rb instanceof VoidType
     //同型直接通过(结构相等,不要求同一实例),剩下的才看 cast 表
     if(type_same(ra,rb))return true
+    if(!(type_merge(ra,rb,scope) instanceof VoidType))return true
     let e_a=new Expression()
     e_a.type=a
     return cast(e_a, scope, b)
@@ -476,9 +492,11 @@ export function real_type(type:Type,scope:Scope){
         type.t=real_type(type.t,scope)
         return type
     }
-    //保留 ClassType,只解析其泛型实参(不能替换成 Class 块)
-    if(type instanceof ClassType)
-        return new ClassType(type.local,type.generic.map(i=>real_type(i,scope)),type._this)
+    //保留 ClassType,只解析其泛型实参(不能替换成 Class 块);generic 缺省按空数组处理
+    if(type instanceof ClassType){
+        const gen=type.generic==null?[]:type.generic
+        return new ClassType(type.local,gen.map(i=>real_type(i,scope)),type._this)
+    }
     if(type instanceof GenericType)return scope.get_generic(type.generic)
     if(type instanceof LambdaType){
         if(!type.overload){

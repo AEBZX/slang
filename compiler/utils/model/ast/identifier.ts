@@ -18,7 +18,7 @@ export class LambdaType extends BasicType{
     }
 }
 export class ClassType extends BasicType{
-    constructor(public local:string[],public generic:Type[],public _this:boolean=false){
+    constructor(public local:string[],public generic:Type[]=[],public _this:boolean=false){
         super()
     }
 }

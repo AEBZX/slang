@@ -12,7 +12,8 @@ import {
     MapExpression, MemberPostfix, ModAssign, Modifier, MulAssign, MulExpression, NumberLiteral,
     PostfixExpression, PrefixExpression, ShlExpression,
     ShrExpression, SubAssign, SubExpression, TernaryExpression,
-    Type, IncrementPostfix, IncrementPrefix, DecrementPostfix, DecrementPrefix, ReferencePrefix, NewPrefix, MinusPrefix
+    Type, IncrementPostfix, IncrementPrefix, DecrementPostfix, DecrementPrefix, ReferencePrefix, NewPrefix, MinusPrefix,
+    LogicAndExpression, BooleanLiteral, LogicOrExpression
 } from '../utils'
 import {slang_check_visitor} from "../check/tool";
 const D_ArrayOrMapExpression:slang_desugar_visitor=(node:MapExpression|ArrayExpression,call)=>{
@@ -67,7 +68,20 @@ const D_PrefixExpression:slang_desugar_visitor=(node:PrefixExpression,call)=>{
 const D_BinaryExpression:slang_desugar_visitor=(node:BinaryExpression,call)=>{
     node.left=call(node.left) as Expression
     node.right=call(node.right) as Expression
-    return expr_desugar(node,node.left,node.right)
+    let ret=expr_desugar(node,node.left,node.right)
+    if(ret instanceof LogicAndExpression)
+        return new TernaryExpression(
+            node.left,
+            new AndExpression(node.left,node.right),
+            new BooleanLiteral('false')
+        )
+    if(ret instanceof LogicOrExpression)
+        return new TernaryExpression(
+            node.left,
+            new BooleanLiteral('false'),
+            new OrExpression(node.left,node.right)
+        )
+    return ret
 }
 const D_TernaryExpression:slang_desugar_visitor=(node:TernaryExpression,call)=>{
     node.condition=call(node.condition) as Expression
