@@ -1,4 +1,4 @@
-import {BinaryDict, CmpDict, fast_call, slang_ir_factory} from './tool'
+import {BinaryDict, CmpDict, fast_call, read, slang_ir_factory} from './tool'
 import {
     BINARY, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
@@ -24,22 +24,14 @@ const I_IdentifierExpr:slang_ir_factory=(data:HIdentifierExpr,tool,call)=>{
 }
 const I_ArrayExpr:slang_ir_factory=(data:HArrayExpr,tool,call)=> {
     const array = tool.ls_arg
-    const ls_id = tool.id()
     //offset index elements
-    for (const [index, element] of data.elements.entries()) {
-        tool.ls_arg = IRArgs.reg(ls_id)
-        call(element)
-        tool.push(new OFFSET_SET(array,tool._pool(index),IRArgs.value(ls_id)))
-    }
+    for (const [index, element] of data.elements.entries())
+        tool.push(new OFFSET_SET(array,tool._pool(index),fast_call(IRArgs.reg(tool.id()),element,tool,call)))
 }
 const I_MapExpr:slang_ir_factory=(data:HMapExpr,tool,call)=>{
     const map=tool.ls_arg
-    const ls_id=tool.id()
-    for(const [key,value] of data.elements){
-        tool.ls_arg=IRArgs.reg(ls_id)
-        call(value)
-        tool.push(new OFFSET_SET(map,tool._pool(key),tool.ls_arg))
-    }
+    for(const [key,value] of data.elements)
+        tool.push(new OFFSET_SET(map,tool._pool(key),fast_call(IRArgs.reg(tool.id()),value,tool,call)))
 }
 const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
     const reg=tool.ls_arg
@@ -60,10 +52,7 @@ const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
 const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
     const mov_data=tool.ls_arg
     const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    data_id.type='value'
-    const offset_id=IRArgs.reg(tool.id())
-    tool.ls_arg=offset_id
-    call(data.index)
+    const offset_id=fast_call(IRArgs.reg(tool.id()),data.index,tool,call)
     if(tool.index_address){
         tool.push(data.is_string?new OFFSET_STR_ADDR(mov_data,data_id,offset_id):new OFFSET_ADDR(mov_data,data_id,offset_id))
         tool.index_address=false
@@ -73,8 +62,8 @@ const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
 }
 const I_MemberExpr:slang_ir_factory=(data:HMemberExpr,tool,call)=>{
     const mov_data=tool.ls_arg
+    //成员是静态的,键直接用池 id 原样;对象要取槽里的值
     const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    data_id.type='value'
     const offset_id=IRArgs.reg(tool.add(data.member))
     if(tool.index_address){
         tool.push(new OFFSET_ADDR(mov_data,data_id,offset_id))
@@ -86,35 +75,27 @@ const I_MemberExpr:slang_ir_factory=(data:HMemberExpr,tool,call)=>{
 const I_PostfixIncrementOrDecrement:slang_ir_factory=(data:HPostIncrementExpr|HPostDecrementExpr,tool,call)=>{
     //先赋值
     call(data.target)
-    //拿到target的地址
-    let target_address=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    target_address.type='value'
-    let target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    target_data.type='value'
+    //拿到target的地址:结果要写回这个地址,所以结果操作数用值形式(写穿)
+    const target_address=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
     tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',target_address,target_data,tool._pool(1)))
 }
 const I_PrefixIncrementOrDecrement:slang_ir_factory=(data:HPreIncrementExpr|HPreDecrementExpr,tool,call)=>{
     const target=tool.ls_arg
     call(data.target)
-    //++i等价于先+在赋值,或者说a=i,a++
-    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',target,target,tool._pool(1)))
+    //++i等价于先+再赋值:结果写回 target 这个槽,左操作数取槽里的值
+    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',target,read(target),tool._pool(1)))
 }
 const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     const ls_arg=tool.ls_arg
     //push所有param
     for(const arg of tool.get_param())
         tool.push(new PUSH(IRArgs.reg(arg)))
-    //装参数
-    const arg_id=IRArgs.reg(tool.id())
-    for(const [index,arg] of data.args.entries()){
-        tool.ls_arg=arg_id
-        call(arg)
-        arg_id.type='value'
-        tool.push(new PARAM_SET(IRArgs.reg(index+1),arg_id))
-        arg_id.type='reg'
-    }
-    tool.ls_arg=arg_id
-    call(data.target)
+    //装参数:每个实参各占一个槽
+    for(const [index,arg] of data.args.entries())
+        tool.push(new PARAM_SET(IRArgs.reg(index+1),fast_call(IRArgs.reg(tool.id()),arg,tool,call)))
+    //被调用者:它的值(块号)要读出来当跳转目标
+    const arg_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
     tool.push(new CALL(arg_id,tool._pool(1)))
     //拿到返回值
     tool.push(new PARAM_LOAD(ls_arg,tool._pool(0)))
@@ -145,17 +126,17 @@ const I_AddressExpr:slang_ir_factory=(data:HAddressExpr,tool,call)=>{
 }
 const I_BinaryExpr:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
     const arg=tool.ls_arg
-    let left_arg=IRArgs.reg(tool.id())
-    let right_arg=IRArgs.reg(tool.id())
-    fast_call(left_arg,data.left,tool,call)
-    fast_call(right_arg,data.right,tool,call)
-    left_arg.type='value'
-    right_arg.type='value'
+    const left_arg=IRArgs.reg(tool.id())
+    const right_arg=IRArgs.reg(tool.id())
+    const left=fast_call(left_arg,data.left,tool,call)
+    const right=fast_call(right_arg,data.right,tool,call)
+    //二元运算:结果写进 arg,两个操作数取槽里的值
     if(Array.from(BinaryDict.keys()).includes(data.op))
-        tool.push(new BINARY(BinaryDict.get(data.op),arg,left_arg,right_arg))
+        tool.push(new BINARY(BinaryDict.get(data.op),arg,left,right))
     if(Array.from(CmpDict.keys()).includes(data.op)){
-        tool.push(new CMP(left_arg,right_arg,tool._pool(CmpDict.get(data.op))))
-        tool.push(new MOV(arg,left_arg))
+        //cmp 的第一个操作数既当目标又当左值(就地),所以给槽号;右值与运算符编号取值
+        tool.push(new CMP(left_arg,right,tool._pool(CmpDict.get(data.op))))
+        tool.push(new MOV(arg,left))
     }
 }
 const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
@@ -163,15 +144,11 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     const block_id=tool.block_id
     const true_id=tool.create()
     const false_id=tool.create()
-    let condition_arg=IRArgs.reg(tool.id())
-    let true_arg=IRArgs.reg(tool.id())
-    let false_arg=IRArgs.reg(tool.id())
-    fast_call(condition_arg,data.condition,tool,call)
-    fast_call(true_arg,data.trueExpr,tool,call)
-    fast_call(false_arg,data.falseExpr,tool,call)
-    condition_arg.type='value'
-    true_arg.type='value'
-    false_arg.type='value'
+    //条件要留在槽里:后面既要比值又要就地取反
+    const condition_reg=IRArgs.reg(tool.id())
+    const condition=fast_call(condition_reg,data.condition,tool,call)
+    const true_arg=fast_call(IRArgs.reg(tool.id()),data.trueExpr,tool,call)
+    const false_arg=fast_call(IRArgs.reg(tool.id()),data.falseExpr,tool,call)
     //建立块
     tool.block_id=true_id
     tool.push(new MOV(arg,true_arg))
@@ -180,10 +157,10 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     tool.block_id=block_id
     //data.condition是不是1
     const cmp_arg=IRArgs.reg(tool.id())
-    tool.push(new CMP(cmp_arg,condition_arg,tool._pool(CmpDict.get('=='))))
-    tool.push(new CZ(tool._pool(true_id),tool._pool(0),cmp_arg))
+    tool.push(new CMP(cmp_arg,condition,tool._pool(CmpDict.get('=='))))
+    tool.push(new CZ(tool._pool(true_id),tool._pool(0),read(cmp_arg)))
     tool.push(new NOT(cmp_arg))
-    tool.push(new CZ(tool._pool(false_id),tool._pool(0),cmp_arg))
+    tool.push(new CZ(tool._pool(false_id),tool._pool(0),read(cmp_arg)))
 }
 export default new Map<any,slang_ir_factory>([
     [HLiteral,I_Literal],

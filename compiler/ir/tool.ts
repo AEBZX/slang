@@ -40,42 +40,56 @@ export const CmpDict=new Map([
     ['<',4],
     ['<=',5]
 ])
+//操作数形式只有两种(见 vm/runtime/runtime.h):
+//reg=原样值(槽号/池id/字面量);value=槽里的值 var[x]
+//所以:目标槽用 reg,读一个槽的内容用 value;写穿地址也用 value(见 postfix ++)
+export function read(arg:IRArgs){
+    return IRArgs.value(arg.data)
+}
 export const VMMap=new Map<string,any>([
-    ['mov',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new MOV(p1,p2)],
-    ['add',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('add',p1,p2,p3)],
-    ['sub',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('sub',p1,p2,p3)],
-    ['mul',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('mul',p1,p2,p3)],
-    ['div',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('div',p1,p2,p3)],
-    ['mod',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('mod',p1,p2,p3)],
-    ['shr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('shr',p1,p2,p3)],
-    ['shl',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('shl',p1,p2,p3)],
-    ['and',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('and',p1,p2,p3)],
-    ['or',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('or',p1,p2,p3)],
-    ['xor',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('xor',p1,p2,p3)],
+    //mov 目标槽,源取槽里的值
+    ['mov',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new MOV(p1,read(p2))],
+    //二元运算 目标槽=左 op 右,两个操作数都取槽里的值
+    ['add',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('add',p1,read(p2),read(p3))],
+    ['sub',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('sub',p1,read(p2),read(p3))],
+    ['mul',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('mul',p1,read(p2),read(p3))],
+    ['div',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('div',p1,read(p2),read(p3))],
+    ['mod',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('mod',p1,read(p2),read(p3))],
+    ['shr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('shr',p1,read(p2),read(p3))],
+    ['shl',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('shl',p1,read(p2),read(p3))],
+    ['and',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('and',p1,read(p2),read(p3))],
+    ['or',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('or',p1,read(p2),read(p3))],
+    ['xor',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('xor',p1,read(p2),read(p3))],
+    //load 的源就是池 id 本身,不能取槽值
     ['load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new LOAD(p1,p2)],
+    //not/bit_not 就地取反,操作数就是那个槽
     ['not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new NOT(p1)],
-    ['cmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CMP(p1,p2,p3)],
-    ['jmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JMP(p1,p2)],
-    ['call',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CALL(p1,p2)],
-    ['thread',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new THREAD(p1,p2)],
-    ['jz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JZ(p1,p2,p3)],
-    ['cz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CZ(p1,p2,p3)],
-    ['tz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new TZ(p1,p2,p3)],
+    //cmp 第一个操作数既当目标又当左值(就地),右值与运算符编号取槽里的值
+    ['cmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CMP(p1,read(p2),read(p3))],
+    ['jmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JMP(read(p1),read(p2))],
+    ['call',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CALL(read(p1),read(p2))],
+    ['thread',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new THREAD(read(p1),read(p2))],
+    ['jz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JZ(read(p1),read(p2),read(p3))],
+    ['cz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CZ(read(p1),read(p2),read(p3))],
+    ['tz',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new TZ(read(p1),read(p2),read(p3))],
     ['ret',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new RET(p1)],
+    //push/pop/delete 操作的是槽本身
     ['push',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PUSH(p1)],
     ['pop',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new POP(p1)],
-    ['param_load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_LOAD(p1,p2)],
-    ['param_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_SET(p1,p2)],
-    ['offset_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_SET(p1,p2,p3)],
-    ['offset_get',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_GET(p1,p2,p3)],
-    ['offset_addr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_ADDR(p1,p2,p3)],
-    ['str_offset_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_SET(p1,p2,p3)],
-    ['str_offset_get',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_GET(p1,p2,p3)],
-    ['str_offset_addr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_ADDR(p1,p2,p3)],
+    ['param_load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_LOAD(p1,read(p2))],
+    ['param_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_SET(read(p1),read(p2))],
+    //offset_* 目标槽用 reg,对象与键取槽里的值
+    ['offset_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_SET(read(p1),read(p2),read(p3))],
+    ['offset_get',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_GET(p1,read(p2),read(p3))],
+    ['offset_addr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_ADDR(p1,read(p2),read(p3))],
+    ['str_offset_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_SET(read(p1),read(p2),read(p3))],
+    ['str_offset_get',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_GET(p1,read(p2),read(p3))],
+    ['str_offset_addr',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_STR_ADDR(p1,read(p2),read(p3))],
     ['delete',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new DELETE(p1)],
     ['gc',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new GC()],
-    ['in',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new IN(p1,p2)],
-    ['out',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OUT(p1,p2)]
+    //in 的 target 是原始槽号(写目标变量),out 的 data 取槽里的对象句柄
+    ['in',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new IN(read(p1),p2)],
+    ['out',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OUT(read(p1),read(p2))]
 ])
 export class IRTool extends PeepholeScope{
     index:number=0
@@ -121,15 +135,24 @@ export class IRTool extends PeepholeScope{
     }
     constructor(id:number=0) {
         super(null,null)
+        //id 是上层(HIR 作用域)已经用到的下一个槽号,IR 的槽要与它共用同一段编号
+        this.index=id
         this.ir=new Map()
-        this.index=0
+        this.pool=new Map()
+        this.arg_pool=new Map()
+        this.param=new Map()
+        this.loop_id=[]
+        //先开一个块,模块头部生成的指令才有地方落
+        this.block_id=this.create()
     }
     id(){
         return this.index++
     }
 }
+//把表达式求值到 arg 槽里,返回**读**它的形式(值形式)。
+//入参 arg 保持槽号形式不变,目标操作数还要用它
 export function fast_call(arg:IRArgs,value:HExpr,tool:IRTool,call:(data:HIRTree)=>void){
     tool.ls_arg=arg
     call(value)
-    return arg
+    return read(arg)
 }

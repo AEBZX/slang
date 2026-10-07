@@ -75,11 +75,12 @@ const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
     //参数注册进扁平注册表;同名遮蔽用快照恢复,内层 lambda 不能污染外层
     const old=new Map<string,number|undefined>()
     for(const [k,v] of node.params)old.set(k,scope.symbol.get(k))
-    let params=[]
+    let params:number[]=[]
     for(const param of node.params.keys()){
         const id=scope.id()
         scope.set(param,id)
-        params.push(new HIdentifierExpr(id))
+        //HLambdaExpr.params 是槽号数组,IR 直接拿它当操作数
+        params.push(id)
     }
     const body=call(node.body)
     for(const [k,v] of old)v==null?scope.symbol.delete(k):scope.symbol.set(k,v)

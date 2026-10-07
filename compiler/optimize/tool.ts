@@ -1,4 +1,4 @@
-import {IRArgs, IRTree} from '../utils'
+import {IRArgs, IRTree, number_radix} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export const BINARYMap=new Map([
     ['add',(a:number,b:number)=>a+b],
@@ -26,6 +26,13 @@ export class OPTTool extends PeepholeScope{
     private state_pool:Map<number|string,number>=new Map()
     private _sweep:[number,number,IRTree[]][]=[]
     private r_pool:Map<number|string,number>=new Map()
+    private last_use:Map<IRArgs,[boolean,number,number,IRTree]>=new Map()
+    peephole_set(key:IRArgs,value:IRTree,bid:number,index:number,write:boolean=false){
+        this.last_use.set(key,[write,bid,index,value])
+    }
+    peephole_get(key:IRArgs){
+        return this.last_use.get(key)
+    }
     pool_set(key:number,value:number|string){
         if(key==null||value==null)return
         this.pool_state.set(key,value)
@@ -55,6 +62,9 @@ export class OPTTool extends PeepholeScope{
     sweep(bid:number,index:number,...ir:IRTree[]){
         if(this._sweep.find(i=>i[0]==bid&&i[1]==index))return
         this._sweep.push([bid,index,ir])
+    }
+    clear(){
+        this._sweep=[]
     }
 }
 export function is_reg(arg:IRArgs){

@@ -362,7 +362,9 @@ export function render(n: any): string {
         case 'HMapExpr':
             return '[' + [...n.elements].map(([k, v]) => k + ':' + render(v)).join(',') + ']'
         case 'HLambdaExpr':
-            return '(' + n.params.map(render).join(',') + ')=>' + render(n.commands)
+            //params 是槽号数组
+            return '(' + n.params.map((p: any) => typeof p == 'number' ? '#' + p : render(p)).join(',') + ')=>' +
+                render(n.commands)
         case 'HIndexExpr':
             return '(' + render(n.target) + '[' + render(n.index) + '])'
         case 'HMemberExpr':
