@@ -188,8 +188,11 @@ Try     ::= "try" 命令 "catch" "(" Identifier ":" Type ")" 命令 [ "finally" 
 ```
 
 - `for` 的初始化只能是若干条 `var` 声明(自带分号);条件不能省略;步进是若干条
-  基本命令,每条自带结尾分号。
+  基本命令,每条自带结尾分号:`i++;`、`i=i+1;`、`i+=1;` 都可以,不带分号的
+  `i++` 不行。
 - `switch` 的分支体是一条命令,用 `=>` 引出;`default` 可省。
+- `try` 的触发与收尾由脱糖保证:`throw` 脱糖为对 catch 的调用,catch 体末尾与
+  try 体末尾都会补上对 finally 的调用。
 
 ```slang
 public static pow:number(a:number,b:number){
@@ -234,6 +237,9 @@ value number{
 }
 ```
 
+运算解析顺序:`operation` 重定义 > 内建语义 > cast。二元/一元运算先查该类型上有没有
+用户重定义,没有就走内建(数值/布尔结果);两侧类型不同且 cast 也转不动时才报错。
+
 注意:**后缀** `++`/`--` 的 lambda 参数表末尾要追加一个无用的 `number` 参数,
 用于与前缀形式区分:
 
@@ -241,4 +247,5 @@ value number{
 operation ++ (x:number,post:number)=>number{ /* ... */ }
 ```
 
-`cast` 定义类型转换:`cast number(s:string)=>number{ return 0; }`。
+`cast` 定义类型转换,**方向单一**:lambda 参数类型是来源,声明的 Type 是目标,
+`cast number(s:string)=>number` 表示 string 可转 number,反向不成立。

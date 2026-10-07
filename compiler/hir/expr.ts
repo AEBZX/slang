@@ -39,7 +39,7 @@ import {
     NullLiteral,
     NumberLiteral,
     ReferencePrefix,
-    StringLiteral, TernaryExpression
+    StringLiteral, TernaryExpression, HArrayExpr
 } from '../utils'
 const H_NumberLiteral:slang_hir_visitor=(node:NumberLiteral, scope, call)=>{
     //进制字面量:0x/0b/0o 按各自的进制转,其余十进制
@@ -63,7 +63,8 @@ const H_IdentifierExpr:slang_hir_visitor=(node:IdentifierExpr,scope,call)=>{
         id=scope.get(scope.link_target.get(node.name))
     return new HIdentifierExpr(id)
 }
-const H_ArrayExpr:slang_hir_visitor=(node:ArrayExpression,scope,call)=>node.elements.map(call)
+const H_ArrayExpr:slang_hir_visitor=(node:ArrayExpression,scope,call)=>
+    new HArrayExpr(node.elements.map(call))
 const H_MapExpr:slang_hir_visitor=(node:MapExpression,scope,call)=>{
     let ret=new Map()
     for(const [key, value] of node.elements)

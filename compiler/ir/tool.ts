@@ -1,67 +1,59 @@
+import {HExpr, HIRTree, IRArgs, IRTree} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
-import {asm_command, asm_pool, HIRTree} from '../utils'
-export type slang_asm_factory=(data:HIRTree,tool:ASMTool)=>void
-export class ASMTool extends PeepholeScope{
-    constructor() {
-        super(null,null)
-        this.pool=new Map()
-        this.cache=[]
-        this.asm=new Map()
-        this.list=[]
-        this.entry=false
-        //根块:入口块,id为0
-        this.name=0
-        this.asm.set(0,[[],[]])
-        //code/param 必须引用块0的数组,否则顶层初始化指令push到独立数组,pop后丢失
-        this.code=this.asm.get(0)[0]
-        this.param=this.asm.get(0)[1]
+export type slang_ir_factory=(data:HIRTree,tool:IRTool,call:(data:HIRTree)=>void)=>void
+const BinaryDict=new Map([
+    ['+','add'],
+    ['-','sub'],
+    ['*','mul'],
+    ['/','div'],
+    ['%','mod'],
+    ['>>','shr'],
+    ['<<','shl'],
+    ['&','and'],
+    ['|','or'],
+    ['^','xor']
+])
+const CmpDict=new Map([
+    ['==',0],
+    ['>',1],
+    ['>=',2],
+    ['!=',3],
+    ['<',4],
+    ['<=',5]
+])
+export class IRTool extends PeepholeScope{
+    index:number=0
+    ir:Map<number,IRTree[]>
+    pool:Map<number|string,number>
+    block_id:number
+    ls_arg:IRArgs=null
+    //是直接调用还取地址
+    index_address:boolean=false
+    add(data:number|string){
+        if(this.pool.has(data))return this.pool.get(data)
+        const id=this.id()
+        this.pool.set(data,id)
+        return id
     }
-    BinaryDict=new Map([
-        ['+','add'],
-        ['-','sub'],
-        ['*','mul'],
-        ['/','div'],
-        ['%','mod'],
-        ['>>','shr'],
-        ['<<','shl'],
-        ['&','and'],
-        ['|','or'],
-        ['^','xor']
-    ])
-    CmpDict=new Map([
-        ['==',0],
-        ['!=',1],
-        ['>',2],
-        ['<',3],
-        ['>=',4],
-        ['<=',5]
-    ])
-    pool:asm_pool
-    code:asm_command[]
-    name:number
-    param:number[]
-    list:[number,[asm_command[],number[]]][]
-    asm:Map<number,[asm_command[],number[]]>
-    cache:number[]
-    continue_stack:number[]=[]
-    entry:boolean
+    push(ir:IRTree){
+        this.ir.get(this.block_id).push(ir)
+    }
+    create(num:number=null){
+        const id=num||this.id()
+        this.ir.set(id,[])
+        return id
+    }
+    constructor(id:number=0) {
+        super(null,null)
+        this.ir=new Map()
+        this.index=0
+    }
     id(){
         return this.index++
     }
-    push(id:number){
-        this.list.push([this.name,[this.code,this.param]])
-        this.name=id
-        //id不存在则自动建空块
-        if(!this.asm.has(id))
-            this.asm.set(id,[[],[]])
-        this.code=this.asm.get(id)[0]
-        this.param=this.asm.get(id)[1]
-    }
-    pop(){
-        this.asm.set(this.name,[this.code,this.param])
-        let data=this.list.pop()
-        this.name=data[0]
-        this.code=data[1][0]
-        this.param=data[1][1]
-    }
+}
+export function fast_call(arg:IRArgs,value:HExpr,tool:IRTool,call:(data:HIRTree)=>void){
+    tool.ls_arg=arg
+    call(value)
+    return arg
 }

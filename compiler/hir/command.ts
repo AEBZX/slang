@@ -12,7 +12,6 @@ import {
     ExprCommand, IdentifierExpr,
     IfStatement, ListCommand,
     Return,
-    VarDecl,
     VM,
     WhileStatement
 } from '../utils'

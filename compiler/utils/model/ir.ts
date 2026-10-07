@@ -1,288 +1,145 @@
 import {PeepholeTree} from '../lib/tool'
-export const BinMap=new Map([
-    ['mov',0],
-    ['add',4],
-    ['sub',12],
-    ['mul',20],
-    ['div',28],
-    ['mod',36],
-    ['shr',44],
-    ['shl',52],
-    ['and',60],
-    ['or',68],
-    ['xor',76],
-    ['load',84],
-    ['cz',88],
-    ['jz',92],
-    ['tz',96],
-    //1参
-    ['call',100],
-    ['jmp',102],
-    ['thread',104],
-    ['not',106],
-    ['bit_not',108],
-    //3参
-    ['cmp',110],
-    //1参
-    ['push',118],
-    ['pop',120],
-    ['ret',122],
-    //retn 原在 121 与 pop 的 value 槽位重叠,已挪到 169(delete 之后,避开 pop 区间)
-    ['retn',169],
-    //字符串索引 s[i]:独立操作码(offset_get 的字符串回退会与数组 owner 槽号数字碰撞误判)
-    ['str_get',170],
-    ['gc',123],
-    //3参
-    ['offset_set',124],
-    ['offset_get',132],
-    ['offset_addr',140],
-    //2参
-    ['in',148],
-    ['out',152],
-    ['block_start',156],
-    ['block_end',158],
-    ['param_set',159],
-    ['param_load',163],
-    //1参
-    ['delete',167]
-])
-export const ParamOffset=new Map<string,number>([
-    ['reg',0],
-    ['value',1],
-    ['regreg',0],
-    ['regvalue',1],
-    ['valuereg',2],
-    ['valuevalue',3],
-    ['regregreg',0],
-    ['regregvalue',1],
-    ['regvaluereg',2],
-    ['regvaluevalue',3],
-    ['valueregerg',4],
-    ['valueregvalue',5],
-    ['valuevaluereg',6],
-    ['valuevaluevalue',7]
-])
 export const Null=0
-export class MOV extends IRTree{
-    constructor(public left:asm_args,public right:asm_args) {
-        super('mov')
+export class IRTree extends PeepholeTree{}
+export class IRArgs{
+    public data:number
+    public type:'reg'|'value'
+    constructor(data:number,type:'reg'|'value') {
+        this.data=data
+        this.type=type
     }
-    generate():bin{
-        return [super.generate_two(this.left,this.right),this.left[1],this.right[1],Null]
+    static reg(value:number){
+        return new IRArgs(value,'reg')
+    }
+    static value(value:number){
+        return new IRArgs(value,'value')
+    }
+}
+export class MOV extends IRTree{
+    constructor(public left:IRArgs,public right:IRArgs) {
+        super()
     }
 }
 export class LOAD extends IRTree{
-    constructor(public reg:asm_args,public data:asm_args) {
-        super('load')
-    }
-    generate():bin{
-        return [super.generate_two(this.reg,this.data),this.reg[1],this.data[1],Null]
+    constructor(public reg:IRArgs,public data:IRArgs) {
+        super()
     }
 }
 export class BINARY extends IRTree{
-    constructor(id:string,public result:asm_args,public left:asm_args,public right:asm_args) {
-        super(id)
-    }
-    generate(): bin {
-        return [super.generate_two(this.left,this.right),this.result[1],this.left[1],this.right[1]]
+    constructor(public id:string,public result:IRArgs,public left:IRArgs,public right:IRArgs) {
+        super()
     }
 }
 export class NOT extends IRTree{
-    constructor(public data:asm_args) {
-        super('not')
-    }
-    generate(): bin {
-        return [super.generate_zero(),this.data[1],Null,Null]
-    }
-}
-export class BIT_NOT extends IRTree{
-    constructor(public data:asm_args) {
-        super('bit_not')
-    }
-    generate(): bin {
-        return [super.generate_zero(),this.data[1],Null,Null]
+    constructor(public data:IRArgs) {
+        super()
     }
 }
 export class CMP extends IRTree{
-    constructor(public left:asm_args,public right:asm_args,public oper:asm_args) {
-        super('cmp')
-    }
-    generate(): bin {
-        return [super.generate_three(this.left,this.right,this.oper),this.left[1],this.right[1],this.oper[1]]
+    //oper=0:==,oper=1:>,oper=2:>=,oper=3:!=,oper=4:<,oper=5:<=
+    constructor(public left:IRArgs,public right:IRArgs,public oper:IRArgs) {
+        super()
     }
 }
-export class JZ extends IRTree{
-    constructor(public target:asm_args,public cond:asm_args) {
-        super('jz')
-    }
-    generate(): bin {
-        return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],Null]
+export class ControlStream extends IRTree{
+    //frame=0:块帧,frame=1:函数帧
+    constructor(public target:IRArgs,public frame:IRArgs) {
+        super()
     }
 }
-export class CZ extends IRTree{
-    constructor(public target:asm_args,public cond:asm_args,public is_func_call:asm_args) {
-        super('cz')
-    }
-    generate(): bin {
-        return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],this.is_func_call[1]]
+export class ControlStreamCond extends ControlStream{
+    constructor(target:IRArgs,frame:IRArgs,public cond:IRArgs) {
+        super(target,frame)
     }
 }
-export class TZ extends IRTree{
-    constructor(public target:asm_args,public cond:asm_args) {
-        super('tz')
-    }
-    generate(): bin {
-        return [super.generate_two(this.target,this.cond),this.target[1],this.cond[1],Null]
-    }
-}
-export class JMP extends IRTree{
-    constructor(public target:asm_args) {
-        super('jmp')
-    }
-    generate(): bin {
-        return [super.generate_one(this.target),this.target[1],Null,Null]
-    }
-}
-export class CALL extends IRTree{
-    //is_func_call:1=函数调用(压函数帧),0=块调用;retn 靠它弹到函数帧
-    constructor(public target:asm_args,public is_func_call:asm_args) {
-        super('call')
-    }
-    generate(): bin {
-        return [super.generate_one(this.target),this.target[1],this.is_func_call[1],Null]
-    }
-}
-export class THREAD extends IRTree{
-    constructor(public target:asm_args) {
-        super('thread')
-    }
-    generate(): bin {
-        return [super.generate_one(this.target),this.target[1],Null,Null]
-    }
-}
+export class JZ extends ControlStreamCond{}
+export class CZ extends ControlStreamCond{}
+export class TZ extends ControlStreamCond{}
+export class JMP extends ControlStream{}
+export class CALL extends ControlStream{}
+export class THREAD extends ControlStream{}
 export class RET extends IRTree{
-    constructor() {
-        super('ret')
-    }
-    generate(): bin {
-        return [super.generate_zero(),Null,Null,Null]
-    }
-}
-export class RETN extends IRTree{
-    constructor() {
-        super('retn')
-    }
-    generate(): bin {
-        return [super.generate_zero(),Null,Null,Null]
+    constructor(public frame:IRArgs) {
+        super()
     }
 }
 export class PUSH extends IRTree{
-    constructor(public target:asm_args) {
-        super('push')
-    }
-    generate(): bin {
-        return [super.generate_zero(),this.target[1],Null,Null]
+    constructor(public target:IRArgs) {
+        super()
     }
 }
 export class POP extends IRTree{
-    constructor(public target:asm_args) {
-        super('pop')
-    }
-    generate(): bin {
-        return [super.generate_zero(),this.target[1],Null,Null]
+    constructor(public target:IRArgs) {
+        super()
     }
 }
 export class OFFSET_SET extends IRTree{
-    constructor(public target:asm_args,public offset:asm_args,public value:asm_args) {
-        super('offset_set')
-    }
-    generate(): bin {
-        return [super.generate_three(this.target,this.offset,this.value),this.target[1],this.offset[1],this.value[1]]
+    constructor(public target:IRArgs,public offset:IRArgs,public value:IRArgs) {
+        super()
     }
 }
 export class OFFSET_GET extends IRTree{
-    constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
-        super('offset_get')
-    }
-    generate(): bin {
-        return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]
+    constructor(public target:IRArgs,public data:IRArgs,public offset:IRArgs) {
+        super()
     }
 }
 export class OFFSET_ADDR extends IRTree{
-    constructor(public target:asm_args,public data:asm_args,public offset:asm_args) {
-        super('offset_addr')
-    }
-    generate(): bin {
-        return [super.generate_three(this.target,this.data,this.offset),this.target[1],this.data[1],this.offset[1]]
+    constructor(public target:IRArgs,public data:IRArgs,public offset:IRArgs) {
+        super()
     }
 }
-export class STR_GET extends OFFSET_GET{
-    constructor(target:asm_args,data:asm_args,offset:asm_args) {
+export class OFFSET_STR_GET extends OFFSET_GET{
+    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
         super(target,data,offset)
-        this.id='str_get'
+    }
+}
+export class OFFSET_STR_SET extends OFFSET_SET{
+    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
+        super(target,data,offset)
+    }
+}
+export class OFFSET_STR_ADDR extends OFFSET_ADDR{
+    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
+        super(target,data,offset)
     }
 }
 export class IN extends IRTree{
-    constructor(public oper:asm_args,public data:asm_args) {
-        super('in')
-    }
-    generate(): bin {
-        return [super.generate_two(this.oper,this.data),this.oper[1],this.data[1],Null]
+    constructor(public oper:IRArgs,public data:IRArgs) {
+        super()
     }
 }
 export class OUT extends IRTree{
-    constructor(public oper:asm_args,public target:asm_args) {
-        super('out')
-    }
-    generate(): bin {
-        return [super.generate_two(this.oper,this.target),this.oper[1],this.target[1],Null]
+    constructor(public oper:IRArgs,public target:IRArgs) {
+        super()
     }
 }
 export class GC extends IRTree{
     constructor() {
-        super('gc')
-    }
-    generate(): bin {
-        return [super.generate_zero(),Null,Null,Null]
+        super()
     }
 }
 export class DELETE extends IRTree{
-    constructor(public data:asm_args) {
-        super('delete')
-    }
-    generate(): bin {
-        return [super.generate_one(this.data),this.data[1],Null,Null]
+    constructor(public data:IRArgs) {
+        super()
     }
 }
 export class BLOCK_START extends IRTree{
-    constructor(public name:asm_args) {
-        super('block_start')
-    }
-    generate(): bin {
-        return [super.generate_zero(),this.name[1],Null,Null]
+    constructor(public name:IRArgs) {
+        super()
     }
 }
 export class BLOCK_END extends IRTree{
     constructor() {
-        super('block_end')
-    }
-    generate(): bin {
-        return [super.generate_zero(),Null,Null,Null]
+        super()
     }
 }
 export class PARAM_SET extends IRTree{
-    constructor(public param:asm_args,public value:asm_args) {
-        super('param_set')
-    }
-    generate(): bin {
-        return [super.generate_two(this.param,this.value),this.param[1],this.value[1],Null]
+    constructor(public param:IRArgs,public value:IRArgs) {
+        super()
     }
 }
 export class PARAM_LOAD extends IRTree{
-    constructor(public data:asm_args,public param:asm_args) {
-        super('param_load')
-    }
-    generate(): bin {
-        return [super.generate_two(this.data,this.param),this.data[1],this.param[1],Null]
+    constructor(public data:IRArgs,public param:IRArgs) {
+        super()
     }
 }

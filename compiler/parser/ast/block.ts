@@ -72,7 +72,9 @@ const G_Function:slang_ast_generate=(data,tree)=>{
                        _implement?tree_ast(data,2+off,tree):null)
 }
 const G_Variable:slang_ast_generate=(data,tree)=>{
-    return new Variable(null,null,tree_ast(data,0,tree),tree_ast(to_ast_data(data,1),0,tree))
+    //child 1:有初值时是表达式节点,无初值时是 CST 里裸字符串 ';' 的节点,不能当表达式转换
+    const init=to_ast_data(data,1)
+    return new Variable(null,null,tree_ast(data,0,tree),typeof init=='object'?tree_ast(init,0,tree):null)
 }
 const G_Block:slang_ast_generate=(data,tree)=>{
     let modifier=data.children.get(0) as ast_data
