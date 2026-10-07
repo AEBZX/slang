@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {parse_expr, render} from './helper'
 
 //解析表达式并渲染成括号风格
@@ -38,19 +38,21 @@ describe('parser/表达式·字面量', () => {
         expect(E('_a$1')).toBe('_a$1')
     })
 
-    //已知缺陷:compiler/utils/lib/lexer.ts:90
-    //转义处理是 ret+=JSON.parse(`"${esc}"`) —— 拼出来的是「只有转义字符本身」的字符串,
-    //反斜杠丢了。于是 \n 变成字母 n;而 \" 与 \\ 会让 JSON.parse 收到非法字面量并抛错。
-    it.fails('\\n 转义成换行符', () => {
+    it('转义序列按 JSON 规则还原', () => {
         expect(E('"a\\nb"')).toBe('"a\\nb"')
+        expect(E('"a\\tb"')).toBe('"a\\tb"')
     })
 
-    it.fails('\\" 是合法转义', () => {
+    it('\\" 是合法转义', () => {
         expect(E('"a\\"b"')).toBe('"a\\"b"')
     })
 
-    it.fails('\\\\ 是合法转义', () => {
+    it('\\\\ 是合法转义', () => {
         expect(E('"a\\\\b"')).toBe('"a\\\\b"')
+    })
+
+    it('JSON 不认识的转义保留原字符', () => {
+        expect(E('"a\\qb"')).toBe('"aqb"')
     })
 })
 
@@ -147,15 +149,11 @@ describe('parser/表达式·前缀', () => {
         expect(E('*&a')).toBe('(*(&a))')
     })
 
-    //已知缺陷:compiler/parser/cst/expr.ts:36
-    //TypePrefix 挂在 PrefixList 里,排在 PostfixExpression -> PrimaryExpression -> "(" Expression ")" 之前,
-    //而 ClassType 接受任意标识符,于是 (x) 先被当成「转成类型 x」吃掉,
-    //后面缺操作数就整条失败;若恰好后面能接住(*y),就静默变成转换而不是乘法。
-    it.fails('括号表达式 (x)', () => {
+    it('括号表达式 (x)', () => {
         expect(E('(x)')).toBe('x')
     })
 
-    it.fails('括号表达式 (a.b)', () => {
+    it('括号表达式 (a.b)', () => {
         expect(E('(a.b)')).toBe('(a.b)')
     })
 
@@ -164,8 +162,18 @@ describe('parser/表达式·前缀', () => {
         expect(E('(1+2)')).toBe('(1+2)')
     })
 
-    it.fails('(x)*y 应该是乘法而不是类型转换', () => {
+    it('括号表达式后面接运算符时按表达式读', () => {
         expect(E('(x)*y')).toBe('(x*y)')
+        expect(E('(x)+y')).toBe('(x+y)')
+    })
+
+    it('括号后紧跟操作数时按类型转换读', () => {
+        expect(E('(x)y')).toBe('((x)y)')
+    })
+
+    it('类型转换后面可以继续跟前缀运算', () => {
+        expect(E('(number)-x')).toBe('((number)(-x))')
+        expect(E('(number)!x')).toBe('((number)(!x))')
     })
 })
 

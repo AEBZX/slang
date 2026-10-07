@@ -46,7 +46,12 @@ import {
     Variable,
     WhileStatement
 } from '../utils'
-import {build_chain, name, resolve_named, slang_check_visitor, verify_generics} from './tool'
+import {build_chain, name, resolve_named, Scope, slang_check_visitor, verify_generics} from './tool'
+//建表只登记第一次出现的名字:round2 的 name() 靠全局表看出「同一个名字被声明过两次」,
+//这里直接覆盖的话,最后一个声明会在 round2 里被当成自身而躲过重名检查
+const set_first=(scope:Scope,name:string,ast:ASTTree)=>{
+    if(scope.global.get(name)==null)scope.global.set(name,ast)
+}
 //round1:Build不做任何检查,搭建全局static符号表
 const Build_File:slang_check_visitor=(ast:File, scope, call)=>{
     for(const i of ast.children)
@@ -77,7 +82,7 @@ const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
 }
 const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     const name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
-    scope.global.set(name,ast)
+    set_first(scope,name,ast)
     scope=scope.enter()
     scope.path=name
     if(ast instanceof Class||ast instanceof Interface)
@@ -88,7 +93,7 @@ const Build_ClassOrInterface: slang_check_visitor=(ast:Class|Interface,scope,cal
 }
 const Build_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
     const name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
-    scope.global.set(name,ast)
+    set_first(scope,name,ast)
 }
 const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.enter()
@@ -111,14 +116,14 @@ const Build_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
 const Build_Function:slang_check_visitor=(ast:Function, scope, call)=>{
     let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(!ast.modifiers.unstatic&&!ast.modifiers._private){
-        scope.global.set(name,ast)
+        set_first(scope,name,ast)
         scope.global.set_overload(name,ast)
     }
 }
 const Build_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     let name=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(!ast.modifiers.unstatic&&!ast.modifiers._private)
-        scope.global.set(name,ast)
+        set_first(scope,name,ast)
 }
 export const Round1=new Map<any,slang_check_visitor>([
     [File,Build_File],
@@ -181,6 +186,9 @@ const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,cal
     const full=scope.path==''?ast.name:`${scope.path}.${ast.name}`
     if(name(full,scope,ast))
         scope.thr(`类/接口${ast.name}不能重名,在行${ast.line.join('\n')}`)
+    //登记进当前作用域:后一个同名声明才会在 c_name 里看到前一个
+    scope.set(ast.name,ast)
+    scope.set(full,ast)
     if(ast.implement instanceof ClassType){
         build_chain(scope,full,ast)
         call(ast.implement,2)
@@ -368,8 +376,9 @@ const Verify_PostfixExpression:slang_check_visitor=(ast:PostfixExpression,scope,
         call(ast.index,2)
 }
 const Verify_PrefixExpression:slang_check_visitor=(ast:PrefixExpression,scope,call)=> {
+    //TypePrefix 的转换目标类型在 ast.t 上,ast.type 是表达式自己的推断类型
     if(ast instanceof TypePrefix)
-        call(ast.type,2)
+        call(ast.t,2)
     call(ast.expr,2)
 }
 const Verify_BinaryExpression:slang_check_visitor=(ast:BinaryExpression,scope,call)=> {

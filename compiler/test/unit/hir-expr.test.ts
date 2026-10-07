@@ -4,6 +4,25 @@ import {hir_src, pipeline, render} from './helper'
 const M = (body: string) => `public m:module{ ${body} }`
 const F = (body: string, head = 'public static f:number(a:number)') => M(`${head}{ ${body} }`)
 
+//在 HIR 树里按类名深度查找第一个匹配节点
+function deep_find(v: any, cls: string, seen = new Set<any>()): any {
+    if (v == null || typeof v != 'object' || seen.has(v)) return null
+    seen.add(v)
+    if (v.constructor && v.constructor.name == cls) return v
+    if (Array.isArray(v)) {
+        for (const i of v) {
+            const r = deep_find(i, cls, seen)
+            if (r) return r
+        }
+        return null
+    }
+    for (const k of Object.keys(v)) {
+        const r = deep_find(v[k], cls, seen)
+        if (r) return r
+    }
+    return null
+}
+
 describe('hir/表达式·字面量', () => {
     it('数字字面量转成 JS number', () => {
         expect(hir_src(F('return 1;'))).toContain('return 1;')
@@ -103,35 +122,49 @@ describe('hir/表达式·标识符与作用域', () => {
     })
 })
 
-describe('hir/表达式·已知缺陷', () => {
-    //已知缺陷:compiler/hir/expr.ts:123 的 H_MemberExpr
-    //check 会给每次函数调用设 call_target(形如 m.g@0),脱糖把它改写成点路径 MemberPostfix(m,'g@0'),
-    //但这个合成出来的 IdentifierExpr('m') 没有 type,于是 H_MemberExpr 走最后一条分支用裸名 scope.get('g@0'),
-    //而符号表里注册的是 'm.g@0' —— 查不到就新分配一个 id,调用目标彻底错掉。
-    it.fails('同模块内调用函数应该解析到函数自己的 id', () => {
+describe('hir/表达式·调用目标与 link 解析', () => {
+    it('同模块内调用函数解析到函数自己的 id', () => {
         const out = hir_src(M(`public static g:number(x:number){return x;}
                                public static f:number(){ return g(1); }`))
-        //g 的 id 是 2,调用点必须也是 2
-        expect(out).toContain('(#2(1))')
+        //m 是 1、g 是 2,调用点要写成对 m.g 的成员访问
+        expect(out).toContain('((#1.2)(1))')
     })
 
-    //已知缺陷:compiler/hir/expr.ts:107-118
-    //命中 link 别名后,lnk_name 取的是最后一段名字('print')而不是匹配上的前缀('io'),
-    //postfix 又从头切,于是 scope.get 拿到的键是 'print.print' 这种不存在的名字,只能新分配 id。
-    it.fails('通过 link 别名做成员访问应该解析到目标模块的成员 id', () => {
+    it('通过 link 别名做成员访问解析到目标模块的成员 id', () => {
         const out = hir_src(`link std.io as io;
 public std:module{ public io:module{ public static print:void(){} } }
 public m:module{ public static f:void(){ io.print(); } }`)
-        expect(out).not.toMatch(/\(#[0-9]+\.[0-9]+\)\.\d+/)
+        //std 是 1、io 是 2、print 是 3,别名要展开成 std.io.print
+        expect(out).toContain('(((#1.2).3)())')
     })
 
-    //同上:别名调用一样会被 call_target 改写成点路径,同样是查错符号
-    it.fails('通过 link 别名直接调用应该解析到函数自己的 id', () => {
+    it('通过 link 别名直接调用解析到函数自己的 id', () => {
         const out = hir_src(`link std.io.print as print;
 public std:module{ public io:module{ public static print:void(){} } }
 public m:module{ public static f:void(){ print(); } }`)
-        //print 的真实 id 是 3,调用点不能出现别的 id
-        expect(out).toContain('(#3())')
+        expect(out).toContain('(((#1.2).3)())')
+    })
+
+    it('运算符重载的目标按点路径解析', () => {
+        const {nodes, hscope} = pipeline(`value number{ operation + (a:number,b:number)=>number{ return a; } }
+public m:module{ public static f:number(a:number){ return a+1; } }`)
+        //脱糖把 a+1 变成对 number.+@0 的调用,调用目标必须正好是那个函数的符号
+        const call = deep_find(nodes[0], 'HArgumentsExpr')
+        expect(call.target.member).toBe(hscope.get('number.+@0'))
+    })
+
+    it('跨模块的全路径调用解析到函数自己的 id', () => {
+        const out = hir_src(`public std:module{ public math:module{ public static pow:number(a:number,b:number){return a;} } }
+public m:module{ public static f:number(){ return std.math.pow(2,3); } }`)
+        //std 是 1、math 是 2、pow 是 3
+        expect(out).toContain('((#1.2).3)(2,3)')
+    })
+
+    it('枚举成员按点路径解析', () => {
+        const out = hir_src(M(`public E:enum{A,B}
+                               public static f:number(){ return m.E.A; }`))
+        //m 是 1、E 是 2、成员 A 是 3
+        expect(out).toContain('((#1.2).3)')
     })
 })
 

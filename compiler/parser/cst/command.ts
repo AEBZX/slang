@@ -33,7 +33,9 @@ const Break=$.s('Break',$.d('break'),$.d(';'))
 const Continue=$.s('Continue',$.d('continue'),$.d(';'))
 const Throw=$.s('Throw',$.d('throw'),$.r('Expression'),$.d(';'))
 const VM=$.s('VM',$.d('vm')
-    ,$.d('('),TokenType.String,$.w('VMParam',$.r('Expression'),','),$.d(')'),$.d(';'))
+    ,$.d('('),TokenType.String
+    ,$.l('VMParam',$.s('VMParamData',$.d(','),$.r('Expression')))
+    ,$.d(')'),$.d(';'))
 const BasicCommand=$.o('BasicCommand',
     $.r('VarDecl'),
     $.r('ExprCommand'),

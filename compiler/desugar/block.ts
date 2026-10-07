@@ -6,6 +6,7 @@ import {
     ClassType,
     desugar_visitor,
     Enum,
+    Expression,
     File,
     LambdaType,
     Modifier,
@@ -16,7 +17,7 @@ import {
     Function, LambdaExpression, NullLiteral, Value, NumberType, StringType, BooleanType, ListCommand, Return,
     IdentifierExpr, VoidType, Interface
 } from '../utils'
-import {slang_desugar_visitor} from './tool'
+import {desugar_cast, desugar_oper, slang_desugar_visitor} from './tool'
 const D_File:slang_desugar_visitor=(node:File,call)=>{
     node.children=node.children.map(call) as Block[]
     return node
@@ -33,13 +34,18 @@ const D_Value:slang_desugar_visitor=(node:Value,call)=>{
 }
 const D_Operation:slang_desugar_visitor=(node:Operation,call)=>{
     node.command=call(node.command) as LambdaExpression
-    return new Function(new Modifier(false,false,false),node.oper+'@'+node.index,new Map(),
+    //名字里的序号交给 D_Function 统一拼,这里先把 index 摆好
+    const _function=new Function(new Modifier(false,false,false),node.oper,new Map(),
         node.command.params,node.command.ret,node.command.body)
+    _function.index=node.index
+    return call(_function)
 }
 const D_Cast:slang_desugar_visitor=(node:Cast,call)=>{
     node.command=call(node.command) as LambdaExpression
-    return new Function(new Modifier(false,false,false),'cast@'+node.id,new Map(),
+    const _function=new Function(new Modifier(false,false,false),'cast',new Map(),
         node.command.params,node.command.ret,node.command.body)
+    _function.index=node.id
+    return call(_function)
 }
 const D_Function:slang_desugar_visitor=(node:Function,call)=>{
     node.commands=call(node.commands)
@@ -69,6 +75,16 @@ const D_Interface:slang_desugar_visitor=(node:Interface,call)=>{
     node.children=node.children.map(call) as Block[]
     return new Class(node.modifiers,node.name,node.generic,null,node.children)
 }
+//块级变量:初值要脱糖,check 打在声明上的 oper/cast 也要落到初值上
+const D_Variable:slang_desugar_visitor=(node:Variable,call)=>{
+    node.value=call(node.value) as Expression
+    if(node.value==null)return node
+    if(node.oper!=null&&node.oper!='')
+        node.value=desugar_oper(node.oper,new IdentifierExpr(node.name),node.value)
+    else if(node.cast!=null&&node.cast!='')
+        node.value=desugar_cast(node.cast,node.value)
+    return node
+}
 const D_Enum:slang_desugar_visitor=(node:Enum,call)=>
     new Class(node.modifiers,node.name,new Map(),null,node.children.map(i=>
         new Variable(new Modifier(false,false,false),i,new VoidType(),new NullLiteral(''))
@@ -80,6 +96,7 @@ export default new Map<any,desugar_visitor>([
     [Operation,D_Operation],
     [Cast,D_Cast],
     [Function,D_Function],
+    [Variable,D_Variable],
     [Class,D_Class],
     [Interface,D_Interface],
     [Enum,D_Enum]

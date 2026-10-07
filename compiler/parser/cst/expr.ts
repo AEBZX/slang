@@ -33,20 +33,23 @@ const PostfixExpression=$.s('PostfixExpression',
                 ,$.d('('),$.w('Args',$.r('Expression'),','),$.d(')')))
     )
 )
+const IncrementPrefix=$.s('IncrementPrefix',$.d('++'))
+const DecrementPrefix=$.s('DecrementPrefix',$.d('--'))
+const NotPrefix=$.s('NotPrefix',$.d('!'))
+const BitNotPrefix=$.s('BitNotPrefix',$.d('~'))
+const MinusPrefix=$.s('MinusPrefix',$.d('-'))
+const ReferencePrefix=$.s('ReferencePrefix',$.d('*'))
+const AddressPrefix=$.s('AddressPrefix',$.d('&'))
+const NewPrefix=$.s('NewPrefix',$.d('new'))
+const TypePrefix=$.s('TypePrefix',$.d('('),$.r('Type'),$.d(')'))
+const PrefixData=$.o('PrefixData',IncrementPrefix,DecrementPrefix,NotPrefix,BitNotPrefix,MinusPrefix
+    ,ReferencePrefix,AddressPrefix,NewPrefix)
+const PrefixDataWithCast=$.o('PrefixData',TypePrefix,IncrementPrefix,DecrementPrefix,NotPrefix,BitNotPrefix
+    ,MinusPrefix,ReferencePrefix,AddressPrefix,NewPrefix)
 const PrefixExpression=$.o('PrefixExpression',
-    $.s('PrefixExpression',
-        $.l('PrefixList',$.o('PrefixData',
-            $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')')),
-            $.s('IncrementPrefix',$.d('++')),
-            $.s('DecrementPrefix',$.d('--')),
-            $.s('NotPrefix',$.d('!')),
-            $.s('BitNotPrefix',$.d('~')),
-            $.s('MinusPrefix',$.d('-')),
-            $.s('ReferencePrefix',$.d('*')),
-            $.s('AddressPrefix',$.d('&')),
-            $.s('NewPrefix',$.d('new'))
-        )),
-        $.r('PostfixExpression'))
+    $.s('PrefixExpression',$.l('PrefixList',TypePrefix),$.r('PostfixExpression')),
+    $.s('PrefixExpression',$.l('PrefixList',PrefixData),$.r('PostfixExpression')),
+    $.s('PrefixExpression',$.l('PrefixList',PrefixDataWithCast),$.r('PostfixExpression'))
 )
 const MulExpression=$.s('MulExpression',
     $.r('PrefixExpression'),$.l('OperList',

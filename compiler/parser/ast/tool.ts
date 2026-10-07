@@ -3,7 +3,7 @@ import {
     AddExpression, AndAssign,
     AndExpression, ast_data, ASTTree, ClassType, DivAssign,
     DivExpression, EqualExpression, GreaterEqualExpression,
-    GreaterExpression, InequalExpression, LessEqualExpression, LessExpression, LogicAndExpression,
+    GreaterExpression, InequalExpression, KeyMap, LessEqualExpression, LessExpression, LogicAndExpression,
     LogicOrExpression, ModAssign,
     ModExpression, MulAssign,
     MulExpression, OrAssign, OrExpression, ShlAssign, ShlExpression, ShrAssign, ShrExpression, SubAssign,
@@ -61,18 +61,19 @@ export function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:n
     const first=data&&data.children?data.children.get(key) as ast_data:null
     if(first==null)
         return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
+    //ImplementsName / ModuleName 都还套了一层,真正取到的是它们包着的类型节点
     if(first.type=='ImplementsName'||first.type=='ModuleName')
-        return {is:true,data:tree(to_ast_data(data,0))}
+        return {is:true,data:tree(to_ast_data(first,0))}
     if(first.type=='Type'||first.type=='BasicType')
-        return {is:true,data:tree(first.type=='Type'?to_ast_data(data,0):first)}
+        return {is:true,data:tree(first)}
     return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
 }
 export function parseGeneric(data:ast_data,tree:(data:ast_data)=>ASTTree){
     const generic=to_ast_data(data,0)
     if(generic==null||generic.type!='GenericList')return {
-        is:false,data:new Map<string,Type>()
+        is:false,data:new KeyMap<string,Type>()
     }
-    let ret=new Map<string,Type>()
+    let ret=new KeyMap<string,Type>()
     for(const v of to_ast_data(generic,0).children.values())
         if(typeof v=='object')
             ret.set(to_string(v,0),parseImplement(v,tree,1).data)

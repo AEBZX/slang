@@ -1,5 +1,6 @@
-import {describe, expect, it} from 'vitest'
-import {parse, parse_first_block, render} from './helper'
+﻿import {describe, expect, it} from 'vitest'
+import {parse, parse_first_block, render, type_str} from './helper'
+import {ClassType} from '../../utils'
 
 //解析整个文件并渲染
 const F = (src: string) => render(parse(src))
@@ -96,31 +97,26 @@ describe('parser/块·Class 与 Interface', () => {
         expect(B('public ObjectInterface:interface{}')).toBe('[?,?,public]ObjectInterface:interface{}')
     })
 
-    //已知缺陷:compiler/parser/ast/tool.ts:65
-    //parseImplement 已经把 first=data.children.get(key) 取出来了,却把 tree(to_ast_data(data,0)) 传下去。
-    //无泛型时 child0 是 ImplementsName 包装节点,有泛型时 child0 是 GenericList,
-    //两者都没注册 AST 生成器,于是 implements 一律抛「AST 生成器缺失」。
-    it.fails('类 implements 接口(无泛型)', () => {
+    it('类 implements 接口(无泛型)', () => {
         expect(B('public Box:class implements Container{}'))
             .toBe('[?,?,public]Box:class implements Container{}')
     })
 
-    it.fails('类 implements 接口(带泛型)', () => {
+    it('类 implements 接口(带泛型)', () => {
         expect(B('public Box:class<T> implements Container<T>{}'))
             .toBe('[?,?,public]Box:class<T> implements Container<T>{}')
     })
 
-    it.fails('接口 implements 接口', () => {
+    it('接口 implements 接口', () => {
         expect(B('public I:interface implements J{}'))
             .toBe('[?,?,public]I:interface implements J{}')
     })
 
-    //已知缺陷:compiler/parser/ast/tool.ts:67
-    //同一个分支里 Type 走的是 tree(to_ast_data(data,0)),而 child0 是泛型名字符串 'T',
-    //tree('T') 去查名字为 undefined 的生成器,直接抛「AST 生成器缺失:undefined」。
-    it.fails('泛型形参带 implements 约束', () => {
-        expect(B('public Box:class<T implements std.ObjectInterface>{}'))
-            .toBe('[?,?,public]Box:class<T>{}')
+    it('泛型形参带 implements 约束', () => {
+        const cls: any = parse_first_block('public Box:class<T implements std.ObjectInterface>{}')
+        //约束记在泛型形参的类型上
+        expect(type_str(cls.generic.get('T'))).toBe('std.ObjectInterface')
+        expect(render(cls)).toBe('[?,?,public]Box:class<T>' + DEFAULT + '{}')
     })
 })
 

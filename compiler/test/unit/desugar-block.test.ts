@@ -89,12 +89,18 @@ describe('desugar/块·Operation 与 Cast', () => {
         return c
     }
 
-    it('operation 变成以「运算符@序号」命名的函数', () => {
-        expect(D(oper())).toBe('[static,sync,public]+@3:number(x:number){return a;}')
+    it('operation 和普通函数一样脱糖成 Variable,名字是「运算符@序号」', () => {
+        const out: any = desugar.run([oper()])[0]
+        expect(out).toBeInstanceOf(Variable)
+        expect(out.name).toBe('+@3')
+        expect(D(oper())).toBe('[static,sync,public]+@3:()=>null=(x:number,:?)=>number{return a;};')
     })
 
-    it('cast 变成以「cast@序号」命名的函数', () => {
-        expect(D(cast())).toBe('[static,sync,public]cast@7:number(x:number){return a;}')
+    it('cast 和普通函数一样脱糖成 Variable,名字是「cast@序号」', () => {
+        const out: any = desugar.run([cast()])[0]
+        expect(out).toBeInstanceOf(Variable)
+        expect(out.name).toBe('cast@7')
+        expect(D(cast())).toBe('[static,sync,public]cast@7:()=>null=(x:number,:?)=>number{return a;};')
     })
 
     it('operation 的 lambda 体会脱糖', () => {
@@ -103,21 +109,6 @@ describe('desugar/块·Operation 与 Cast', () => {
         const o = oper()
         o.command = lambda(new NumberType(), new Return(e))
         expect(D(o)).toContain('return (o@0((&a),(&b)));')
-    })
-
-    //已知缺陷:compiler/desugar/block.ts:34
-    //D_Operation / D_Cast 直接 return new Function(...),没有再走一遍 call()。
-    //于是它们不会像普通函数那样被 D_Function 转成 Variable,
-    //少掉隐式 this 参数槽(void 返回时也少了 return this)——
-    //而 hir/block.ts 与 ir/block.ts 都只认 Variable,不认 Function,这两个函数会在后端被整个跳过。
-    it.fails('operation 也应该像普通函数一样脱糖成 Variable', () => {
-        const out = desugar.run([oper()])[0]
-        expect(out.constructor.name).toBe('Variable')
-    })
-
-    it.fails('cast 也应该像普通函数一样脱糖成 Variable', () => {
-        const out = desugar.run([cast()])[0]
-        expect(out.constructor.name).toBe('Variable')
     })
 })
 
@@ -217,12 +208,29 @@ describe('desugar/块·Class 与实例成员', () => {
         expect(D(c)).toBe('[?,?,?]C:class{[?,?,?]f:number=()=>void{b;};}')
     })
 
-    //已知缺陷:compiler/desugar/index.ts(同 desugar-expr 里记的那条)
-    //Variable 没有注册 visitor,兜底 (node,call)=>node 也不递归,
-    //所以块级变量声明里的初值表达式完全不会被脱糖。
-    it.fails('块级变量初值里的逻辑与应该被展开成三目', () => {
+    it('块级变量初值里的逻辑与会展开成三目', () => {
         const c = new Class(mod(), 'C', new Map(), null, [
             new Variable(mod(), 'v', new BooleanType(), new LogicAndExpression(id('a'), id('b')))])
         expect(D(c)).toContain('(a?(a&b):false)')
+    })
+
+    it('块级变量初值里的 oper 会脱糖成运算符调用', () => {
+        const e = new AddExpression(id('a'), id('b'))
+        ;(e as any).oper = 'o@0'
+        const c = new Class(mod(), 'C', new Map(), null, [
+            new Variable(mod(), 'v', new NumberType(), e)])
+        expect(D(c)).toContain('(o@0((&a),(&b)))')
+    })
+
+    it('块级变量声明上的 cast 会套到初值上', () => {
+        const v = new Variable(mod(), 'v', new NumberType(), num('1'))
+        ;(v as any).cast = 'C.cast@0'
+        expect(D(v)).toBe('[?,?,?]v:number=((C.cast@0)(1));')
+    })
+
+    it('块级变量声明上的 oper 会带上变量自身作为左操作数', () => {
+        const v = new Variable(mod(), 'v', new NumberType(), num('1'))
+        ;(v as any).oper = 'C.set@0'
+        expect(D(v)).toBe('[?,?,?]v:number=((C.set@0)((&v),(&1)));')
     })
 })

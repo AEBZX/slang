@@ -23,6 +23,7 @@ import {
     GreaterExpression,
     InequalExpression,
     Interface,
+    KeyMap,
     LambdaExpression,
     LambdaType,
     LessEqualExpression,
@@ -182,7 +183,9 @@ export class Scope extends PeepholeScope{
         else this.cast.set(type,[cast])
     }
     thr(msg:string){
-        this.global.error.push(msg)
+        //错误统一记在最外层作用域上:Check.run 返回的就是它,
+        //记在 global 上的话调用方读 scope.error 永远是空的
+        this.root().error.push(msg)
     }
 }
 function m_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
@@ -515,12 +518,19 @@ export function real_type(type:Type,scope:Scope){
     }
     return type
 }
-//按名解析符号:本地作用域优先,其次全局,最后按当前路径补全
+//按名解析符号:本地作用域优先,其次全局,最后按当前路径逐级往上补全
 export function resolve_named(scope:Scope,name:string):ASTTree{
     let data=scope.get(name)
     if(data==null&&scope.global)data=scope.global.get(name)
-    if(data==null&&scope.path!=''&&scope.global)data=scope.global.get(scope.path+'.'+name)
-    return data==null?null:data
+    if(data!=null)return data
+    //函数体/类体里的 path 已经带上函数名/类名,只拼当前这一级会得到 m.f.C 这种查不到的名字,
+    //所以顺着作用域链把每一级的 path 都试一遍
+    for(let s:Scope=scope;s!=null;s=s.parent){
+        if(s.path==''||scope.global==null)continue
+        data=scope.global.get(s.path+'.'+name)
+        if(data!=null)return data
+    }
+    return null
 }
 //收集 block 实现/继承的接口(传递闭包)
 export function collect_chain(scope:Scope,block:Class|Interface,out:Set<Interface>,seen:Set<Block>){
@@ -573,9 +583,11 @@ export function check_async_modifier(ast:Block, scope:Scope,kind:string){
         ast.modifiers._async=false
     }
 }
-export function check_dup(keys: Iterable<string>, scope: Scope, label: string, line: string[]) {
-    const arr = Array.from(keys)
-    if (new Set(arr).size != arr.length)
+export function check_dup(keys: Map<string,any>|Iterable<string>, scope: Scope, label: string, line: string[]) {
+    //Map 会把重复的键吃掉,重复项由 KeyMap 记在 dup 里,两边都要看
+    const arr = keys instanceof Map ? Array.from(keys.keys()) : Array.from(keys)
+    const dup = keys instanceof KeyMap ? keys.dup : []
+    if (new Set(arr).size != arr.length || dup.length != 0)
         scope.thr(`${label}重复定义,在行${line.join('\n')}`)
 }
 export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {

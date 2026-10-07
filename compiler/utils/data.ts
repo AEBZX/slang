@@ -22,6 +22,13 @@ export class ASTTree extends PeepholeTree{
     type:Type
     line:string[]
 }
+export class KeyMap<K,V> extends Map<K,V>{
+    dup:K[]=[]
+    set(key:K,value:V):this{
+        if(this.has(key))this.dup.push(key)
+        return super.set(key,value)
+    }
+}
 export class HIRTree extends PeepholeTree{}
 export type ast_generate=(data:ast_data,tree:(data:ast_data)=>PeepholeTree)=>PeepholeTree
 export type slang_ast_generate=(data:ast_data,tree:(data:ast_data)=>ASTTree)=>ASTTree
@@ -51,6 +58,8 @@ export let keywords=[
     '+=','-=', '*=', '/=', '%=', '<<=', '>>=', '&&=', '||=','&=','|=','^=',
     '++','--','===','!==','+=','-=','*=','/=','%=','<<=','>>=','&&=','||=','&=','|=','^=',
     '<<','>>','&&','||','==','!=','>=','<=','+','-','*','/','%','&','|','^','>','<','!','=',
+    //new 也必须是关键字:否则它会被词法成标识符,前缀表达式里会先被当成变量名吃掉
+    'new',
     //外层关键字
     'link','module','class','enum','interface','of','implements','function','var','as','operation','cast','value',
     //类型关键字

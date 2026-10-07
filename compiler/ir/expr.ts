@@ -29,7 +29,7 @@ const I_ArrayExpr:slang_ir_factory=(data:HArrayExpr,tool,call)=> {
     for (const [index, element] of data.elements.entries()) {
         tool.ls_arg = IRArgs.reg(ls_id)
         call(element)
-        tool.push(new OFFSET_SET(array,tool._pool(index), tool.ls_arg))
+        tool.push(new OFFSET_SET(array,tool._pool(index),IRArgs.value(ls_id)))
     }
 }
 const I_MapExpr:slang_ir_factory=(data:HMapExpr,tool,call)=>{
@@ -59,9 +59,8 @@ const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
 }
 const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
     const mov_data=tool.ls_arg
-    const data_id=IRArgs.reg(tool.id())
-    tool.ls_arg=data_id
-    call(data.target)
+    const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    data_id.type='value'
     const offset_id=IRArgs.reg(tool.id())
     tool.ls_arg=offset_id
     call(data.index)
@@ -74,9 +73,8 @@ const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
 }
 const I_MemberExpr:slang_ir_factory=(data:HMemberExpr,tool,call)=>{
     const mov_data=tool.ls_arg
-    const data_id=IRArgs.reg(tool.id())
-    tool.ls_arg=data_id
-    call(data.target)
+    const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    data_id.type='value'
     const offset_id=IRArgs.reg(tool.add(data.member))
     if(tool.index_address){
         tool.push(new OFFSET_ADDR(mov_data,data_id,offset_id))
@@ -91,7 +89,8 @@ const I_PostfixIncrementOrDecrement:slang_ir_factory=(data:HPostIncrementExpr|HP
     //拿到target的地址
     let target_address=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
     target_address.type='value'
-    const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    let target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    target_data.type='value'
     tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',target_address,target_data,tool._pool(1)))
 }
 const I_PrefixIncrementOrDecrement:slang_ir_factory=(data:HPreIncrementExpr|HPreDecrementExpr,tool,call)=>{
@@ -110,7 +109,9 @@ const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     for(const [index,arg] of data.args.entries()){
         tool.ls_arg=arg_id
         call(arg)
+        arg_id.type='value'
         tool.push(new PARAM_SET(IRArgs.reg(index+1),arg_id))
+        arg_id.type='reg'
     }
     tool.ls_arg=arg_id
     call(data.target)
@@ -144,10 +145,12 @@ const I_AddressExpr:slang_ir_factory=(data:HAddressExpr,tool,call)=>{
 }
 const I_BinaryExpr:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
     const arg=tool.ls_arg
-    const left_arg=IRArgs.reg(tool.id())
-    const right_arg=IRArgs.reg(tool.id())
+    let left_arg=IRArgs.reg(tool.id())
+    let right_arg=IRArgs.reg(tool.id())
     fast_call(left_arg,data.left,tool,call)
     fast_call(right_arg,data.right,tool,call)
+    left_arg.type='value'
+    right_arg.type='value'
     if(Array.from(BinaryDict.keys()).includes(data.op))
         tool.push(new BINARY(BinaryDict.get(data.op),arg,left_arg,right_arg))
     if(Array.from(CmpDict.keys()).includes(data.op)){
@@ -160,12 +163,15 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     const block_id=tool.block_id
     const true_id=tool.create()
     const false_id=tool.create()
-    const condition_arg=IRArgs.reg(tool.id())
-    const true_arg=IRArgs.reg(tool.id())
-    const false_arg=IRArgs.reg(tool.id())
+    let condition_arg=IRArgs.reg(tool.id())
+    let true_arg=IRArgs.reg(tool.id())
+    let false_arg=IRArgs.reg(tool.id())
     fast_call(condition_arg,data.condition,tool,call)
     fast_call(true_arg,data.trueExpr,tool,call)
     fast_call(false_arg,data.falseExpr,tool,call)
+    condition_arg.type='value'
+    true_arg.type='value'
+    false_arg.type='value'
     //建立块
     tool.block_id=true_id
     tool.push(new MOV(arg,true_arg))

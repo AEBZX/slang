@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {Round0} from '../../check/censor'
 import {Round1, Round2} from '../../check/symbol'
 import {Round3} from '../../check/type'
@@ -49,19 +49,14 @@ describe('check/作用域与引擎', () => {
         expect(inner.root()).toBe(scope)
     })
 
-    //已知缺陷:compiler/utils/lib/check.ts:40 与 check/tool.ts:184
-    //Scope.thr 把消息推进 this.global.error,而 Check.run 返回的是最外层 scope,
-    //它自己的 error 数组始终是空的。compiler/index.ts 正是读 scope.error.length 来决定要不要中止编译,
-    //所以所有 check 诊断目前都被静默吞掉,非法程序会继续走到脱糖和后端。
-    it.fails('Check.run 返回的 scope.error 应该带上收集到的诊断', () => {
+    it('Check.run 返回的 scope.error 带上收集到的诊断', () => {
         const scope: any = run_check([parse(M('public static f:void(){ undefined_name; }'))])
-        expect(scope.error.length).toBeGreaterThan(0)
+        expect(scope.error.join('')).toContain('未定义的变量')
     })
 
-    it('诊断实际落在 global.error 上', () => {
+    it('诊断记在最外层作用域上,不会漏到 global 里', () => {
         const scope: any = run_check([parse(M('public static f:void(){ undefined_name; }'))])
-        expect(scope.error).toEqual([])
-        expect(scope.global.error.join('')).toContain('未定义的变量')
+        expect(scope.global.error).toEqual([])
     })
 })
 
@@ -92,18 +87,15 @@ describe('check/round2·重名', () => {
         expect(up_to2(M('public static f:void(){} public static f:number(){return 1;}'))).toEqual([])
     })
 
-    //已知缺陷:compiler/check/tool.ts:188 的 name()
-    //m_name 在 exist==ast 时直接返回 false,而 round1 建表时同名后声明会覆盖先声明,
-    //于是「最后一个声明」永远被当成自身、不报重名;变量那侧因为 Verify_Variable 会顺手改写 global 才侥幸能报。
-    it.fails('枚举不能重名', () => {
+    it('枚举不能重名', () => {
         expect(has(up_to2(M('public E:enum{A} public E:enum{B}')), '枚举E不能重名')).toBe(true)
     })
 
-    it.fails('类不能重名', () => {
+    it('类不能重名', () => {
         expect(has(up_to2(STD + M('public C:class{} public C:class{}')), '类/接口C不能重名')).toBe(true)
     })
 
-    it.fails('类与接口同名也不能重名', () => {
+    it('类与接口同名也不能重名', () => {
         expect(has(up_to2(STD + M('public C:class{} public C:interface{}')), '类/接口C不能重名')).toBe(true)
     })
 })
@@ -136,14 +128,11 @@ describe('check/round2·类型名解析', () => {
         expect(up_to2(STD + M('public C:class{} public static v:C=null;'))).toEqual([])
     })
 
-    //已知缺陷:compiler/check/tool.ts:519 的 resolve_named
-    //按路径补全时用的是「当前作用域」的 path,而函数体/类体里的 path 已经带上函数名/类名,
-    //于是拼成 m.f.C / m.D.C,永远查不到同模块的兄弟声明。
-    it.fails('函数参数里的裸类型名应该能解析到同模块的类', () => {
+    it('函数参数里的裸类型名应该能解析到同模块的类', () => {
         expect(up_to2(STD + M('public C:class{} public static f:void(a:C){}'))).toEqual([])
     })
 
-    it.fails('类体里的裸类型名应该能解析到同模块的类', () => {
+    it('类体里的裸类型名应该能解析到同模块的类', () => {
         expect(up_to2(STD + M('public C:class{} public D:class{public static f:void(a:C){}}'))).toEqual([])
     })
 

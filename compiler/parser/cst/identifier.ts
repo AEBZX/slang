@@ -5,7 +5,7 @@ const BooleanType=$.s('BooleanType',$.d('boolean'))
 const StringType=$.s('StringType',$.d('string'))
 const VoidType=$.s('VoidType',$.d('void'))
 const LambdaType=$.s('LambdaType',
-    $.c('Generic',$.r('GenericList')),
+    $.c($.r('GenericList')),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
     $.d('=>'),$.r('Type'))
 const GenericType=$.s('GenericType',$.d('@'),TokenType.Identifier)

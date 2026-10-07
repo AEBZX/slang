@@ -10,7 +10,7 @@ import {ASTTree, Expression, File, Function, ListCommand} from '../../utils'
 
 //用完整 token 表把源码切成 token
 export function lex_src(src: string) {
-    return lexer(src, tokens)
+    return lexer(src, tokens as any[])
 }
 
 //解析单个源文件:Parser.run 收的是「每个文件一个 token 数组」
@@ -75,11 +75,11 @@ export function run_check(files: File[]) {
     return check.run(files) as Scope
 }
 
-//Scope.thr 写的是 global.error;Check.run 返回的外层 scope.error 永远是空的
+//Scope.thr 把诊断记在最外层作用域上,也就是 Check.run 返回的那个
 export function errors_of(scope: any): string[] {
     if (scope == null) return []
-    if (scope.global && Array.isArray(scope.global.error)) return scope.global.error
-    return scope.error || []
+    if (Array.isArray(scope.error)) return scope.error
+    return (scope.global && scope.global.error) || []
 }
 
 //解析 + 完整 check(只跑一轮时用 check_rounds),返回真实收集到的错误

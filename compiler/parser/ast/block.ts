@@ -5,7 +5,7 @@ import {
     Class, ClassType,
     Enum, File,
     Function,
-    Interface, LambdaExpression,
+    Interface, KeyMap, LambdaExpression,
     Link, Modifier,
     Module, Operation,
     Type, Value,
@@ -58,7 +58,7 @@ const G_Enum:slang_ast_generate=(data,tree)=>{
     return new Enum(null,null,children)
 }
 const G_Function:slang_ast_generate=(data,tree)=>{
-    let params=new Map<string,Type>()
+    let params=new KeyMap<string,Type>()
     const generic=parseGeneric(data,tree)
     const off=generic.is?1:0
     const ParamIdentifier=to_ast_data(data,1+off)

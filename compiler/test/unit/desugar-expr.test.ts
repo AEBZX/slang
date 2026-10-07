@@ -215,21 +215,16 @@ describe('desugar/表达式·递归', () => {
         expect(D(new BooleanLiteral('true'))).toBe('true')
     })
 
-    //已知缺陷:compiler/desugar/index.ts
-    //默认兜底是 (node,call)=>node —— 不调用 expr_desugar。
-    //于是只有被注册进 desugar 表的节点类型才会消费 oper/cast,
-    //叶子节点(IdentifierExpr / 各种 Literal)身上的 cast 会被直接丢掉。
-    //check/type.ts:480 与 tool.ts:620 都会把 cast 挂到这类节点上。
-    it.fails('标识符上的 cast 应该被脱糖', () => {
+    it('标识符上的 cast 会被脱糖', () => {
         expect(D(with_cast(id('a'), 'c@0'))).toBe('(c@0(a))')
     })
 
-    it.fails('调用实参里标识符上的 cast 应该被脱糖', () => {
+    it('调用实参里标识符上的 cast 会被脱糖', () => {
         expect(D(new ArgumentsPostfix(id('f'), [], [with_cast(id('x'), 'c@0')])))
-            .toBe('(f((c@0)(x)))')
+            .toBe('(f((c@0(x))))')
     })
 
-    it.fails('成员访问基对象上的 cast 应该被脱糖', () => {
-        expect(D(new MemberPostfix(with_cast(id('a'), 'c@0'), 'b'))).toBe('((c@0)(a).b)')
+    it('成员访问基对象上的 cast 会被脱糖', () => {
+        expect(D(new MemberPostfix(with_cast(id('a'), 'c@0'), 'b'))).toBe('((c@0(a)).b)')
     })
 })

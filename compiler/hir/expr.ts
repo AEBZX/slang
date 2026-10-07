@@ -2,7 +2,7 @@ import {slang_hir_visitor} from './tool'
 import {
     AddressPrefix,
     ArgumentsPostfix,
-    ArrayExpression, BinaryExpression,
+    ArrayExpression, ASTTree, BinaryExpression,
     BitNotPrefix,
     BlockType,
     BooleanLiteral,
@@ -87,6 +87,11 @@ const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
 }
 const H_IndexExpr:slang_hir_visitor=(node:IndexPostfix,scope,call)=>
     new HIndexExpr(call(node.expr), call(node.index))
+const ast_path=(node:ASTTree):string=>{
+    if(node instanceof IdentifierExpr)return node.name
+    if(node instanceof MemberPostfix)return ast_path(node.expr)+'.'+node.name
+    return null
+}
 const H_MemberExpr:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     const is_link=(n:MemberPostfix)=>{
         if(n.expr instanceof IdentifierExpr)return true
@@ -101,26 +106,29 @@ const H_MemberExpr:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     }
     if(is_link(node)){
         set_name(node)
-        let lnk_index:number=-1
-        let lnk_name:string=null
         name=name.reverse()
-        for(const [index,n] of name.entries())
-            if(scope.link_target.get(name.slice(0,index).join('.'))){
+        //找第一个命中 link 别名的前缀;别名之后的段接在目标模块的点路径后面继续查
+        let lnk_index=-1
+        for(let index=0;index<name.length;index++)
+            if(scope.link_target.get(name.slice(0,index+1).join('.'))){
                 lnk_index=index
-                lnk_name=n
                 break
             }
-        if(lnk_name!=null){
-            const postfix=name.slice(lnk_index)
-            let ret:HExpr=new HIdentifierExpr(scope.get(scope.link_target.get(lnk_name)))
-            for(const [index,i] of postfix.entries())
-                ret=new HMemberExpr(ret,scope.get(lnk_name+'.'+postfix.slice(0,index)+i))
+        if(lnk_index>=0){
+            let path=scope.link_target.get(name.slice(0,lnk_index+1).join('.'))
+            let ret:HExpr=new HIdentifierExpr(scope.get(path))
+            for(const i of name.slice(lnk_index+1)){
+                path=path+'.'+i
+                ret=new HMemberExpr(ret,scope.get(path))
+            }
             return ret
         }
     }
     if(node.expr.type instanceof ClassType||node.expr.type instanceof BlockType)
         return new HMemberExpr(call(node.expr),scope.get(node.expr.type.local.join('.')+'.'+node.name))
-    return new HMemberExpr(call(node.expr), scope.get(node.name))
+    //没有 type 的 callee 要自己拼出全名再查,按裸名查只会新分配一个不相干的符号
+    const path=ast_path(node)
+    return new HMemberExpr(call(node.expr), scope.get(path!=null?path:node.name))
 }
 const H_ArgumentsExpr:slang_hir_visitor=(node:ArgumentsPostfix,scope,call)=>
     new HArgumentsExpr(call(node.expr),node.args.map(call))

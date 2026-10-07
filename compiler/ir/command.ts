@@ -20,6 +20,7 @@ const I_Assign:slang_ir_factory=(data:HAssign,tool,call)=>{
         const data_arg=IRArgs.reg(tool.id())
         let offset_arg=IRArgs.reg(tool.id())
         fast_call(data_arg,data.data.target,tool,call)
+        data_arg.type='value'
         if(data.data instanceof HMemberExpr)
             offset_arg=tool._pool(data.data.member)
         if(data.data instanceof HIndexExpr)

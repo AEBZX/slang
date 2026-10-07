@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {parse_commands, parse_function, render} from './helper'
 
 //解析一段函数体,把每条命令渲染出来
@@ -67,15 +67,11 @@ describe('parser/命令·基本命令', () => {
         expect(() => parse_function('return')).toThrow()
     })
 
-    //已知缺陷:compiler/parser/cst/command.ts:35
-    //VM ::= "vm" "(" String { VMParam } ")" ";" —— VMParam 是 while 循环,语义是「元素后跟分隔符」,
-    //所以 String 后面必须立刻出现表达式,那个逗号永远没人消费。
-    //结果:只要 vm 带参数,整个块都解析不出来。
-    it.fails('vm 带一个参数', () => {
+    it('vm 带一个参数', () => {
         expect(C('vm("out %s",x);')).toEqual(['vm("out %s",x);'])
     })
 
-    it.fails('vm 带多个参数', () => {
+    it('vm 带多个参数', () => {
         expect(C('vm("a",x,y);')).toEqual(['vm("a",x,y);'])
     })
 })

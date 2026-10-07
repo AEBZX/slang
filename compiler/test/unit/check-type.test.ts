@@ -228,20 +228,13 @@ describe('check/round3·new', () => {
         expect(has(c3(M('public static f:void(){ var a:number=new 1; }')), 'new只能用于类')).toBe(true)
     })
 
-    //已知缺陷:compiler/check/type.ts:403 的 Label_ArgumentsPostfix
-    //构造调用会把 callee 重写成合成的 MemberPostfix(...,'constructor') 再 call(ast,3) 一次,
-    //而这个合成节点既没有 line,类里也不存在名为 constructor 的成员,
-    //于是报错时读 ast.line.join 直接抛 TypeError —— 也就是说 new 一个类根本走不通。
-    it.fails('new 一个类应该能通过', () => {
+    it('new 一个类应该能通过', () => {
         expect(c3(STD + M('public C:class{} public static f:void(){ var a:m.C=new m.C(); }'))).toEqual([])
     })
 })
 
-describe('check/round3·已知缺陷', () => {
-    //已知缺陷:compiler/parser/ast/expr.ts 里 G_PostfixExpression 只给最外层节点盖行号,
-    //链式访问里内层的 MemberPostfix 没有 line,而 check 报错时直接读 ast.line.join,
-    //于是一个本该被诊断出来的错误变成了 TypeError。
-    it.fails('链式成员访问里的错误应该被正常诊断', () => {
+describe('check/round3·诊断不会因为缺行号而崩掉', () => {
+    it('链式成员访问里的错误应该被正常诊断', () => {
         expect(has(c3(M('public static f:void(){ var a:number=1; a.b(); }')), 'b不存在')).toBe(true)
     })
 
@@ -249,10 +242,7 @@ describe('check/round3·已知缺陷', () => {
         expect(has(c3(M('public static f:void(){ var a:number=1; a.b; }')), 'b不存在')).toBe(true)
     })
 
-    //已知缺陷:compiler/check/symbol.ts:370 的 Verify_PrefixExpression
-    //TypePrefix 的转换目标类型存在 ast.t 上,这里却 call(ast.type, 2) —— ast.type 是表达式的推断类型(此时还是 undefined),
-    //于是转换目标类型从来没被解析/检查过。
-    it.fails('类型转换的目标类型应该被解析', () => {
+    it('类型转换的目标类型应该被解析', () => {
         expect(has(c3(M('public static f:void(){ var a:number=(NoSuchType)1; }')),
             '类/接口NoSuchType不是Class或Interface')).toBe(true)
     })

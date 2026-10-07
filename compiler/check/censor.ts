@@ -114,7 +114,7 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
     //implement必须是ClassType
     if(ast.implement!=null&&!(ast.implement instanceof ClassType))
         scope.thr(`类的/接口implement的模块必须是接口,在行${ast.line.join('\n')}`)
-    check_dup(ast.generic.keys(),scope,'类/接口中泛型',ast.line)
+    check_dup(ast.generic,scope,'类/接口中泛型',ast.line)
     //generic implement必须是ClassType
     for(const i of ast.generic.values())
         if(!(i instanceof ClassType))
@@ -133,8 +133,8 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
 }
 const Check_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     ast.modifiers=fill_modifier(ast)
-    check_dup(ast.generic.keys(),scope,'函数中泛型定义',ast.line)
-    check_dup(ast.params.keys(),scope,'函数中参数定义',ast.line)
+    check_dup(ast.generic,scope,'函数中泛型定义',ast.line)
+    check_dup(ast.params,scope,'函数中参数定义',ast.line)
     for(const i of ast.params.values())
         call(i,0)
     for(const i of ast.generic.values())
@@ -173,10 +173,11 @@ const Check_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     const old=scope.throw
     scope.throw=true
     call(ast.commands,0)
-    scope.throw=old
     call(ast.catch_.type,0)
     call(ast.catch_.command,0)
     call(ast.finally_,0)
+    //catch / finally 也在 try 的范围内,它们的 throw 要等到这里才恢复标志
+    scope.throw=old
 }
 const Check_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
     if(!scope.throw_())
@@ -222,8 +223,8 @@ const Check_VM:slang_check_visitor=(ast:VM,scope,call)=>{
     for(const i of ast.param)call(i,0)
 }
 const Check_LambdaExpression:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
-    check_dup(ast.generic.keys(),scope,'lambda中泛型定义',ast.line)
-    check_dup(ast.params.keys(),scope,'lambda中参数定义',ast.line)
+    check_dup(ast.generic,scope,'lambda中泛型定义',ast.line)
+    check_dup(ast.params,scope,'lambda中参数定义',ast.line)
     for(const i of ast.params.values())
         call(i,0)
     for(const i of ast.generic.values())
@@ -234,7 +235,7 @@ const Check_ArrayExpression:slang_check_visitor=(ast:ArrayExpression,scope,call)
     for(const i of ast.elements)call(i,0)
 }
 const Check_MapExpression:slang_check_visitor=(ast:MapExpression,scope,call)=>{
-    check_dup(ast.elements.keys(),scope,'map中key定义',ast.line)
+    check_dup(ast.elements,scope,'map中key定义',ast.line)
     for(const i of ast.elements.values())call(i,0)
 }
 const Check_PostfixOrPrefixExpression:slang_check_visitor=(ast:PostfixExpression|PrefixExpression,scope,call)=>{

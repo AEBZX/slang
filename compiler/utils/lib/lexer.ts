@@ -87,7 +87,13 @@ let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
             stream.next()
             let esc=stream.now()
             if(esc==undefined)return [true,ret,TokenType.String]
-            ret+=JSON.parse(`"${esc}"`)
+            //转义序列要连反斜杠一起交给 JSON 解析,否则 \n 只会得到字母 n;
+            //JSON 不认识的转义(如 \q)保留原字符
+            try{
+                ret+=JSON.parse(`"\\${esc}"`)
+            }catch (e){
+                ret+=esc
+            }
             stream.next()
             continue
         }

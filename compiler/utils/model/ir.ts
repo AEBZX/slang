@@ -104,7 +104,7 @@ export class OFFSET_STR_ADDR extends OFFSET_ADDR{
     }
 }
 export class IN extends IRTree{
-    constructor(public oper:IRArgs,public data:IRArgs) {
+    constructor(public oper:IRArgs,public target:IRArgs) {
         super()
     }
 }

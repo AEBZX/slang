@@ -6,7 +6,7 @@ import {
     slang_ast_generate, BitNotPrefix, AndExpression, OrExpression, XorExpression,
     BooleanLiteral, DecrementPostfix, DecrementPrefix, DivExpression, EqualExpression, Expression,
     GreaterEqualExpression,
-    IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, InequalExpression, LessEqualExpression,
+    IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, InequalExpression, KeyMap, LessEqualExpression,
     LogicAndExpression, LogicOrExpression, MapExpression, MemberPostfix,
     AddressPrefix, MinusPrefix, ModExpression, MulExpression, NewPrefix, NotPrefix,
     NullLiteral,
@@ -38,7 +38,7 @@ const G_ArrayExpression:slang_ast_generate=(data,tree)=>{
     return new ArrayExpression(children)
 }
 const G_MapExpression:slang_ast_generate=(data,tree)=>{
-    let children=new Map<string,Expression>
+    let children=new KeyMap<string,Expression>
     for(const v of data.children.values())
         if(typeof v=='object')
             children.set(to_string(v,0),tree_ast(v,1,tree))
@@ -47,7 +47,7 @@ const G_MapExpression:slang_ast_generate=(data,tree)=>{
 const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
     const d=parseGeneric(data,tree)
     const ParamIdentifier=to_ast_data(data,d.is?1:0)
-    let param=new Map<string,Type>
+    let param=new KeyMap<string,Type>
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
             param.set(to_string(v,0),
@@ -59,76 +59,82 @@ const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
 const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
     let primary=tree_ast<Expression>(data,0,tree)
     const FixList=to_ast_data(data,1)
-    for(const v of FixList.children.values())
-        if(typeof v=='object')
-            switch (v.type) {
-                case 'IncrementPostfix':
-                    primary=new IncrementPostfix(primary)
-                    break
-                case 'DecrementPostfix':
-                    primary=new DecrementPostfix(primary)
-                    break
-                case 'MemberPostfix':
-                    primary=new MemberPostfix(primary,to_string(v,0))
-                    break
-                case 'IndexPostfix':
-                    primary=new IndexPostfix(primary,tree_ast(v,0,tree))
-                    break
-                case 'ArgumentsPostfix':{
-                    let param:Expression[]=[]
-                    let type:Type[]=[]
-                    let args=0
-                    const first=to_ast_data(v,0)
-                    if(first&&first.type=='GenericData'){
-                        args=1
-                        for(const _v of first.children.values())
-                            type.push(tree(_v as ast_data))
-                    }
-                    const args_data=to_ast_data(v,args)
-                    if(args_data)
-                        for(const arg of args_data.children.values())
-                            if(typeof arg=='object')
-                                param.push(tree(arg) as Expression)
-                    primary=new ArgumentsPostfix(primary,type,param)
-                    break
+    for(const v of FixList.children.values()){
+        if(typeof v!='object')continue
+        switch (v.type) {
+            case 'IncrementPostfix':
+                primary=new IncrementPostfix(primary)
+                break
+            case 'DecrementPostfix':
+                primary=new DecrementPostfix(primary)
+                break
+            case 'MemberPostfix':
+                primary=new MemberPostfix(primary,to_string(v,0))
+                break
+            case 'IndexPostfix':
+                primary=new IndexPostfix(primary,tree_ast(v,0,tree))
+                break
+            case 'ArgumentsPostfix':{
+                let param:Expression[]=[]
+                let type:Type[]=[]
+                let args=0
+                const first=to_ast_data(v,0)
+                if(first&&first.type=='GenericData'){
+                    args=1
+                    for(const _v of first.children.values())
+                        type.push(tree(_v as ast_data))
                 }
+                const args_data=to_ast_data(v,args)
+                if(args_data)
+                    for(const arg of args_data.children.values())
+                        if(typeof arg=='object')
+                            param.push(tree(arg) as Expression)
+                primary=new ArgumentsPostfix(primary,type,param)
+                break
             }
+        }
+        //这里生成的中间节点不会经过 generate,得自己带上行号:check 报错时要读 ast.line
+        if(primary.line==null)primary.line=v.line
+    }
     return primary
 }
 const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
     const FixList=data.children.get(0) as ast_data
     let primary:Expression=tree(to_ast_data(data,1)) as Expression
-    for(const v of Array.from(FixList.children.values()).reverse())
-        if(typeof v=='object')
-            switch (v.type) {
-                case 'TypePrefix':
-                    primary=new TypePrefix(primary,tree_ast(v,0,tree))
-                    break
-                case 'IncrementPrefix':
-                    primary=new IncrementPrefix(primary)
-                    break
-                case 'DecrementPrefix':
-                    primary=new DecrementPrefix(primary)
-                    break
-                case 'NotPrefix':
-                    primary=new NotPrefix(primary)
-                    break
-                case 'BitNotPrefix':
-                    primary=new BitNotPrefix(primary)
-                    break
-                case 'MinusPrefix':
-                    primary=new MinusPrefix(primary)
-                    break
-                case 'ReferencePrefix':
-                    primary=new ReferencePrefix(primary)
-                    break
-                case 'AddressPrefix':
-                    primary=new AddressPrefix(primary)
-                    break
-                case 'NewPrefix':
-                    primary=new NewPrefix(primary)
-                    break
-            }
+    for(const v of Array.from(FixList.children.values()).reverse()){
+        if(typeof v!='object')continue
+        switch (v.type) {
+            case 'TypePrefix':
+                primary=new TypePrefix(primary,tree_ast(v,0,tree))
+                break
+            case 'IncrementPrefix':
+                primary=new IncrementPrefix(primary)
+                break
+            case 'DecrementPrefix':
+                primary=new DecrementPrefix(primary)
+                break
+            case 'NotPrefix':
+                primary=new NotPrefix(primary)
+                break
+            case 'BitNotPrefix':
+                primary=new BitNotPrefix(primary)
+                break
+            case 'MinusPrefix':
+                primary=new MinusPrefix(primary)
+                break
+            case 'ReferencePrefix':
+                primary=new ReferencePrefix(primary)
+                break
+            case 'AddressPrefix':
+                primary=new AddressPrefix(primary)
+                break
+            case 'NewPrefix':
+                primary=new NewPrefix(primary)
+                break
+        }
+        //同上:前缀节点也要自己带行号
+        if(primary.line==null)primary.line=v.line
+    }
     return primary
 }
 const G_BinaryExpression:slang_ast_generate=(data,tree)=>{

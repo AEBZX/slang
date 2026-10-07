@@ -2,7 +2,7 @@ import {
     ast_data,
     slang_ast_generate,
     BooleanType,
-    ClassType, FixType,
+    ClassType, FixType, KeyMap,
     LambdaType,
     NumberType,
     StringType,
@@ -15,7 +15,7 @@ const G_StringType:slang_ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:slang_ast_generate=(data,tree)=>new BooleanType()
 const G_VoidType:slang_ast_generate=(data,tree)=>new VoidType()
 const G_LambdaType:slang_ast_generate=(data,tree)=>{
-    let params=new Map<string,Type>()
+    let params=new KeyMap<string,Type>()
     const generic=parseGeneric(data,tree)
     const off=generic.is?1:0
     const ParamIdentifier=to_ast_data(data,off)

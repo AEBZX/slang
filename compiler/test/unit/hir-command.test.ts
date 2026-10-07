@@ -131,19 +131,17 @@ describe('hir/命令·节点形状', () => {
     })
 })
 
-describe('hir/命令·已知缺陷', () => {
-    //已知缺陷:compiler/hir/expr.ts:123 —— check 给每次函数调用设的 call_target
-    //让脱糖把 callee 改写成点路径,而 HIR 用裸名查符号表,查不到就新分配 id,调用目标错掉。
-    it.fails('同模块函数调用应该指向函数自己的 id', () => {
+describe('hir/命令·调用目标', () => {
+    it('同模块函数调用指向函数自己的 id', () => {
         const out = hir_src(M(`public static g:number(x:number){return x;}
                                public static f:number(){ return g(1); }`))
-        expect(out).toContain('(#2(1))')
+        //m 是 1、g 是 2
+        expect(out).toContain('((#1.2)(1))')
     })
 
-    it.fails('await 的调用目标也应该指向函数自己的 id', () => {
+    it('await 的调用目标也指向函数自己的 id', () => {
         const out = hir_src(M(`public static g:void(){}
                                public static f:void(){ await g(); }`))
-        //g 的 id 是 2
-        expect(out).toContain('await #2()')
+        expect(out).toContain('await ((#1.2)())')
     })
 })

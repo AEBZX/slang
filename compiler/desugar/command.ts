@@ -25,12 +25,16 @@ import {
     VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await, VM, ModExpression, DivExpression, DivAssign,
     ArrayType, MapType
 } from '../utils'
-import {desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
+import {desugar_cast, desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
     if(node.oper!=null&&node.oper!='')
         return call(new ExprCommand(desugar_oper(node.oper,node.data,node.value)))
+    //cast 是 check 给赋值结果标的类型转换,套在右值上;
+    //复合赋值要在展开前套,不然会转到 a+b 整体而不是写出来的 b
+    if(node.cast!=null&&node.cast!='')
+        node.value=desugar_cast(node.cast,node.value)
     if(node instanceof AAssign)return node
     if(node instanceof AddAssign)return call(new AAssign(node.data,new AddExpression(node.data,node.value)))
     if(node instanceof SubAssign)return call(new AAssign(node.data,new SubExpression(node.data,node.value)))

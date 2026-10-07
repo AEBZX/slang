@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {parse, parse_function, parse_type, type_str} from './helper'
 
 //把类型源码解析成类型节点并渲染回字符串
@@ -83,17 +83,11 @@ describe('parser/类型', () => {
         expect(T('(a:@T)=>@T')).toBe('(a:@T)=>@T')
     })
 
-    //已知缺陷:compiler/parser/cst/identifier.ts:8
-    //LambdaType 写成 $.c('Generic',$.r('GenericList')),但 $.c 的签名是 choose_rule(...data),
-    //没有 name 形参 —— 'Generic' 变成了 choose 的第一个「字面量分支」。
-    //parse_choose 在第一个分支抛错时直接结束并返回 null,于是 GenericList 那条根本没被尝试,
-    //泛型函数类型(lambda type)永远解析不出来。
-    //对照 cst/expr.ts:12 的 LambdaExpression 写的是 $.c($.r('GenericList')),是对的。
-    it.fails('函数类型声明泛型形参', () => {
+    it('函数类型声明泛型形参', () => {
         expect(T('<T>(a:@T)=>@T')).toBe('<T>(a:@T)=>@T')
     })
 
-    it.fails('函数类型的泛型形参 + 空实参表', () => {
+    it('函数类型的泛型形参 + 空实参表', () => {
         expect(T('<T>()=>@T')).toBe('<T>()=>@T')
     })
 })

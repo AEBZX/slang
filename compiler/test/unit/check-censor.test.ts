@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {Round0} from '../../check/censor'
 import {errors_of, parse, check_rounds} from './helper'
 
@@ -64,9 +64,7 @@ describe('check/round0·Class 与 Interface', () => {
             '类/接口内部只能是operation/cast/variable/function')).toBe(true)
     })
 
-    //已知缺陷:check_dup 收的是 Map 的 keys,而泛型表是 Map
-    //——同名泛型在解析成 AST 时就已经合并成一项,check_dup 永远看不到重复
-    it.fails('类/接口里的泛型不能重名', () => {
+    it('类/接口里的泛型不能重名', () => {
         expect(has(c0(M('public C:class<T,T>{}')), '类/接口中泛型重复定义')).toBe(true)
     })
 
@@ -92,12 +90,11 @@ describe('check/round0·Function 与 Variable', () => {
         expect(c0(M('public static f:<T>void(a:@T){}'))).toEqual([])
     })
 
-    //已知缺陷:参数表与泛型表都是 Map,重复项在 AST 里已经被合并,check_dup 形同虚设
-    it.fails('函数参数不能重名', () => {
+    it('函数参数不能重名', () => {
         expect(has(c0(M('public static f:void(a:number,a:number){}')), '函数中参数定义重复定义')).toBe(true)
     })
 
-    it.fails('函数的泛型形参不能重名', () => {
+    it('函数的泛型形参不能重名', () => {
         expect(has(c0(M('public static f:<T,T>void(){}')), '函数中泛型定义重复定义')).toBe(true)
     })
 
@@ -133,14 +130,11 @@ describe('check/round0·break/continue/throw 的作用域', () => {
         expect(c0(M('public static f:void(){try{throw e;}catch(x:string){}}'))).toEqual([])
     })
 
-    //已知缺陷:compiler/check/censor.ts:172
-    //Check_Try 在访问 catch / finally 之前就把 scope.throw 恢复成旧值了,
-    //于是 catch 里重新抛出、finally 里抛出都被判成「throw只能在try中使用」。
-    it.fails('catch 里可以重新抛出', () => {
+    it('catch 里可以重新抛出', () => {
         expect(c0(M('public static f:void(){try{}catch(x:string){throw e;}}'))).toEqual([])
     })
 
-    it.fails('finally 里可以抛出', () => {
+    it('finally 里可以抛出', () => {
         expect(c0(M('public static f:void(){try{}catch(x:string){}finally{throw e;}}'))).toEqual([])
     })
 })
@@ -192,19 +186,16 @@ describe('check/round0·表达式', () => {
         expect(has(c0(M('public E:enum{A,A}')), '枚举成员重复定义')).toBe(true)
     })
 
-    //已知缺陷:MapExpression.elements 是 Map,同名 key 在 AST 里已经被合并
-    it.fails('map 的 key 不能重复', () => {
+    it('map 的 key 不能重复', () => {
         expect(has(c0(M("public static f:void(){var a:number{}=[k:1,k:2];}")), 'map中key定义重复定义')).toBe(true)
     })
 
-    //已知缺陷:lambda 的 params 也是 Map
-    it.fails('lambda 的参数不能重复', () => {
+    it('lambda 的参数不能重复', () => {
         expect(has(c0(M('public static f:void(){var a:number=(x:number,x:number)=>number{return x;};}')),
             'lambda中参数定义重复定义')).toBe(true)
     })
 
-    //已知缺陷:lambda 的 generic 也是 Map
-    it.fails('lambda 的泛型不能重复', () => {
+    it('lambda 的泛型不能重复', () => {
         expect(has(c0(M('public static f:void(){var a:number=<T,T>(x:@T)=>number{return x;};}')),
             'lambda中泛型定义重复定义')).toBe(true)
     })

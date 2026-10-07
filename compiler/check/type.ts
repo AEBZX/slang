@@ -424,14 +424,18 @@ const Label_ArgumentsPostfix:slang_check_visitor=(ast:ArgumentsPostfix,scope,cal
     }
     if(ast.expr.type instanceof ClassType){
         const local=ast.expr.type.local
-        ast.expr=new IdentifierExpr(local[0])
-        for(let i=1;i<local.length;i++)
-            ast.expr=new MemberPostfix(ast.expr,local[i])
-        ast.expr=new MemberPostfix(ast.expr,'constructor')
-        ast.cons=true
-        ast.local=local
-        call(ast,3)
-        return
+        const block=scope.get(localToName(local)) as Class
+        const ctor=block==null||block.children==null?null:block.children.find(i=>i.name=='constructor')
+        //类里写了 constructor 成员就按普通函数调用处理,没写则构造的结果就是该类的实例。
+        //原来这里会把 callee 重写成合成的 MemberPostfix(...,'constructor') 再递归一次,
+        //但类里根本没有这个成员,于是递归里报错时读 ast.line 直接崩掉。
+        if(ctor instanceof Function)ast.expr.type=ctor.type
+        else{
+            ast.cons=true
+            ast.local=local
+            ast.type=ast.expr.type
+            return
+        }
     }
     if(ast.expr.type instanceof LambdaType){
         if(!ast.expr.type.overload){
