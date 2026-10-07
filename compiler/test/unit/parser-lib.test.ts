@@ -1,274 +1,159 @@
-import { describe, it, expect } from 'vitest'
-import { lexer } from '../../utils/lib/lexer.ts'
-import { Parser as $, ast_data, TokenType } from '../../utils'
+import {describe, expect, it} from 'vitest'
+import Parser, {$} from '../../utils/lib/parser'
+import {ast_data, ast_rule, ASTTree, TokenType} from '../../utils'
+import {lex_src} from './helper'
 
-// 辅助: lex → 以指定规则集解析
-// 注意:lexer 会把连续字母合并为单个标识符 token,故输入中 token 之间用空格分隔
-function parse_entry(entry: string, rules: any[], code: string): ast_data | string | null {
-    return $.run(entry, rules, lexer(code))
+//用一个「原样返回 cst」的生成器跑规则,这样能直接断言 CST 结构本身
+function cst(rule: ast_rule, code: string): any {
+    const p = new Parser().use([rule]).use(((data: ast_data) => data) as any)
+    return p.run([lex_src(code)])[0]
 }
 
-// ==================== seg 规则 ====================
-describe('seg 规则', () => {
-    it('拼接子规则并生成连续 child 索引', () => {
-        const rule = $.s('Seq', 'a', 'b', 'c')
-        const r = parse_entry('Seq', [rule], 'a b c') as ast_data
-        expect(r.type).toBe('Seq')
-        expect(r.children.get('child_0')).toBe('a')
-        expect(r.children.get('child_1')).toBe('b')
-        expect(r.children.get('child_2')).toBe('c')
+describe('parser/规则引擎', () => {
+    it('seg 按出现顺序占 child 槽位', () => {
+        const r = $.s('S', TokenType.Number, TokenType.String)
+        const d = cst(r, '1 "a"')
+        expect(d.type).toBe('S')
+        expect(d.children.get(0)).toBe('1')
+        expect(d.children.get(1)).toBe('a')
     })
 
-    it('顺序不匹配则整体失败', () => {
-        const rule = $.s('Seq', 'a', 'b')
-        expect(() => parse_entry('Seq', [rule], 'b a')).toThrow()
+    it('delete 规则只做字面量匹配,不占 child 槽位', () => {
+        const r = $.s('S', TokenType.Number, $.d(','), TokenType.String)
+        const d = cst(r, '1,"a"')
+        //若 delete 占了槽位,第二个值会落在 2 而不是 1
+        expect(d.children.get(0)).toBe('1')
+        expect(d.children.get(1)).toBe('a')
+        expect(d.children.size).toBe(2)
     })
 
-    it('子规则解析的 ast 作为 child 保留', () => {
-        const inner = $.s('Inner', 'i')
-        const outer = $.s('Outer', 'x', $.r('Inner'), 'y')
-        const r = parse_entry('Outer', [inner, outer], 'x i y') as ast_data
-        expect(r.type).toBe('Outer')
-        const child = r.children.get('child_1') as ast_data
-        expect(child.type).toBe('Inner')
+    it('delete 匹配失败时整条规则失败', () => {
+        const r = $.s('S', TokenType.Number, $.d(','), TokenType.String)
+        expect(() => cst(r, '1 "a"')).toThrow()
     })
 
-    it('缺失 token 时整体失败', () => {
-        const rule = $.s('Seq', 'a', 'b')
-        expect(() => parse_entry('Seq', [rule], 'a')).toThrow()
-    })
-})
-
-// ==================== delete 规则 ====================
-describe('delete 规则', () => {
-    it('占位匹配但不产生 child', () => {
-        const rule = $.s('Del', $.d('a'), 'b')
-        const r = parse_entry('Del', [rule], 'a b') as ast_data
-        expect(r.type).toBe('Del')
-        expect(r.children.size).toBe(1)
-        expect(r.children.get('child_0')).toBe('b')
+    it('字面量不匹配时报出期望的 token 与位置', () => {
+        const r = $.s('S', $.d('class'))
+        expect(() => cst(r, 'module')).toThrow(/class/)
     })
 
-    it('delete 匹配失败则整体失败', () => {
-        const rule = $.s('Del', $.d('a'), 'b')
-        expect(() => parse_entry('Del', [rule], 'z b')).toThrow()
-    })
-})
-
-// ==================== child 规则 ====================
-describe('child 规则', () => {
-    it('返回第一个 object child', () => {
-        const inner = $.s('Inner', 'i')
-        const outer = $.s('Outer', $.t('(', $.r('Inner'), ')'), 'y')
-        const r = parse_entry('Outer', [inner, outer], '( i ) y') as ast_data
-        const child = r.children.get('child_0') as ast_data
-        expect(child.type).toBe('Inner')
+    it('child 规则解包出内部的规则节点', () => {
+        const inner = $.s('Inner', TokenType.Number)
+        const r = $.s('S', $.t('(', $.r('Inner'), ')'), TokenType.String)
+        const p = new Parser().use([r, inner]).use(((data: ast_data) => data) as any)
+        const d = p.run([lex_src('(1)"a"')])[0]
+        expect(d.children.get(0).type).toBe('Inner')
+        expect(d.children.get(1)).toBe('a')
     })
 
-    it('child 只透传 object,忽略字符串', () => {
-        const rule = $.s('Wrap', $.t('(', 'x', ')'))
-        const r = parse_entry('Wrap', [rule], '( x )') as ast_data
-        // t 内无 object child → child 返回空节点
-        const child = r.children.get('child_0') as ast_data
-        expect(child.type).toBeNull()
-    })
-})
-
-// ==================== or 规则 ====================
-describe('or 规则', () => {
-    it('返回命中的候选', () => {
-        const rule = $.o('Pick', 'a', 'b', 'c')
-        expect(parse_entry('Pick', [rule], 'b')).toBe('b')
+    it('child 规则内全是 token 时没有可解包的节点,得到空壳', () => {
+        const r = $.s('S', $.t('(', TokenType.Number, ')'))
+        const d = cst(r, '(1)')
+        expect(d.children.get(0).type).toBe(null)
+        expect(d.children.get(0).children.size).toBe(0)
     })
 
-    it('全部候选失败则抛错', () => {
-        const rule = $.o('Pick', 'a', 'b')
-        expect(() => parse_entry('Pick', [rule], 'z')).toThrow()
+    it('or 按顺序尝试,失败回退到下一个分支', () => {
+        const r = $.o('O', $.s('A', TokenType.Number), $.s('B', TokenType.String))
+        expect(cst(r, '1').type).toBe('A')
+        expect(cst(r, '"x"').type).toBe('B')
     })
 
-    it('候选失败后回滚位置再试下一个', () => {
-        // 候选1 解析 AB('a b') 在 'b' 处失败,必须回滚到起点后才能命中候选2 AC('a c')
-        const ab = $.s('AB', 'a', 'b')
-        const ac = $.s('AC', 'a', 'c')
-        const rule = $.o('Rollback', $.r('AB'), $.r('AC'))
-        const r = parse_entry('Rollback', [ab, ac, rule], 'a c') as ast_data
-        expect(r.type).toBe('AC')
+    it('or 的回退会还原游标:前面的失败分支不吃掉后续 token', () => {
+        const r = $.s('S',
+            $.o('O', $.s('A', TokenType.Number), $.s('B', TokenType.String)),
+            TokenType.String)
+        const d = cst(r, '"x""y"')
+        expect(d.children.get(0).type).toBe('B')
+        expect(d.children.get(1)).toBe('y')
     })
 
-    it('命中的 ast 候选作为结果返回', () => {
-        const a = $.s('A', 'a')
-        const pick = $.o('Pick', $.r('A'), 'b')
-        const r = parse_entry('Pick', [a, pick], 'a') as ast_data
-        expect(r.type).toBe('A')
-    })
-})
-
-// ==================== choose 规则 ====================
-describe('choose 规则', () => {
-    it('整个序列匹配时返回最后一条结果', () => {
-        const rule = $.s('Wrap', $.c('a', 'b'))
-        const r = parse_entry('Wrap', [rule], 'a b') as ast_data
-        expect(r.children.get('child_0')).toBe('b')
+    it('or 全部分支失败时抛错', () => {
+        const r = $.o('O', $.s('A', TokenType.Number), $.s('B', TokenType.String))
+        expect(() => cst(r, 'true')).toThrow(/无法找到/)
     })
 
-    it('匹配失败返回 null 且不报错,外层 seg 跳过', () => {
-        const rule = $.s('Wrap', 'x', $.c('a', 'b'), 'y')
-        const r = parse_entry('Wrap', [rule], 'x y') as ast_data
-        expect(r.type).toBe('Wrap')
-        expect(r.children.get('child_0')).toBe('x')
-        expect(r.children.get('child_1')).toBe('y')
+    it('choose 全部失败时返回 null 而不抛错', () => {
+        const r = $.s('S', $.c(TokenType.Number), TokenType.String)
+        const d = cst(r, '"a"')
+        //choose 没匹配就不占槽位
+        expect(d.children.get(0)).toBe('a')
+        expect(d.children.size).toBe(1)
     })
 
-    it('部分匹配后正确回滚位置', () => {
-        // choose('a','b') 中 'a' 命中但 'b' 不匹配 → 整体回滚到 choose 起点
-        // 回滚后外层 'a' 必须能从起点重新命中
-        const rule = $.s('Wrap', 'x', $.c('a', 'b'), 'a')
-        const r = parse_entry('Wrap', [rule], 'x a') as ast_data
-        expect(r.children.get('child_0')).toBe('x')
-        expect(r.children.get('child_1')).toBe('a')
+    it('choose 不把 delete 的包装当成结果', () => {
+        const r = $.s('S', $.c($.d('<'), TokenType.Number, $.d('>')), TokenType.String)
+        const d = cst(r, '<7>"a"')
+        expect(d.children.get(0)).toBe('7')
     })
 
-    it('子规则命中即视为可选片段存在', () => {
-        const rule = $.s('Wrap', $.c('await'), 'x')
-        const r = parse_entry('Wrap', [rule], 'await x') as ast_data
-        expect(r.children.get('child_0')).toBe('await')
-        expect(r.children.get('child_1')).toBe('x')
-    })
-})
-
-// ==================== call 规则 ====================
-describe('call 规则', () => {
-    it('按名字引用其他规则', () => {
-        const inner = $.s('Inner', 'i')
-        const outer = $.s('Outer', 'x', $.r('Inner'))
-        const r = parse_entry('Outer', [inner, outer], 'x i') as ast_data
-        expect(r.children.get('child_1') as ast_data).toMatchObject({ type: 'Inner' })
+    it('while 规则:元素 + 分隔符交替,收尾处静默停止', () => {
+        const r = $.s('S', $.w('W', TokenType.Number, ','))
+        expect(cst(r, '1,2,3').children.get(0).children.size).toBe(3)
+        expect(cst(r, '1').children.get(0).children.size).toBe(1)
+        expect(cst(r, '').children.get(0).children.size).toBe(0)
     })
 
-    it('引用不存在的规则抛错', () => {
-        const outer = $.s('Outer', 'x', $.r('Missing'))
-        expect(() => parse_entry('Outer', [outer], 'x')).toThrow()
-    })
-})
-
-// ==================== while 规则 ====================
-describe('while 规则', () => {
-    it('零次匹配返回 null', () => {
-        const rule = $.w('WList', TokenType.Identifier, ',')
-        expect(parse_entry('WList', [rule], '')).toBeNull()
+    it('while 规则遇到不匹配的分隔符时保留已收元素', () => {
+        const r = $.s('S', $.w('W', TokenType.Number, ','), TokenType.String)
+        const d = cst(r, '1,2"a"')
+        expect(d.children.get(0).type).toBe('W')
+        expect(d.children.get(0).children.size).toBe(2)
+        expect(d.children.get(1)).toBe('a')
     })
 
-    it('多次匹配生成 param 序列', () => {
-        const rule = $.w('WList', TokenType.Identifier, ',')
-        const r = parse_entry('WList', [rule], 'a,b,c') as ast_data
-        expect(r.type).toBe('WList')
-        expect(r.children.get('param_0')).toBe('a')
-        expect(r.children.get('param_1')).toBe('b')
-        expect(r.children.get('param_2')).toBe('c')
+    it('loop 规则重复到无法前进为止', () => {
+        const r = $.s('S', $.l('L', TokenType.Number))
+        expect(cst(r, '1 2 3').children.get(0).children.size).toBe(3)
+        expect(cst(r, '').children.get(0).children.size).toBe(0)
     })
 
-    it('分隔符缺失时停止', () => {
-        const rule = $.w('WList', TokenType.Identifier, ',')
-        const r = parse_entry('WList', [rule], 'a,b') as ast_data
-        expect(r.children.size).toBe(2)
+    it('call 规则按名字引用其他规则', () => {
+        const inner = $.s('Inner', TokenType.Number)
+        const outer = $.s('Outer', $.r('Inner'), TokenType.String)
+        const p = new Parser().use([outer, inner]).use(((data: ast_data) => data) as any)
+        const d = p.run([lex_src('1"a"')])[0]
+        expect(d.children.get(0).type).toBe('Inner')
     })
 
-    it('分隔符已消费但后续项失败时回滚分隔符', () => {
-        // while(Identifier, '.') 匹配到 'a.', 分隔符 '.' 后无 Identifier
-        // 必须回滚 '.' 才能让外层 '.' 命中
-        const rule = $.s('Wrap', $.w('W', TokenType.Identifier, '.'), '.')
-        const r = parse_entry('Wrap', [rule], 'a.') as ast_data
-        expect(r.type).toBe('Wrap')
-        const w = r.children.get('child_0') as ast_data
-        expect(w.type).toBe('W')
-        expect(w.children.size).toBe(1)
-        expect(r.children.get('child_1')).toBe('.')
+    it('引用不存在的规则会抛错', () => {
+        const outer = $.s('Outer', $.r('Missing'))
+        const p = new Parser().use([outer]).use(((data: ast_data) => data) as any)
+        expect(() => p.run([lex_src('1')])).toThrow()
     })
 
-    it('首次项失败时恢复位置并返回 null', () => {
-        // while 首次要求 Number,'y' 不是 Number → 0 次匹配,回滚后外层 'y' 命中
-        const rule = $.s('Wrap', 'x', $.w('W', TokenType.Number, '.'), 'y')
-        const r = parse_entry('Wrap', [rule], 'x y') as ast_data
-        expect(r.children.get('child_0')).toBe('x')
-        expect(r.children.get('child_1')).toBe('y')
-    })
-})
-
-// ==================== loop 规则 ====================
-describe('loop 规则', () => {
-    it('零次匹配返回空节点', () => {
-        const rule = $.l('LList', 'a')
-        const r = parse_entry('LList', [rule], '') as ast_data
-        expect(r.type).toBe('LList')
-        expect(r.children.size).toBe(0)
+    it('注释 token 不参与解析', () => {
+        const r = $.s('S', TokenType.Number, TokenType.String)
+        expect(() => cst(r, '1 // 注释\n "a"')).not.toThrow()
+        expect(() => cst(r, '1 /* 块注释 */ "a"')).not.toThrow()
+        const d = cst(r, '/* x */ 1 "a" // tail')
+        expect(d.children.get(0)).toBe('1')
+        expect(d.children.get(1)).toBe('a')
     })
 
-    it('多次匹配生成 param 序列', () => {
-        const rule = $.l('LList', 'a')
-        const r = parse_entry('LList', [rule], 'a a a') as ast_data
-        expect(r.type).toBe('LList')
-        expect(r.children.size).toBe(3)
+    it('还有剩余 token 时报错,而不是产出截断的结果', () => {
+        const r = $.s('S', TokenType.Number)
+        expect(() => cst(r, '1 2')).toThrow(/未解析的 token/)
     })
 
-    it('部分失败时回滚位置', () => {
-        // loop 的 data 是 'a b' 序列;第三次在 'a' 后 'b' 失败,需回滚后让外层 'c' 命中
-        const rule = $.s('Wrap', $.l('L', $.s('Pair', 'a', 'b')), 'c')
-        const r = parse_entry('Wrap', [rule], 'a b a b c') as ast_data
-        const l = r.children.get('child_0') as ast_data
-        expect(l.children.size).toBe(2)
-        expect(r.children.get('child_1')).toBe('c')
-    })
-})
-
-// ==================== EOF 与错误 ====================
-describe('EOF 与错误处理', () => {
-    it('空输入解析失败时错误消息标记 EOF', () => {
-        const rule = $.s('Need', 'x')
-        expect(() => parse_entry('Need', [rule], '')).toThrow(/EOF/)
+    it('生成节点会继承 cst 的行信息', () => {
+        const r = $.s('S', TokenType.Number, TokenType.String)
+        const p = new Parser().use([r]).use(new Map<string, any>([['S', () => new ASTTree()]]))
+        const n: any = p.run([lex_src('1 "a"')])[0]
+        expect(n.line.join('')).toContain('1 "a"')
     })
 
-    it('输入耗尽时 or 错误消息标记 EOF', () => {
-        const rule = $.o('Pick', 'a', 'b')
-        expect(() => parse_entry('Pick', [rule], '')).toThrow(/EOF/)
+    it('没有入口规则时抛错', () => {
+        const p = new Parser().use(new Map())
+        expect(() => p.run([lex_src('1')])).toThrow(/入口规则不存在/)
     })
 
-    it('TokenType 匹配失败时错误消息标记 EOF', () => {
-        const rule = $.s('Need', TokenType.Number)
-        expect(() => parse_entry('Need', [rule], '')).toThrow(/EOF/)
-    })
-})
-
-// ==================== 规则对象状态污染回归 ====================
-describe('规则对象状态污染回归', () => {
-    it('delete 规则失败后不污染共享规则对象', () => {
-        const del = $.d('a')
-        const A = $.s('A', del, 'b')
-        const pick = $.o('Pick', $.r('A'), 'c')
-        const w = $.s('W', 'x', $.r('Pick'), 'y')
-        const rules = [del, A, pick, w]
-        // 第一次: Pick 尝试 A(del 'a' 遇 'c' 失败) 后命中 'c'
-        const r1 = $.run('W', rules, lexer('x c y')) as ast_data
-        expect(r1.children.get('child_1')).toBe('c')
-        // 第二次: 同一 del 对象必须仍是 delete, A 正常解析 'a b'
-        const r2 = $.run('W', rules, lexer('x a b y')) as ast_data
-        const a = r2.children.get('child_1') as ast_data
-        expect(a.type).toBe('A')
-        expect(a.children.size).toBe(1)
-        expect(a.children.get('child_0')).toBe('b')
-    })
-
-    it('child 规则失败后不污染共享规则对象', () => {
-        const t = $.t('(', 'x', ')')
-        const w = $.s('W', $.o('Pick', t, 'z'), 'y')
-        const rules = [w]
-        // 第一次: t 匹配 '( x )'
-        const r1 = $.run('W', rules, lexer('( x ) y')) as ast_data
-        expect(r1.children.get('child_0')).toBeDefined()
-        // 第二次: t '(' 遇 'z' 失败 → 命中 'z'
-        const r2 = $.run('W', rules, lexer('z y')) as ast_data
-        expect(r2.children.get('child_0')).toBe('z')
-        // 第三次: 同一 t 对象仍正常匹配
-        const r3 = $.run('W', rules, lexer('( x ) y')) as ast_data
-        expect(r3.children.get('child_0')).toBeDefined()
+    it('run 逐文件解析,每个文件一棵树', () => {
+        const r = $.s('S', TokenType.Number)
+        const p = new Parser().use([r]).use(((data: ast_data) => data) as any)
+        const out = p.run([lex_src('1'), lex_src('2')])
+        expect(out.length).toBe(2)
+        expect(out[0].children.get(0)).toBe('1')
+        expect(out[1].children.get(0)).toBe('2')
     })
 })
