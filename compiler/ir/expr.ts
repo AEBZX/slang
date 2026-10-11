@@ -1,6 +1,6 @@
 import {BinaryDict, CmpDict, fast_call, read, slang_ir_factory} from './tool'
 import {
-    BINARY, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
+    BINARY, BIT_NOT, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
     HBooleanLiteral,
     HIdentifierExpr, HIndexExpr, HLambdaExpr, HLiteral, HMapExpr, HMemberExpr, HNotExpr,
@@ -106,7 +106,7 @@ const I_NotOrBitNotExpr:slang_ir_factory=(data:HBitNotExpr|HNotExpr,tool,call)=>
     const ls_arg=tool.ls_arg
     call(data.target)
     //取反
-    tool.push(new NOT(ls_arg))
+    tool.push(data instanceof HNotExpr?new NOT(ls_arg,read(ls_arg)):new BIT_NOT(ls_arg,read(ls_arg)))
 }
 const I_ReferenceExpr:slang_ir_factory=(data:HReferenceExpr,tool,call)=>{
     const ls_arg=tool.ls_arg
@@ -122,7 +122,7 @@ const I_AddressExpr:slang_ir_factory=(data:HAddressExpr,tool,call)=>{
         call(data.target)
     }
     if(data.target instanceof HIdentifierExpr)
-        tool.push(new MOV(ls_arg,IRArgs.reg(data.target.name)))
+        tool.push(new MOV(ls_arg,IRArgs.value(data.target.name)))
 }
 const I_BinaryExpr:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
     const arg=tool.ls_arg
@@ -159,7 +159,7 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     const cmp_arg=IRArgs.reg(tool.id())
     tool.push(new CMP(cmp_arg,condition,tool._pool(CmpDict.get('=='))))
     tool.push(new CZ(tool._pool(true_id),tool._pool(0),read(cmp_arg)))
-    tool.push(new NOT(cmp_arg))
+    tool.push(new NOT(cmp_arg,read(cmp_arg)))
     tool.push(new CZ(tool._pool(false_id),tool._pool(0),read(cmp_arg)))
 }
 export default new Map<any,slang_ir_factory>([

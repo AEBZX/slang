@@ -68,7 +68,7 @@ const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
     call(data.else_)
     tool.block_id=id
     tool.push(new CZ(tool._pool(true_id),tool._pool(0),condition_value))
-    tool.push(new NOT(condition))
+    tool.push(new NOT(condition,read(condition)))
     tool.push(new CZ(tool._pool(false_id),tool._pool(0),read(condition)))
 }
 const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{

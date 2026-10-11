@@ -1,4 +1,4 @@
-import {IRArgs, IRTree, number_radix} from '../utils'
+import {IRArgs, IRTree, MOV, number_radix} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export const BINARYMap=new Map([
     ['add',(a:number,b:number)=>a+b],
@@ -22,35 +22,20 @@ export const CMPMap=new Map([
 ])
 export type slang_opt_visitor =(data:IRTree, tool:OPTTool, bid:number, index:number)=>void
 export class OPTTool extends PeepholeScope{
-    private pool_state:Map<number,number|string>=new Map()
-    private state_pool:Map<number|string,number>=new Map()
     private _sweep:[number,number,IRTree[]][]=[]
-    private r_pool:Map<number|string,number>=new Map()
-    private last_use:Map<IRArgs,[boolean,number,number,IRTree]>=new Map()
-    peephole_set(key:IRArgs,value:IRTree,bid:number,index:number,write:boolean=false){
-        this.last_use.set(key,[write,bid,index,value])
-    }
-    peephole_get(key:IRArgs){
-        return this.last_use.get(key)
-    }
-    pool_set(key:number,value:number|string){
-        if(key==null||value==null)return
-        this.pool_state.set(key,value)
-        this.state_pool.set(value,key)
-    }
-    pool_get(key:number){
-        if(key==null)return null
-        return this.pool_state.get(key)
-    }
-    getForValue(value:number|string){
-        if(value==null)return null
-        if(this.r_pool.has(value))
-            return this.r_pool.get(value)
-        const id=this.id()
-        this.r_pool.set(value,id)
-        this.pool.set(id,value)
-        return id
-    }
+    r_pool:Map<number|string,number>=new Map()
+    //复制传播
+    //最简单,a可以替换为b
+    //针对mov value a value b(*a=b->a=&b)->value a->reg b
+    cpy_rep_table:Map<IRArgs,IRArgs>=new Map()
+    //特殊,可以把a作为b的左值
+    cpy_set_table:Map<IRArgs,{left:string,command:IRTree}>
+    //常量表
+    cprop_table:Map<IRArgs,number|string>=new Map()
+    //折叠用,记录data[offset]的值
+    cprop_offset_table:Map<IRArgs[],number|string>=new Map()
+    //记录param[arg]的值
+    cprop_param_table:Map<IRArgs,number|string>=new Map()
     constructor(public index:number,public command:Map<number,IRTree[]>,public pool:Map<number,number|string>) {
         super(null,null)
         for(const [k,v] of pool)
@@ -64,19 +49,63 @@ export class OPTTool extends PeepholeScope{
         this._sweep.push([bid,index,ir])
     }
     clear(){
-        this._sweep=[]
+        this.cpy_rep_table.clear()
+        this.cpy_set_table.clear()
+        this.cprop_table.clear()
+        this.cprop_offset_table.clear()
+        this.cprop_param_table.clear()
     }
 }
-export function is_reg(arg:IRArgs){
-    return arg.type=='reg'
+export function copy(ir:IRArgs,tool:OPTTool){
+    return tool.cpy_rep_table.get(ir)??ir
 }
-export function value(arg:IRArgs,tool:OPTTool){
-    if(is_reg(arg))return arg.data
-    //取arg.data寄存器的值
-    return tool.pool_get(arg.data)
+export function mov_rep(ir:MOV,tool:OPTTool){
+    const rep=tool.cpy_set_table.get(ir.right)
+    if(rep==null)return ir
+    rep.command[rep.left]=ir.left
+    return rep.command
 }
-export function rep(arg:IRArgs,tool:OPTTool){
-    const _arg=value(arg,tool)
-    if(arg==null||typeof _arg!='number')return arg
-    return IRArgs.reg(_arg)
+export function cprop_record(set:IRArgs, ir:IRArgs, tool:OPTTool){
+    if(set.type=='value')return
+    tool.cprop_table.delete(set)
+    set=to_v(set)
+    if(ir.type=='reg')
+        tool.cprop_table.set(set,ir.data)
+    if(tool.cprop_table.has(ir))
+        tool.cprop_table.set(set,tool.cprop_table.get(ir))
+}
+export function cprop_offset_record(set:IRArgs[], ir:IRArgs, tool:OPTTool){
+    if(set.every(i=>i.type='value'))return
+    tool.cprop_offset_table.delete(set)
+    set=set.map(to_v)
+    if(ir.type=='reg')
+        tool.cprop_offset_table.set(set,ir.data)
+    if(tool.cprop_table.has(ir))
+        tool.cprop_offset_table.set(set,tool.cprop_table.get(ir))
+}
+export function cprop_param_record(set:IRArgs, ir:IRArgs, tool:OPTTool){
+    if(set.type=='value')return
+    tool.cprop_param_table.delete(set)
+    set=to_v(set)
+    if(ir.type=='reg')
+        tool.cprop_param_table.set(set,ir.data)
+    if(tool.cprop_table.has(ir))
+        tool.cprop_param_table.set(set,tool.cprop_table.get(ir))
+}
+export function cprop(ir:IRArgs,tool:OPTTool){
+    if(ir.type=='value')return ir
+    if(!tool.cprop_table.has(ir))return ir
+    if(typeof tool.cprop_table.get(ir)!='number')return ir
+    return IRArgs.reg(tool.cprop_table.get(ir) as number)
+}
+export function is_constant(...ir:IRArgs[]){
+    return ir.every(i => i.type == 'reg')
+}
+export function to_v(ir:IRArgs){
+    ir.type='value'
+    return ir
+}
+export function to_r(ir:IRArgs){
+    ir.type='reg'
+    return ir
 }

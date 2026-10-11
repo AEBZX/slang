@@ -31,7 +31,12 @@ export class BINARY extends IRTree{
     }
 }
 export class NOT extends IRTree{
-    constructor(public data:IRArgs) {
+    constructor(public left:IRArgs,public right:IRArgs) {
+        super()
+    }
+}
+export class BIT_NOT extends IRTree{
+    constructor(public left:IRArgs,public right:IRArgs) {
         super()
     }
 }
@@ -83,9 +88,9 @@ export class OFFSET_GET extends IRTree{
         super()
     }
 }
-export class OFFSET_ADDR extends IRTree{
-    constructor(public target:IRArgs,public data:IRArgs,public offset:IRArgs) {
-        super()
+export class OFFSET_ADDR extends OFFSET_GET{
+    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
+        super(target,data,offset)
     }
 }
 export class OFFSET_STR_GET extends OFFSET_GET{
