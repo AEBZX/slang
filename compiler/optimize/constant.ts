@@ -14,7 +14,7 @@ import {
     NOT, OFFSET_ADDR, OFFSET_GET, OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET, POP, PUSH, RET, THREAD, TZ
 } from '../utils'
 import {is_reg, value, slang_opt_visitor, rep, BINARYMap, CMPMap} from './tool'
-//常量折叠和传播
+//常量折叠
 /*
  * 取value可以出现null,null
  * 但实际上这种情况相当于啥事没有
@@ -94,7 +94,7 @@ const C_ControlStream:slang_opt_visitor=(data:ControlStream,tool,bid,index)=>{
 const C_RET:slang_opt_visitor=(data:RET,tool,bid,index)=>{
     tool.sweep(bid,index,new RET(rep(data.frame,tool)))
 }
-const C_PUSHOrPOP:slang_opt_visitor=(data:PUSH|POP,tool,bid,index)=>{
+const C_PUSH:slang_opt_visitor=(data:PUSH,tool,bid,index)=>{
     data.target=rep(data.target,tool)
     tool.sweep(bid,index,data)
 }

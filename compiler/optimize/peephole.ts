@@ -2,18 +2,16 @@ import {BINARY, CMP, IRArgs, LOAD, MOV, NOT, OFFSET_SET, PARAM_LOAD} from '../ut
 import {slang_opt_visitor, value} from './tool'
 //窥孔以及复制传播,局部剔除
 const P_LOAD:slang_opt_visitor=(data:LOAD,tool,bid,index)=>{
-    if(data.reg.type=='value')
-        tool.clear()
     const get=tool.peephole_get(data.reg)
     //写2次前一次无用
     if(get[0])
-        tool.sweep(bid,index,get[1],get[2],get[3])
+        tool.sweep(bid,index,get[1],get[2],)
     tool.peephole_set(data.reg,data,bid,index,true)
     tool.peephole_set(data.data,data,bid,index,false)
+    if(data.reg.type=='value')
+        tool.clear()
 }
 const P_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
-    if(data.left.type=='value')
-        tool.clear()
     /*
     mov a,b
     mov c,a
@@ -21,10 +19,10 @@ const P_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
      */
     const a_get=tool.peephole_get(data.left)
     if(a_get[0])
-        tool.sweep(bid,index,a_get[1],a_get[2],a_get[3])
+        tool.sweep(bid,index,a_get[1],a_get[2],)
     //是否mov a a
     if(data.left.data==data.right.data&&data.left.type=='reg'&&data.right.type=='value'){
-        tool.sweep(bid,index)
+        tool.sweep(bid,index,)
         return
     }
     const b_get=tool.peephole_get(data.right)
@@ -42,10 +40,10 @@ const P_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
     }
     tool.peephole_set(data.left,data,bid,index,true)
     tool.peephole_set(data.right,data,bid,index,false)
+    if(data.left.type=='value')
+        tool.clear()
 }
 const P_BINARY:slang_opt_visitor=(data:BINARY,tool,bid,index)=> {
-    if (data.result.type == 'value')
-        tool.clear()
     //复制传播
     const a_get = tool.peephole_get(data.left)
     const b_get = tool.peephole_get(data.right)
@@ -82,4 +80,26 @@ const P_BINARY:slang_opt_visitor=(data:BINARY,tool,bid,index)=> {
     const div_1 = value_b == 1 && data.id == 'div'
     if (and_or_self || and_neg1 || or_xor_shr_shl_0 || add_0 || sub_0 || mul_1 || div_1)
         tool.sweep(bid, index, new MOV(data.result, data.left))
+    if (data.result.type == 'value')
+        tool.clear()
+}
+const P_NOT:slang_opt_visitor=(data:NOT,tool,bid,index)=>{
+    const get=tool.peephole_get(data.data)
+    if(get[0]&&get[3] instanceof NOT)
+        tool.sweep(bid,index,)
+    if(get[0]&&!(get[3] instanceof NOT||get[3] instanceof CMP))
+        tool.sweep(bid,index,get[1],get[2],)
+    if (data.data.type=='value')
+        tool.clear()
+}
+const P_CMP:slang_opt_visitor=(data:CMP,tool,bid,index)=>{
+    //复制传播
+    const b_get = tool.peephole_get(data.right)
+    const o_get = tool.peephole_get(data.oper)
+    if(b_get[0]&&b_get[3] instanceof MOV)
+        data.right = b_get[3].right
+    if(o_get[0]&&o_get[3] instanceof MOV)
+        data.oper = o_get[3].right
+    if(data.left.type=='value')
+        tool.clear()
 }

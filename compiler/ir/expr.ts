@@ -99,8 +99,8 @@ const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     tool.push(new CALL(arg_id,tool._pool(1)))
     //拿到返回值
     tool.push(new PARAM_LOAD(ls_arg,tool._pool(0)))
-    for(const arg of tool.get_param())
-        tool.push(new POP(IRArgs.reg(arg)))
+    for(const i of tool.get_param())
+        tool.push(new POP())
 }
 const I_NotOrBitNotExpr:slang_ir_factory=(data:HBitNotExpr|HNotExpr,tool,call)=>{
     const ls_arg=tool.ls_arg

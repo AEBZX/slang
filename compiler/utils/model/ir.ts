@@ -69,7 +69,7 @@ export class PUSH extends IRTree{
     }
 }
 export class POP extends IRTree{
-    constructor(public target:IRArgs) {
+    constructor() {
         super()
     }
 }
