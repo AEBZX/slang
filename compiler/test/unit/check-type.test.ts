@@ -1,8 +1,8 @@
 import {describe, expect, it} from 'vitest'
-import {Round0} from '../../check/censor'
-import {Round1, Round2} from '../../check/symbol'
-import {Round3} from '../../check/type'
-import {Scope, param_is, pick_best, type_is, type_merge, type_same} from '../../check/tool'
+import {Round0} from '../../src/check/censor'
+import {Round1, Round2} from '../../src/check/symbol'
+import {Round3} from '../../src/check/type'
+import {Scope, param_is, pick_best, type_is, type_merge, type_same} from '../../src/check/tool'
 import {check_rounds, errors_of, parse} from './helper'
 import {
     ArrayType,
@@ -16,7 +16,7 @@ import {
     PointType,
     StringType,
     VoidType
-} from '../../utils'
+} from '../../src/utils'
 
 const ALL: [number, Map<any, any>][] = [[0, Round0], [1, Round1], [2, Round2], [3, Round3]]
 const M = (body: string) => `public m:module{ ${body} }`

@@ -1,5 +1,5 @@
 ﻿import {describe, expect, it} from 'vitest'
-import {Round0} from '../../check/censor'
+import {Round0} from '../../src/check/censor'
 import {errors_of, parse, check_rounds} from './helper'
 
 //只跑第 0 轮(纯静态检查,不需要符号表)

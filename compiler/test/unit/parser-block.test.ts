@@ -1,6 +1,6 @@
 ﻿import {describe, expect, it} from 'vitest'
 import {parse, parse_first_block, render, type_str} from './helper'
-import {ClassType} from '../../utils'
+import {ClassType} from '../../src/utils'
 
 //解析整个文件并渲染
 const F = (src: string) => render(parse(src))

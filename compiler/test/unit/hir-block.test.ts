@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {pipeline, render} from './helper'
-import {HScope} from '../../hir/tool'
+import {HScope} from '../../src/hir/tool'
 
 const M = (body: string) => `public m:module{ ${body} }`
 

@@ -3,7 +3,7 @@ import * as process from 'node:process'
 import {readdirSync} from 'node:fs'
 import path from 'node:path'
 import {readFileSync, writeFileSync} from 'fs'
-import c from './index'
+import c from './src'
 const program=new Command()
 program.name('slang')
 program.version('1.0.0')

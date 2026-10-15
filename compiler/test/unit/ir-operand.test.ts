@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import {pipeline} from './helper'
-import ir from '../../ir'
-import {BINARY, CALL, CMP, CZ, IN, IRArgs, LOAD, MOV, NOT, OFFSET_GET, OUT, PARAM_LOAD, PARAM_SET} from '../../utils'
+import ir from '../../src/ir'
+import {BINARY, CALL, CMP, CZ, IN, IRArgs, LOAD, MOV, NOT, OFFSET_GET, OUT, PARAM_LOAD, PARAM_SET} from '../../src/utils'
 
 //编译到 IR,把所有块里的指令摊平
 function compile(src: string): any[] {

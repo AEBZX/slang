@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
-import Parser, {$} from '../../utils/lib/parser'
-import {ast_data, ast_rule, ASTTree, TokenType} from '../../utils'
+import Parser, {$} from '../../src/utils/lib/parser'
+import {ast_data, ast_rule, ASTTree, TokenType} from '../../src/utils'
 import {lex_src} from './helper'
 
 //用一个「原样返回 cst」的生成器跑规则,这样能直接断言 CST 结构本身

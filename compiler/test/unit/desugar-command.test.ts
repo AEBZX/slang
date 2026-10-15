@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest'
-import desugar from '../../desugar'
+import desugar from '../../src/desugar'
 import {render} from './helper'
 import {
     AAssign,
@@ -35,7 +35,7 @@ import {
     VM,
     WhileStatement,
     XorAssign
-} from '../../utils'
+} from '../../src/utils'
 
 //脱糖一个节点并渲染
 const D = (n: any) => render(desugar.run([n])[0])

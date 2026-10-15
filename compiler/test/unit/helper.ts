@@ -1,12 +1,12 @@
-import {tokens} from '../../utils/data'
-import {lexer} from '../../utils/lib/lexer'
-import parser from '../../parser'
-import Check from '../../utils/lib/check'
-import check from '../../check'
-import desugar from '../../desugar'
-import hir from '../../hir'
-import {Scope} from '../../check/tool'
-import {ASTTree, Expression, File, Function, ListCommand} from '../../utils'
+import {tokens} from '../../src/utils/data'
+import {lexer} from '../../src/utils/lib/lexer'
+import parser from '../../src/parser'
+import Check from '../../src/utils/lib/check'
+import check from '../../src/check'
+import desugar from '../../src/desugar'
+import hir from '../../src/hir'
+import {Scope} from '../../src/check/tool'
+import {ASTTree, Expression, File, Function, ListCommand} from '../../src/utils'
 
 //用完整 token 表把源码切成 token
 export function lex_src(src: string) {

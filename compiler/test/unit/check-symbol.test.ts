@@ -1,7 +1,7 @@
 ﻿import {describe, expect, it} from 'vitest'
-import {Round0} from '../../check/censor'
-import {Round1, Round2} from '../../check/symbol'
-import {Round3} from '../../check/type'
+import {Round0} from '../../src/check/censor'
+import {Round1, Round2} from '../../src/check/symbol'
+import {Round3} from '../../src/check/type'
 import {check_rounds, errors_of, parse, run_check} from './helper'
 import {
     Class,
@@ -13,7 +13,7 @@ import {
     Module,
     NumberType,
     Variable
-} from '../../utils'
+} from '../../src/utils'
 
 const ROUNDS: [number, Map<any, any>][] = [[0, Round0], [1, Round1], [2, Round2]]
 //跑到符号表两轮为止
