@@ -23,7 +23,7 @@ export const CMPMap=new Map([
 export type slang_opt_visitor =(data:IRTree, tool:OPTTool, bid:number, index:number)=>void
 export class OPTTool extends PeepholeScope{
     private _sweep:[number,number,IRTree[]][]=[]
-    r_pool:Map<number|string,number>=new Map()
+    pool:Map<number,number|string>=new Map()
     //复制传播
     //最简单,a可以替换为b
     //针对mov value a value b(*a=b->a=&b)->value a->reg b
@@ -36,17 +36,29 @@ export class OPTTool extends PeepholeScope{
     cprop_offset_table:Map<IRArgs[],number|string>=new Map()
     //记录param[arg]的值
     cprop_param_table:Map<IRArgs,number|string>=new Map()
-    constructor(public index:number,public command:Map<number,IRTree[]>,public pool:Map<number,number|string>) {
+    changed:boolean=false
+    constructor(public index:number,public command:Map<number,IRTree[]>,public r_pool:Map<number|string,number>) {
         super(null,null)
-        for(const [k,v] of pool)
-            this.r_pool.set(v,k)
+        for(const [k,v] of r_pool)
+            this.pool.set(v,k)
     }
     id(){
         return this.index++
     }
     sweep(bid:number,index:number,...ir:IRTree[]){
+        this.changed=true
         if(this._sweep.find(i=>i[0]==bid&&i[1]==index))return
         this._sweep.push([bid,index,ir])
+    }
+    flush(){
+        for(const [bid,index,ir] of this._sweep){
+            let commands=this.command.get(bid)
+            //分成[0,index),(index,...)两段中间拼接ir
+            const left=commands.slice(0,index)
+            const right=commands.slice(index+1,commands.length)
+            commands=[...left,...ir,...right]
+        }
+        this.changed=false
     }
     clear(){
         this.cpy_rep_table.clear()
@@ -108,4 +120,14 @@ export function to_v(ir:IRArgs){
 export function to_r(ir:IRArgs){
     ir.type='reg'
     return ir
+}
+//左值对应右值
+export function to_peephole_l(ir:IRArgs){
+    if(ir.type=='value')return null
+    ir.type='value'
+    return ir
+}
+export function value(ir:IRArgs){
+    if(ir.type=='reg')return ir.data
+    return NaN
 }

@@ -111,4 +111,4 @@ export default ['copy',new Map<any,opt_visitor>([
     [DELETE,CPY_DELETE],
     [PARAM_LOAD,CPY_PARAM_LOAD],
     [PARAM_SET,CPY_PARAM_SET]
-])]
+])]  as [string,Map<any,slang_opt_visitor>]

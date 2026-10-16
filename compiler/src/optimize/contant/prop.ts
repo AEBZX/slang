@@ -70,6 +70,9 @@ const CPROP_OFFSET_GET:slang_opt_visitor=(data:OFFSET_GET,tool,bid,index)=>{
     tool.sweep(bid,index,data)
 }
 const CPROP_IN_OR_OUT:slang_opt_visitor=(data:IN|OUT,tool,bid,index)=>{
+    tool.cprop_table.clear()
+    tool.cprop_param_table.clear()
+    tool.cprop_offset_table.clear()
     data.oper=cprop(data.oper,tool)
     data.target=cprop(data.target,tool)
     tool.sweep(bid,index,data)
@@ -101,4 +104,4 @@ export default ['constant_prop',new Map<any,slang_opt_visitor>([
     [OUT,CPROP_IN_OR_OUT],
     [PARAM_SET,CPROP_PARAM_SET],
     [PARAM_LOAD,CPROP_PARAM_LOAD]
-])]
+])] as [string,Map<any,slang_opt_visitor>]

@@ -1,6 +1,6 @@
 export type opt_visitor =(data:PeepholeTree, tool:PeepholeScope, bid:number, index:number)=>void
-export type opt_machine=(tool:PeepholeScope,call:(round:string,tree:PeepholeTree)=>opt_visitor)=>PeepholeTool
-import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool'
+export type opt_machine=(tool:PeepholeScope,call:(round:string,tree:PeepholeTree)=>opt_visitor)=>PeepholeScope
+import PeepholeTool, {PeepholeScope, PeepholeTree} from './tool'
 export default class Optimize extends PeepholeTool{
     ref:[string,Map<any,opt_visitor>][]=[]
     machine:opt_machine

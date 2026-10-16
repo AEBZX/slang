@@ -37,6 +37,9 @@ const CFOLD_ControlStreamCond:slang_opt_visitor=(data:ControlStreamCond,tool,bid
         if(data instanceof CZ)tool.sweep(bid,index,new CALL(data.target,data.frame))
         if(data instanceof TZ)tool.sweep(bid,index,new THREAD(data.target,data.frame))
     }
+    //直接删除
+    if(is_constant(data.cond)&&data.cond.data==0)
+        tool.sweep(bid,index,)
 }
 const CFOLD_OFFSET_GET:slang_opt_visitor=(data:OFFSET_GET,tool,bid,index)=>{
     if(is_constant(data.offset,data.data)&&tool.cprop_offset_table.has([data.offset,data.data]))
@@ -54,4 +57,4 @@ export default ['constant_fold',new Map<any,slang_opt_visitor>([
     [ControlStreamCond,CFOLD_ControlStreamCond],
     [OFFSET_GET,CFOLD_OFFSET_GET],
     [PARAM_LOAD,CFOLD_PARAM_LOAD]
-])]
+])] as [string,Map<any,slang_opt_visitor>]
