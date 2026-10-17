@@ -171,7 +171,7 @@ function match(input:TokenParam|string):(stream:CharStream)=>pre_token{
         }
     }
 }
-export function lexer(code:string,tokens:TokenParam[]):token[]{
+export function lexer(code:string,tokens:(TokenParam|string)[]):token[]{
     let ret:token[]=[]
     code=code.replace(/\r\n/g,'\n')
     let stream=new CharStream(code)
@@ -209,11 +209,11 @@ export function lexer(code:string,tokens:TokenParam[]):token[]{
     return ret
 }
 export default class Lexer extends PeepholeTool{
-    keyword:TokenParam[]=[]
+    keyword:(TokenParam|string)[]=[]
     constructor(){
         super('lexer')
     }
-    use(data:TokenParam[]){
+    use(data:(TokenParam|string)[]){
         this.keyword.push(...data)
         return this
     }

@@ -128,16 +128,6 @@ export class DELETE extends IRTree{
         super()
     }
 }
-export class BLOCK_START extends IRTree{
-    constructor(public name:number) {
-        super()
-    }
-}
-export class BLOCK_END extends IRTree{
-    constructor() {
-        super()
-    }
-}
 export class PARAM_SET extends IRTree{
     constructor(public param:IRArgs,public value:IRArgs) {
         super()

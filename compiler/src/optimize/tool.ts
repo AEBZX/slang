@@ -1,4 +1,4 @@
-import {IRArgs, IRTree, MOV, number_radix} from '../utils'
+import {IRArgs, IRTree, LOAD, MOV, number_radix} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export const BINARYMap=new Map([
     ['add',(a:number,b:number)=>a+b],
@@ -37,10 +37,19 @@ export class OPTTool extends PeepholeScope{
     //记录param[arg]的值
     cprop_param_table:Map<IRArgs,number|string>=new Map()
     changed:boolean=false
+    //用于last环节
+    id_pool:Map<number,number>
     constructor(public index:number,public command:Map<number,IRTree[]>,public r_pool:Map<number|string,number>) {
         super(null,null)
         for(const [k,v] of r_pool)
             this.pool.set(v,k)
+    }
+    pool_id(data:number|string){
+        if(this.r_pool.has(data))return this.r_pool.get(data)
+        const id=this.id()
+        this.r_pool.set(data,id)
+        this.pool.set(id,data)
+        return id
     }
     id(){
         return this.index++
@@ -130,4 +139,16 @@ export function to_peephole_l(ir:IRArgs){
 export function value(ir:IRArgs){
     if(ir.type=='reg')return ir.data
     return NaN
+}
+export function to_load(ir:IRTree,key:string,tool:OPTTool,bid:number,index:number){
+    let arg:IRArgs=ir[key]
+    if(arg.type=='value')return
+    if(Number.isInteger(arg.data)&&arg.data>=0)return
+    const id=tool.id_pool.has(arg.data)?tool.id_pool.get(arg.data):(()=>{
+        const _id=tool.id()
+        tool.id_pool.set(arg.data,_id)
+        return _id
+    })()
+    ir[key]=IRArgs.reg(id)
+    tool.sweep(bid,index,new LOAD(IRArgs.reg(id),IRArgs.reg(tool.pool_id(arg.data))),ir)
 }

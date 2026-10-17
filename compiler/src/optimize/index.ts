@@ -5,8 +5,9 @@ import fold from './contant/fold'
 import prop from './contant/prop'
 import copy from './copy'
 import peephole from './peephole'
+import last from './last'
 import {IRTool} from '../ir/tool'
-export default new Optimize().use(fold).use(prop).use(copy).use(peephole).use((tool:IRTool,call)=>{
+export default new Optimize().use(fold).use(prop).use(copy).use(peephole).use(last).use((tool:IRTool,call)=>{
     let _tool=new OPTTool(tool.index+1,tool.ir,tool.pool)
     for(let i=0;i<10;i++){
         for(const [bid,v] of _tool.command)
@@ -19,5 +20,6 @@ export default new Optimize().use(fold).use(prop).use(copy).use(peephole).use((t
                 _tool.flush()
             }
     }
+    call('last',_tool)
     return _tool
 })
