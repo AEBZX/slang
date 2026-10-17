@@ -1,7 +1,8 @@
 ﻿import {
-    Break,
-    CALL, Continue, CZ,
+    HArrayExpr, HMapExpr,
+    CALL, CZ,
     HAssign, HAwait,
+    HBreak, HContinue,
     HExprCommand,
     HIdentifierExpr, HIfStatement,
     HIndexExpr, HListCommand,
@@ -12,14 +13,20 @@
     OFFSET_SET,
     OFFSET_STR_SET, PARAM_SET, RET, THREAD, TZ, VM
 } from '../utils'
-import {fast_call, read, slang_ir_factory, VMMap} from './tool'
+import {container_of, fast_call, read, slang_ir_factory, VMMap} from './tool'
 const I_Assign:slang_ir_factory=(data:HAssign,tool,call)=>{
+    if(data.data instanceof HIdentifierExpr&&(data.value instanceof HArrayExpr||data.value instanceof HMapExpr)){
+        tool.ls_arg=IRArgs.reg(data.data.name)
+        call(data.value)
+        return
+    }
     const value_arg=fast_call(IRArgs.reg(tool.id()),data.value,tool,call)
     if(data.data instanceof HIdentifierExpr)
         tool.push(new MOV(IRArgs.reg(data.data.name),value_arg))
     if(data.data instanceof HMemberExpr||data.data instanceof HIndexExpr){
         //对象取槽里的值;成员键是静态的,直接用池 id;下标要取值
-        const data_arg=fast_call(IRArgs.reg(tool.id()),data.data.target,tool,call)
+        //容器用槽号本身(和 offset_set 的 a 同一身份)
+        const data_arg=container_of(data.data.target,tool,call)
         let offset_arg=IRArgs.reg(tool.id())
         if(data.data instanceof HMemberExpr)
             offset_arg=tool._pool(data.data.member)
@@ -83,10 +90,10 @@ const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{
     tool.block_id=id
     tool.push(new CALL(IRArgs.reg(loop_id),IRArgs.reg(2)))
 }
-const I_Break:slang_ir_factory=(data:Break,tool,call)=>{
+const I_Break:slang_ir_factory=(data:HBreak,tool,call)=>{
     tool.push(new RET(IRArgs.reg(2)))
 }
-const I_Continue:slang_ir_factory=(data:Continue,tool,call)=>{
+const I_Continue:slang_ir_factory=(data:HContinue,tool,call)=>{
     tool.push(new JMP(IRArgs.reg(tool.loop()),IRArgs.reg(0)))
 }
 const I_VM:slang_ir_factory=(data:HVM,tool,call)=>{
@@ -108,7 +115,7 @@ export default new Map<any,slang_ir_factory>([
     [HReturn,I_Return],
     [HIfStatement,I_If],
     [HWhileStatement,I_While],
-    [Break,I_Break],
-    [Continue,I_Continue],
+    [HBreak,I_Break],
+    [HContinue,I_Continue],
     [HVM,I_VM],
 ])

@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import desugar from '../../src/desugar'
 import {render} from './helper'
 import {
@@ -114,8 +114,8 @@ describe('desugar/表达式·逻辑短路', () => {
         expect(D(new LogicAndExpression(id('a'), id('b')))).toBe('(a?(a&b):false)')
     })
 
-    it('逻辑或展开成三目:a ? false : (a | b)', () => {
-        expect(D(new LogicOrExpression(id('a'), id('b')))).toBe('(a?false:(a|b))')
+    it('逻辑或展开成三目:a ? true : b', () => {
+        expect(D(new LogicOrExpression(id('a'), id('b')))).toBe('(a?true:b)')
     })
 
     it('按位与/或不受影响', () => {
@@ -130,7 +130,7 @@ describe('desugar/表达式·逻辑短路', () => {
 
     it('短路展开后的右侧也没有 oper/cast 时保持原样', () => {
         expect(D(new LogicOrExpression(id('a'), inner())))
-            .toBe('(a?false:(a|((C.cast@0)((x.y)))))')
+            .toBe('(a?true:((C.cast@0)((x.y))))')
     })
 })
 

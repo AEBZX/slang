@@ -1,12 +1,18 @@
-import {
+﻿import {
+    NotPrefix,
+    LogicAndExpression,
+    GreaterEqualExpression,
+    GreaterExpression,
+    EqualExpression,
     AddressPrefix,
     ArgumentsPostfix,
-    ASTTree, BooleanType, ClassType, Command,
+    LambdaExpression, ASTTree, BooleanType, ClassType, Command,
     Expression, IdentifierExpr, InequalExpression, ListCommand, LiteralType, MemberPostfix, NullLiteral,
     NumberType,
     PostfixExpression,
     PrefixExpression,
-    StringType, Throw, Type
+    StringType, Throw, Type,
+    LessExpression, LessEqualExpression, LogicOrExpression, BooleanLiteral
 } from '../utils'
 
 export type slang_desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
@@ -38,8 +44,29 @@ export function expr_desugar(node:Expression,...param:Expression[]){
 export function address(expr:Expression){
     return new AddressPrefix(expr)
 }
+function is_bool_shape(expr:Expression){
+    return expr instanceof EqualExpression||expr instanceof InequalExpression
+        ||expr instanceof GreaterExpression||expr instanceof LessExpression
+        ||expr instanceof GreaterEqualExpression||expr instanceof LessEqualExpression
+        ||expr instanceof LogicAndExpression||expr instanceof LogicOrExpression
+        ||expr instanceof NotPrefix||expr instanceof BooleanLiteral
+}
+//这条语句里(递归,但不进 lambda 体)会不会抛:if/while/for 里的 throw 也算
+export function contains_throw(node:ASTTree,depth=0):boolean{
+    if(node==null||typeof node!='object'||depth>20)return false
+    if(node instanceof LambdaExpression)return false
+    if(node instanceof Throw)return true
+    if(Array.isArray(node))return node.some(i=>contains_throw(<any>i,depth+1))
+    if(node instanceof Map)return [...(<any>node).values()].some(i=>contains_throw(<any>i,depth+1))
+    //AST 节点的子节点在构造参数里,不在 children 上,所以按字段走
+    for(const k of Object.keys(node)){
+        if(k=='line'||k=='type'||k=='children')continue
+        if(contains_throw((<any>node)[k],depth+1))return true
+    }
+    return false
+}
 export function no_bool_cond(expr:Expression){
-    if(!(expr.type instanceof BooleanType))
-        return new InequalExpression(expr,new NullLiteral(''))
-    return expr
+    if(expr.type instanceof BooleanType||is_bool_shape(expr))
+        return expr
+    return new InequalExpression(expr,new NullLiteral(''))
 }

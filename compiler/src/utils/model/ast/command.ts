@@ -1,4 +1,4 @@
-import {ASTTree} from '../../data'
+﻿import {ASTTree} from '../../data'
 import {Expression} from './expr'
 import {Type} from './identifier'
 export class Command extends ASTTree{}
@@ -13,6 +13,17 @@ export class Assign extends BasicCommand{
 export class AAssign extends Assign{
     constructor(data:Expression,value:Expression) {
         super(data,value,'=')
+    }
+}
+//&&= / ||=:按 a = a && b 处理(短路语义在脱糖里展开成三目)
+export class LogicAndAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'&&=')
+    }
+}
+export class LogicOrAssign extends Assign{
+    constructor(data:Expression,value:Expression) {
+        super(data,value,'||=')
     }
 }
 export class AddAssign extends Assign{
@@ -136,6 +147,8 @@ export class SwitchStatement extends BlockCommand{
     }
 }
 export class TryStatement extends BlockCommand{
+    //没写 catch 时由文法补一个空的,这个标记用来区分"作者真的写了"和"补的"
+    public no_catch:boolean=false
     constructor(public commands:Command,public catch_:{iden:string,type:Type,command:Command},public finally_:Command) {
         super()
     }

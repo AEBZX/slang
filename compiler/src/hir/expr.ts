@@ -1,5 +1,6 @@
-import {slang_hir_visitor} from './tool'
+﻿import {slang_hir_visitor} from './tool'
 import {
+    TypePrefix,
     AddressPrefix,
     ArgumentsPostfix,
     ArrayExpression, ASTTree, BinaryExpression,
@@ -136,6 +137,8 @@ const H_MemberExpr:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     const path=ast_path(node)
     return new HMemberExpr(call(node.expr), scope.get(path!=null?path:node.name))
 }
+//类型前缀只是标注类型:值本身在脱糖阶段已经套上了 cast 调用,这里直接穿过去
+const H_TypePrefix:slang_hir_visitor=(node:TypePrefix,scope,call)=>call(node.expr)
 const H_ArgumentsExpr:slang_hir_visitor=(node:ArgumentsPostfix,scope,call)=>
     new HArgumentsExpr(call(node.expr),node.args.map(call))
 const H_PreIncrementExpr:slang_hir_visitor=(node:IncrementPrefix,scope,call)=>
@@ -169,6 +172,7 @@ export default new Map<any,slang_hir_visitor>([
     [LambdaExpression,H_LambdaExpr],
     [IndexPostfix,H_IndexExpr],
     [MemberPostfix,H_MemberExpr],
+    [TypePrefix,H_TypePrefix],
     [ArgumentsPostfix,H_ArgumentsExpr],
     [IncrementPrefix,H_PreIncrementExpr],
     [DecrementPrefix,H_PreDecrementExpr],

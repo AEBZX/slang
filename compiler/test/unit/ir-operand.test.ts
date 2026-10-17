@@ -55,20 +55,20 @@ describe('ir/操作数形式', () => {
         expect(form(not.right)).toBe('value')
     })
 
-    it('取下标:目标是槽(reg),对象与下标取值(value)', () => {
+    it('取下标:目标与容器都是槽(reg),下标取值(value)', () => {
         const get: any = one(F('var d:number[]=[a]; return d[0];'), OFFSET_GET)
         expect(form(get.target)).toBe('reg')
-        expect(form(get.data)).toBe('value')
+        expect(form(get.data)).toBe('reg')
         expect(form(get.offset)).toBe('value')
     })
 
-    it('后缀自增:结果操作数写穿地址,所以取值(value)', () => {
-        const binary: any = one(F('a++; return a;'), BINARY)
-        expect(binary.id).toBe('add')
-        expect(form(binary.result)).toBe('value')
-        expect(form(binary.left)).toBe('value')
+    it('后缀自增:目标槽直接写,左右操作数按读槽取值', () => {
+        const ir = one(F('var b:number=5; b++; return a;'), BINARY)
+        //目标就是变量自己的槽(reg);读的是槽里的值(value)
+        expect(ir.result.type).toBe('reg')
+        expect(ir.left.type).toBe('value')
+        expect(ir.right.type).toBe('reg')
     })
-
     it('调用:被调用者取值(value),实参取值、参数序号取槽(reg)', () => {
         const src = M(`public static g:number(x:number){return x;}
                        public static f:number(a:number){ return g(a); }`)

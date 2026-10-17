@@ -1,4 +1,4 @@
-import {TokenType} from '../../utils'
+﻿import {TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const AAssign=$.s('AAssign',$.r('Expression'),$.d('='),$.r('Expression'),$.d(';'))
 const AddAssign=$.s('AddAssign',$.r('Expression'),$.d('+='),$.r('Expression'),$.d(';'))
@@ -9,6 +9,8 @@ const ModAssign=$.s('ModAssign',$.r('Expression'),$.d('%='),$.r('Expression'),$.
 const AndAssign=$.s('AndAssign',$.r('Expression'),$.d('&='),$.r('Expression'),$.d(';'))
 const OrAssign=$.s('OrAssign',$.r('Expression'),$.d('|='),$.r('Expression'),$.d(';'))
 const XorAssign=$.s('XorAssign',$.r('Expression'),$.d('^='),$.r('Expression'),$.d(';'))
+const LogicAndAssign=$.s('LogicAndAssign',$.r('Expression'),$.d('&&='),$.r('Expression'),$.d(';'))
+const LogicOrAssign=$.s('LogicOrAssign',$.r('Expression'),$.d('||='),$.r('Expression'),$.d(';'))
 const ShlAssign=$.s('ShlAssign',$.r('Expression'),$.d('<<='),$.r('Expression'),$.d(';'))
 const ShrAssign=$.s('ShrAssign',$.r('Expression'),$.d('>>='),$.r('Expression'),$.d(';'))
 const Assign=$.o('Assign',
@@ -21,6 +23,8 @@ const Assign=$.o('Assign',
     $.r('AndAssign'),
     $.r('OrAssign'),
     $.r('XorAssign'),
+$.r('LogicAndAssign'),
+$.r('LogicOrAssign'),
     $.r('ShlAssign'),
     $.r('ShrAssign'),
 )
@@ -53,7 +57,7 @@ const IfStatement=$.s('IfStatement',$.d('if'),$.r('Condition'),$.r('Commands'),
 const WhileStatement=$.s('WhileStatement',$.d('while'),$.r('Condition'),$.r('Commands'))
 const DoWhileStatement=$.s('DoWhileStatement',$.d('do'),$.r('Commands'),$.d('while'),$.r('Condition'),$.d(';'))
 const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
-    $.l('Init',$.r('VarDecl')),$.r('Expression'),$.d(';'),$.l('Step',$.r('BasicCommand')),
+    $.l('Init',$.r('VarDecl')),$.c($.r('Expression')),$.d(';'),$.l('Step',$.r('BasicCommand')),
     $.d(')'),$.r('Commands'))
 const ForeachStatement=$.s('ForeachStatement',$.d('foreach'),$.d('('),
     $.r('Identifier'),$.d(':'),$.r('Expression'),$.d(')'),$.r('Commands')
@@ -65,9 +69,12 @@ const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('
     $.c($.d('default'),$.d('=>'),$.r('Commands')),
     $.d('}')
 )
+//catch 可以省(只要写了 finally)
+const CatchData=$.s('CatchData',$.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'))
+const FinallyData=$.s('FinallyData',$.d('finally'),$.r('Commands'))
 const TryStatement=$.s('TryStatement',$.d('try'),$.r('Commands'),
-    $.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'),
-    $.c($.d('finally'),$.r('Commands')))
+    $.c($.r('CatchData')),
+    $.c($.r('FinallyData')))
 const BlockCommand=$.o('BlockCommand',
     $.r('IfStatement'),
     $.r('WhileStatement'),
@@ -89,6 +96,7 @@ export default [
     AndAssign,
     OrAssign,
     XorAssign,
+    LogicAndAssign, LogicOrAssign,
     ShlAssign,
     ShrAssign,
     Assign,
@@ -108,6 +116,8 @@ export default [
     ForStatement,
     SwitchStatement,
     TryStatement,
+    CatchData,
+    FinallyData,
     BlockCommand,
     Commands,
     Condition

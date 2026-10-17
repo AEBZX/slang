@@ -1,4 +1,6 @@
-import {
+﻿import {
+    LogicAndAssign, LogicOrAssign, LogicAndExpression, LogicOrExpression,
+    EqualExpression,
     AAssign,
     AddAssign,
     AddExpression, ArgumentsPostfix,
@@ -25,7 +27,7 @@ import {
     VarDecl, VoidType, WhileStatement, Expression, IncrementPostfix, Await, VM, ModExpression, DivExpression, DivAssign,
     ArrayType, MapType
 } from '../utils'
-import {desugar_cast, desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
+import {contains_throw, desugar_cast, desugar_oper, no_bool_cond, slang_desugar_visitor} from './tool'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
@@ -43,6 +45,8 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     if(node instanceof ModAssign)return call(new AAssign(node.data,new ModExpression(node.data,node.value)))
     if(node instanceof ShlAssign)return call(new AAssign(node.data,new ShlExpression(node.data,node.value)))
     if(node instanceof ShrAssign)return call(new AAssign(node.data,new ShrExpression(node.data,node.value)))
+    if(node instanceof LogicAndAssign)return call(new AAssign(node.data,new LogicAndExpression(node.data,node.value)))
+    if(node instanceof LogicOrAssign)return call(new AAssign(node.data,new LogicOrExpression(node.data,node.value)))
     if(node instanceof AndAssign)return call(new AAssign(node.data,new AndExpression(node.data,node.value)))
     if(node instanceof OrAssign)return call(new AAssign(node.data,new OrExpression(node.data,node.value)))
     if(node instanceof XorAssign)return call(new AAssign(node.data,new XorExpression(node.data,node.value)))
@@ -70,8 +74,8 @@ const D_Throw:slang_desugar_visitor=(node:Throw,call)=>{
     node.data=call(node.data) as Expression
     return call(
         new ListCommand([
-            new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('catch'),[],[node.data])),
-            new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('true'))
+            new ExprCommand(new ArgumentsPostfix(new IdentifierExpr(cur_try.catch_name),[],[node.data])),
+            new AAssign(new IdentifierExpr(cur_try.throw_name),new BooleanLiteral('true'))
         ])
     )
 }
@@ -81,14 +85,24 @@ const D_IfStatement:slang_desugar_visitor=(node:IfStatement,call)=>{
     node.else_=call(node.else_)
     return node
 }
+//switch 展开成 if-else 链:条件先存进临时变量,避免每个分支重复求值
+let switch_id=0
 const D_SwitchStatement:slang_desugar_visitor=(node:SwitchStatement,call)=>{
-    node.condition=call(node.condition) as Expression
-    for(let i of node.case_list){
-        i.condition=call(i.condition) as Expression
-        i.commands=call(i.commands)
+    const name=`switch@${switch_id++}`
+    const condition=call(node.condition) as Expression
+    let body:Command=node.default_==null?new ListCommand([]):call(node.default_) as Command
+    for(let i=node.case_list.length-1;i>=0;i--){
+        const item=node.case_list[i]
+        body=new IfStatement(
+            new EqualExpression(new IdentifierExpr(name),call(item.condition) as Expression),
+            call(item.commands) as Command,
+            body)
     }
-    node.default_=call(node.default_)
-    return node
+    //VarDecl 也得过一遍脱糖(它会被降成赋值),否则 HIR 里没有这个节点的 visitor
+    return new ListCommand([
+        call(new VarDecl(name,condition.type??new VoidType(),condition)) as Command,
+        body
+    ])
 }
 const D_DoWhileStatement:slang_desugar_visitor=(node:DoWhileStatement,call)=>{
     return call(new ListCommand([
@@ -129,6 +143,11 @@ const D_ForeachStatement:slang_desugar_visitor=(node:ForeachStatement,call)=>{
         )
     )
 }
+let try_id=0
+//当前正在脱糖的 try 用到的名字(嵌套时保存/恢复)
+let cur_try={throw_name:'throw',catch_name:'catch',finally_name:'finally'}
+//这条语句里(递归,但不进 lambda 体)会不会抛:if/while/for 里的 throw 也算
+
 const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
     //先按 Throw 切分包裹、再脱糖:call 之后的树上 Throw 已被 D_Throw 换成 ListCommand,instanceof 扫不到
     const _do=(command:Command)=>{
@@ -136,8 +155,8 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
             let index=0
             let _if=-1
             for(let i of command.commands){
-                //第一个 throw 之后的语句都要包进 if(throw);嵌套块交给递归
-                if(i instanceof Throw){
+                //第一个"会抛"的语句之后都要包进 if(throw);控制结构里的 throw 也算
+                if(contains_throw(i)){
                     _if=index
                     break
                 }
@@ -148,30 +167,47 @@ const D_TryStatement:slang_desugar_visitor=(node:TryStatement,call)=>{
             if(_if>-1){
                 //throw 本身留在原位脱糖,其后语句截断进 if(throw){throw=false;...},不然会执行两遍
                 const tail=command.commands.slice(_if+1)
-                const cond=new IdentifierExpr('throw')
+                const cond=new IdentifierExpr(cur_try.throw_name)
                 cond.type=new BooleanType()
                 command.commands.length=_if+1
                 command.commands.push(new IfStatement(cond,
-                    _do(new ListCommand([new AAssign(new IdentifierExpr('throw'),new BooleanLiteral('false')),...tail])),
+                    _do(new ListCommand([new AAssign(new IdentifierExpr(cur_try.throw_name),new BooleanLiteral('false')),...tail])),
                     new ListCommand([])))
             }
         }
         return command
     }
+    //每个 try 用自己的一套名字:嵌套 try 才不会把外层的 catch/finally 覆盖掉
+    const id=try_id++
+    const throw_name=`throw@${id}`
+    const has_catch=!node.no_catch
+    //没有 catch 的 try 只负责跑 finally:throw 直接交给外层处理器,不要吞掉
+    const catch_name=has_catch?`catch@${id}`:cur_try.catch_name
+    const finally_name=`finally@${id}`
+    //先进内层再恢复:内层用自己的名字,外层的不受影响
+    const prev_try=cur_try
+    cur_try={throw_name,catch_name,finally_name}
     _do(node.commands)
     node.commands=call(node.commands)
-    node.catch_.command=new ListCommand([node.catch_.command,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('finally'),[],[]))])
+    node.catch_.command=new ListCommand([node.catch_.command,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr(finally_name),[],[]))])
     node.finally_=call(node.finally_)
-    node.commands=new ListCommand([node.commands,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr('finally'),[],[]))])
-    return call(new ListCommand([
-        new VarDecl('throw',new BooleanType(),new BooleanLiteral('false')),
-        new VarDecl('catch',new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])
+    node.commands=new ListCommand([node.commands,new ExprCommand(new ArgumentsPostfix(new IdentifierExpr(finally_name),[],[]))])
+    //catch/finally 体是这次 call 里才脱糖的,那时还得看到自己的名字,所以最后才恢复
+    const head:Command[]=[
+        new VarDecl(throw_name,new BooleanType(),new BooleanLiteral('false'))
+    ]
+    if(has_catch)
+        head.push(new VarDecl(catch_name,new LambdaType(null,new Map([[node.catch_.iden,node.catch_.type]])
                 ,new VoidType(),false),
-            new LambdaExpression(null,new Map([[node.catch_.iden,node.catch_.type]]),new VoidType(),node.catch_.command)),
-        new VarDecl('finally',new LambdaType(null,new Map(),new VoidType(),false),
+            new LambdaExpression(null,new Map([[node.catch_.iden,node.catch_.type]]),new VoidType(),node.catch_.command)))
+    const built=call(new ListCommand([
+        ...head,
+        new VarDecl(finally_name,new LambdaType(null,new Map(),new VoidType(),false),
             new LambdaExpression(null,new Map(),new VoidType(),node.finally_)),
         node.commands
     ]))
+    cur_try=prev_try
+    return built
 }
 const D_ListCommand:slang_desugar_visitor=(node:ListCommand,call)=>{
     node.commands=node.commands.map(call)

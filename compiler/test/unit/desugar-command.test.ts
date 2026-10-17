@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import desugar from '../../src/desugar'
 import {render} from './helper'
 import {
@@ -37,8 +37,8 @@ import {
     XorAssign
 } from '../../src/utils'
 
-//脱糖一个节点并渲染
-const D = (n: any) => render(desugar.run([n])[0])
+//脱糖一个节点并渲染。try 的 catch/finally/throw 名字带自己的序号,统一归一化掉
+const D = (n: any) => render(desugar.run([n])[0]).replace(/(catch|finally|throw)@\d+/g, '$1@N')
 const id = (s: string) => new IdentifierExpr(s)
 const num = (s: string) => new NumberLiteral(s)
 const list = (...c: any[]) => new ListCommand(c)
@@ -152,7 +152,14 @@ describe('desugar/命令·循环', () => {
 
     it('foreach 展开成带下标的 for', () => {
         expect(D(new ForeachStatement('c', id('s'), new ExprCommand(id('body')))))
-            .toBe('for=0; c=null; while((((s[for])!=null)!=null))c=(s[for]); body; (for++);')
+            .toBe('for=0; c=null; while(((s[for])!=null))c=(s[for]); body; (for++);')
+    })
+
+    //循环条件本身已经是布尔,不该再包一层 != null(以前包了两层,条件恒真,循环永不结束)
+    it('foreach 的条件只包一层 != null', () => {
+        const out = D(new ForeachStatement('c', id('s'), new ExprCommand(id('body'))))
+        expect(out).toContain('(s[for])!=null')
+        expect(out).not.toContain(')!=null)!=null')
     })
 
     it('foreach 的循环变量初值是 null,条件是与 null 比较', () => {
@@ -164,9 +171,25 @@ describe('desugar/命令·循环', () => {
         expect((out.commands[1] as AAssign).value).toBeInstanceOf(NullLiteral)
     })
 
-    it('switch 的分支体会脱糖', () => {
-        expect(D(new SwitchStatement(cond(true), [new Case(num('1'), new ExprCommand(id('a')))], null)))
-            .toBe('switch(c){case 1=>a;}')
+    //switch 现在会展开成 if-else 链:条件先存进临时变量,避免每个 case 重复求值
+    //临时变量名带全局序号,断言时归一化掉
+    const norm = (s: string) => s.replace(/switch@\d+/g, 'switch@N')
+    it('switch 展开成 if-else 链', () => {
+        expect(norm(D(new SwitchStatement(cond(true), [new Case(num('1'), new ExprCommand(id('a')))], null))))
+            .toBe('switch@N=c; if((switch@N==1))a;else ')
+    })
+
+    it('多个 case 按顺序串成 else-if', () => {
+        expect(norm(D(new SwitchStatement(cond(true), [
+            new Case(num('1'), new ExprCommand(id('a'))),
+            new Case(num('2'), new ExprCommand(id('b')))
+        ], null)))).toBe('switch@N=c; if((switch@N==1))a;else if((switch@N==2))b;else ')
+    })
+
+    it('有 default 时挂在最后一级 else', () => {
+        expect(norm(D(new SwitchStatement(cond(true), [new Case(num('1'), new ExprCommand(id('a')))],
+            new ExprCommand(id('d'))))))
+            .toBe('switch@N=c; if((switch@N==1))a;else d;')
     })
 })
 
@@ -176,7 +199,7 @@ describe('desugar/命令·try', () => {
             list(new ExprCommand(id('a'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
             new ExprCommand(id('c')))))
-            .toBe('throw=false; catch=(e:string)=>void{b; (finally());}; finally=()=>void{c;}; a; (finally());')
+            .toBe('throw@N=false; catch@N=(e:string)=>void{b; (finally@N());}; finally@N=()=>void{c;}; a; (finally@N());')
     })
 
     it('没有 finally 时 finally lambda 体为空', () => {
@@ -184,7 +207,7 @@ describe('desugar/命令·try', () => {
             list(new ExprCommand(id('a'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
             null)))
-            .toBe('throw=false; catch=(e:string)=>void{b; (finally());}; finally=()=>void{}; a; (finally());')
+            .toBe('throw@N=false; catch@N=(e:string)=>void{b; (finally@N());}; finally@N=()=>void{}; a; (finally@N());')
     })
 
     it('try 体里 throw 之后的语句会被包进 if(throw),避免执行两遍', () => {
@@ -192,8 +215,8 @@ describe('desugar/命令·try', () => {
             list(new ExprCommand(id('a')), new Throw(id('x')), new ExprCommand(id('b'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('h'))},
             null)))
-            .toBe('throw=false; catch=(e:string)=>void{h; (finally());}; finally=()=>void{}; ' +
-                'a; (catch(x)); throw=true; if(throw)throw=false; b;else  (finally());')
+            .toBe('throw@N=false; catch@N=(e:string)=>void{h; (finally@N());}; finally@N=()=>void{}; ' +
+                'a; (catch@N(x)); throw@N=true; if(throw@N)throw@N=false; b;else  (finally@N());')
     })
 
     it('try 体里没有 throw 时不插入 if(throw)', () => {

@@ -1,5 +1,5 @@
-import {
-    AAssign, AddAssign,
+﻿import {
+    AAssign, AddAssign, LogicAndAssign, LogicOrAssign,
     AddExpression, AndAssign,
     AndExpression, ast_data, ASTTree, ClassType, DivAssign,
     DivExpression, EqualExpression, GreaterEqualExpression,
@@ -41,7 +41,9 @@ export const AssignMap=new Map([
     ['OrAssign',OrAssign],
     ['XorAssign',XorAssign],
     ['ShlAssign',ShlAssign],
-    ['ShrAssign',ShrAssign]
+    ['ShrAssign',ShrAssign],
+    ['LogicAndAssign',LogicAndAssign],
+    ['LogicOrAssign',LogicOrAssign]
 ])
 export function to_ast_data(data:ast_data,id:number){
     return data.children.get(id) as ast_data|null

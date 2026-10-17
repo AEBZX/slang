@@ -1,4 +1,4 @@
-//round:符号表构建和相关检查
+﻿//round:符号表构建和相关检查
 import {
     ArgumentsPostfix,
     ArrayExpression,
@@ -272,6 +272,9 @@ const Verify_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.value,2)
 }
 const Verify_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
+    //同一个作用域里不能重复声明;父作用域的同名允许遮蔽
+    if(scope.data.has(ast.name))
+        scope.thr(`变量${ast.name}重复声明,在行${ast.line.join('\n')}`)
     scope.set(ast.name,ast)
     call(ast.t,2)
     call(ast.value,2)

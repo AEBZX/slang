@@ -1,9 +1,9 @@
-import {
+﻿import {
     BINARY, BIT_NOT,
     CALL,
     CMP,
     CZ, DELETE, GC,
-    HExpr,
+    HExpr, HIdentifierExpr, HIndexExpr, HMemberExpr,
     HIRTree, IN,
     IRArgs,
     IRTree,
@@ -101,17 +101,23 @@ export class IRTool extends PeepholeScope{
     ls_arg:IRArgs=null
     entry:boolean=false
     loop_id:number[]
+    //当前所在函数的参数表(子块继承用)
+    current_param:number[]=[]
     //是直接调用还取地址
     index_address:boolean=false
     high:boolean=true
     loop(){
         return this.loop_id[this.loop_id.length-1]
     }
+    //常量池里的东西当右值用时要"读槽":先把常量 load 进槽,再以 value 形式引用。
+    //右值写 reg 只会得到那个数字(池 id),而不是常量本身
     _pool(value:number|string){
         if(this.arg_pool.has(value))return this.arg_pool.get(value)
-        const id=IRArgs.reg(this.add(value))
-        this.push(new LOAD(id,IRArgs.reg(this.add(value))))
-        return id
+        const slot=IRArgs.reg(this.add(value))
+        this.push(new LOAD(slot,IRArgs.reg(this.add(value))))
+        const ret=IRArgs.value(slot.data)
+        this.arg_pool.set(value,ret)
+        return ret
     }
     add(data:number|string){
         if(this.pool.has(data))return this.pool.get(data)
@@ -121,9 +127,11 @@ export class IRTool extends PeepholeScope{
     }
     set_param(param:number[]){
         this.param.set(this.block_id,param)
+        this.current_param=param
     }
     get_param():number[]{
-        return this.param.get(this.block_id)
+        //分支/循环/await 这些子块没有自己登记参数表,继承外层函数的
+        return this.param.get(this.block_id)??this.current_param
     }
     push(ir:IRTree){
         this.ir.get(this.block_id).push(ir)
@@ -150,8 +158,36 @@ export class IRTool extends PeepholeScope{
         return this.index++
     }
 }
-//把表达式求值到 arg 槽里,返回**读**它的形式(值形式)。
-//入参 arg 保持槽号形式不变,目标操作数还要用它
+//容器(offset_* 的 b)的身份就是槽号:变量本身直接用它的槽,复合表达式求值到新槽后也用槽号
+export function container_of(expr:any,tool:IRTool,call:(data:any)=>void){
+    if(expr!=null&&expr.constructor!=null&&expr.constructor.name=='HIdentifierExpr')return IRArgs.reg(expr.name)
+    const slot=IRArgs.reg(tool.id())
+    fast_call(slot,expr,tool,call)
+    return slot
+}
+export function inc_slot(data:any){
+    const target:any=data.target
+    return target instanceof HIdentifierExpr?target.name:null
+}
+//目标是不是"位置"(下标/成员)
+export function is_place_target(target:any){
+    return target instanceof HIndexExpr||target instanceof HMemberExpr
+}
+//位置目标的自增:读出来、算新值、写回同一个位置
+export function inc_place_target(data:any,tool:IRTool,call:any,op:string,is_prefix:boolean){
+    const target:any=data.target
+    const container=container_of(target.target,tool,call)
+    //下标要算,成员名是静态的键
+    const offset=target instanceof HMemberExpr?tool._pool(target.member)
+        :fast_call(IRArgs.reg(tool.id()),target.index,tool,call)
+    const old=IRArgs.reg(tool.id())
+    tool.push(new OFFSET_GET(old,container,offset))
+    const next=IRArgs.reg(tool.id())
+    tool.push(new BINARY(op,next,IRArgs.value(old.data),IRArgs.reg(1)))
+    tool.push(new OFFSET_SET(container,offset,IRArgs.value(next.data)))
+    //前缀的结果是新值,后缀是旧值
+    return is_prefix?IRArgs.value(next.data):IRArgs.value(old.data)
+}
 export function fast_call(arg:IRArgs,value:HExpr,tool:IRTool,call:(data:HIRTree)=>void){
     tool.ls_arg=arg
     call(value)

@@ -21,8 +21,10 @@ import {
 import {copy, mov_rep, set_arg, slang_opt_visitor} from './tool'
 const CPY_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
     set_arg(data,'right',copy(data.right,tool),tool,bid,index)
-    //源槽的产出指令能直接把结果写到这条 mov 的目标上,这条 mov 就没用了
-    if(mov_rep(data,tool)!==data)tool.sweep(bid,index)
+    //注意:这里不能把 mov 删掉换成"让产出指令直接写目标槽"。
+    //产出指令可能已经被别的轮次替换掉了(cpy_set_table 还指着旧对象),
+    //改它的结果槽等于改一个不在流里的指令,目标槽就再也没人写 → 运行时读到垃圾。
+    //保可运行优先,这条 mov 保留。
     //mov 槽X, R 之后,读槽X 就等于读 R。
     //左值是 value 形式时,代表"编号未知的槽",没法记也不该去猜
     if(data.left.type=='reg')tool.cpy_rep_table.set(data.left.data,data.right)

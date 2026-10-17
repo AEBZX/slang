@@ -1,4 +1,4 @@
-﻿import {BinaryDict, CmpDict, fast_call, read, slang_ir_factory} from './tool'
+﻿import {BinaryDict, CmpDict, container_of, fast_call, inc_place_target, inc_slot, is_place_target, read, slang_ir_factory} from './tool'
 import {
     BINARY, BIT_NOT, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
@@ -36,6 +36,7 @@ const I_MapExpr:slang_ir_factory=(data:HMapExpr,tool,call)=>{
 const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
     const reg=tool.ls_arg
     const block_id=tool.block_id
+    const param=tool.current_param
     const lambda_id=tool.entry?0:tool.create()
     tool.block_id=lambda_id
     tool.set_param(data.params)
@@ -45,13 +46,15 @@ const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
         tool.push(new PARAM_LOAD(IRArgs.reg(id),IRArgs.reg(index+1)))
     call(data.commands)
     tool.block_id=block_id
+    tool.current_param=param
     //lambda变量就是存储block_id
     tool.ls_arg=reg
     call(new HNumberLiteral(lambda_id))
 }
 const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
     const mov_data=tool.ls_arg
-    const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+    //容器用槽号本身:和 offset_set 的 a 同一身份
+    const data_id=container_of(data.target,tool,call)
     const offset_id=fast_call(IRArgs.reg(tool.id()),data.index,tool,call)
     if(tool.index_address){
         tool.push(data.is_string?new OFFSET_STR_ADDR(mov_data,data_id,offset_id):new OFFSET_ADDR(mov_data,data_id,offset_id))
@@ -63,8 +66,9 @@ const I_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
 const I_MemberExpr:slang_ir_factory=(data:HMemberExpr,tool,call)=>{
     const mov_data=tool.ls_arg
     //成员是静态的,键直接用池 id 原样;对象要取槽里的值
-    const data_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    const offset_id=IRArgs.reg(tool.add(data.member))
+    const data_id=container_of(data.target,tool,call)
+    //成员名是字符串常量,走 _pool:搬进槽后以读槽形式引用
+    const offset_id=tool._pool(data.member)
     if(tool.index_address){
         tool.push(new OFFSET_ADDR(mov_data,data_id,offset_id))
         tool.index_address=false
@@ -73,18 +77,39 @@ const I_MemberExpr:slang_ir_factory=(data:HMemberExpr,tool,call)=>{
     tool.push(new OFFSET_GET(mov_data,data_id,offset_id))
 }
 const I_PostfixIncrementOrDecrement:slang_ir_factory=(data:HPostIncrementExpr|HPostDecrementExpr,tool,call)=>{
-    //先赋值
-    call(data.target)
-    //拿到target的地址:结果要写回这个地址,所以结果操作数用值形式(写穿)
-    const target_address=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',target_address,target_data,IRArgs.reg(1)))
+    const result=tool.ls_arg
+    const op=data instanceof HPostIncrementExpr?'add':'sub'
+    if(is_place_target(data.target)){
+        tool.push(new MOV(result,inc_place_target(data,tool,call,op,false)))
+        return
+    }
+    const slot=inc_slot(data)
+    if(slot==null){
+        //复杂目标:先求值再自增
+        const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+        tool.push(new BINARY(op,IRArgs.reg(tool.id()),target_data,IRArgs.reg(1)))
+        return
+    }
+    //后缀:表达式的结果是旧值,然后槽里的值自增
+    tool.push(new MOV(result,IRArgs.value(slot)))
+    tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',IRArgs.reg(slot),IRArgs.value(slot),IRArgs.reg(1)))
 }
 const I_PrefixIncrementOrDecrement:slang_ir_factory=(data:HPreIncrementExpr|HPreDecrementExpr,tool,call)=>{
-    const target=tool.ls_arg
-    call(data.target)
-    //++i等价于先+再赋值:结果写回 target 这个槽,左操作数取槽里的值
-    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',target,read(target),IRArgs.reg(1)))
+    const result=tool.ls_arg
+    const op=data instanceof HPreIncrementExpr?'add':'sub'
+    if(is_place_target(data.target)){
+        tool.push(new MOV(result,inc_place_target(data,tool,call,op,true)))
+        return
+    }
+    const slot=inc_slot(data)
+    if(slot==null){
+        const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
+        tool.push(new BINARY(op,result,target_data,IRArgs.reg(1)))
+        return
+    }
+    //前缀:先自增,表达式的结果是新值
+    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',IRArgs.reg(slot),IRArgs.value(slot),IRArgs.reg(1)))
+    tool.push(new MOV(result,IRArgs.value(slot)))
 }
 const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     const ls_arg=tool.ls_arg
@@ -157,6 +182,8 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     tool.block_id=block_id
     //data.condition是不是1
     const cmp_arg=IRArgs.reg(tool.id())
+    //cmp 的左操作数是就地的:先把它置成 1,再比 condition 等不等于 1
+    tool.push(new MOV(cmp_arg,IRArgs.reg(1)))
     tool.push(new CMP(cmp_arg,condition,IRArgs.reg(CmpDict.get('=='))))
     tool.push(new CZ(IRArgs.reg(true_id),IRArgs.reg(0),read(cmp_arg)))
     tool.push(new NOT(cmp_arg,read(cmp_arg)))

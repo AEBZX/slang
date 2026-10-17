@@ -1,4 +1,6 @@
-import {
+﻿import {
+    ClassType,
+    GenericType,
     AddExpression,
     AndExpression,
     ArrayType,
@@ -10,7 +12,6 @@ import {
     BooleanType,
     Cast,
     Class,
-    ClassType,
     DivExpression,
     Enum,
     EnumType,
@@ -18,7 +19,6 @@ import {
     Expression,
     FixType,
     Function,
-    GenericType,
     GreaterEqualExpression,
     GreaterExpression,
     InequalExpression,
@@ -221,15 +221,43 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
     const real=Array.from(param.values())
     if(iden.length!=real.length)return false
     //每个声明形参都要能接受对应实参
-    for(let i=0;i<iden.length;i++)
-        if(!type_is(real_type(real[i],scope),real_type(iden[i],scope),scope))return false
+    for(let i=0;i<iden.length;i++){
+        const decl=real[i]
+        //泛型形参是通配:把实参类型绑到泛型名上,返回类型里的 @T 才能解析
+        if(decl instanceof GenericType){
+            if(scope.get_generic(decl.generic)==null)
+                scope.set_generic(decl.generic,real_type(iden[i],scope))
+            continue
+        }
+        if(!type_is(real_type(decl,scope),real_type(iden[i],scope),scope))return false
+    }
     return true
 }
+//泛型声明里写的是裸名字(<T>),会被解析成 ClassType(['T']);@T 才是 GenericType。
+//两种都要当成"占位符"
+export function generic_placeholder(decl:Type,name:string){
+    if(decl==null||decl instanceof GenericType)return true
+    //泛型声明写裸名字时会解析成 ClassType(['T'])
+    if(decl instanceof ClassType&&decl.generic.length==0&&decl.local.length==1&&decl.local[0]==name)return true
+    //声明的类型信息被"未知类型"占位符盖掉了(cast 失败时的 stamp),只能当通配
+    if(decl instanceof ClassType&&decl.local.length==2&&decl.local[0]=='std'&&decl.local[1]=='ObjectInterface')return true
+    return false
+}
 export function generic_is(iden:Type[],param:Map<string,Type>,scope:Scope){
-    const real=Array.from(param.values())
-    if(iden.length!=real.length)return false
-    for(let i=0;i<iden.length;i++)
-        if(!type_is(real_type(real[i],scope),real_type(iden[i],scope),scope))return false
+    if(iden.length!=param.size)return false
+    const list=Array.from(param.entries())
+    for(let i=0;i<list.length;i++){
+        const [name,decl]=list[i]
+        const actual=real_type(iden[i],scope)
+        if(generic_placeholder(decl,name)){
+            const bound=scope.get_generic(name)
+            //已经绑过就要和这次一致,否则 <string> 配 number 实参会被放过
+            if(bound==null)scope.set_generic(name,actual)
+            else if(!type_is(real_type(bound,scope),actual,scope))return false
+            continue
+        }
+        if(!type_is(real_type(decl,scope),actual,scope))return false
+    }
     return true
 }
 export function fill_modifier(data:Block){
@@ -400,6 +428,9 @@ export function pick_best(scope:Scope,param_sets:Type[][],arg_types:Type[]):numb
     }
     if(fit.length==0)return null
     if(fit.length==1)return fit[0]
+    //具体形参优先于泛型形参:有具体候选能用时,泛型候选不参与竞争
+    const concrete=fit.filter(k=>!param_sets[k].some(t=>t instanceof GenericType))
+    if(concrete.length>0)fit=concrete
     //剔除被更具体候选支配的:若存在另一候选 j 使 j 每参都是 k 的子类/同构且至少一处严格子类
     let worse=new Set<number>()
     for(let a of fit)for(let b of fit){

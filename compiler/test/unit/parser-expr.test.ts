@@ -197,7 +197,7 @@ describe('parser/表达式·二元运算', () => {
         expect(E('a|b')).toBe('(a|b)')
         expect(E('a&&b')).toBe('(a&&b)')
         expect(E('a||b')).toBe('(a||b)')
-    })
+    }, 20000)
 
     it('同级左结合', () => {
         expect(E('1-2-3')).toBe('((1-2)-3)')

@@ -1,4 +1,4 @@
-import {address, desugar_cast, desugar_oper, expr_desugar, LiteralToConst, slang_desugar_visitor} from './tool'
+﻿import {address, desugar_cast, desugar_oper, expr_desugar, LiteralToConst, slang_desugar_visitor} from './tool'
 import {
     AAssign,
     AddAssign, AddExpression,
@@ -76,10 +76,11 @@ const D_BinaryExpression:slang_desugar_visitor=(node:BinaryExpression,call)=>{
             new BooleanLiteral('false')
         )
     if(ret instanceof LogicOrExpression)
+        //短路或:左边为真就是真,否则取右边
         return new TernaryExpression(
             node.left,
-            new BooleanLiteral('false'),
-            new OrExpression(node.left,node.right)
+            new BooleanLiteral('true'),
+            node.right
         )
     return ret
 }

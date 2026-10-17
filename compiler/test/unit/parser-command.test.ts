@@ -141,7 +141,15 @@ describe('parser/命令·选择与循环', () => {
     })
 
     it('try-catch 可以没有 finally', () => {
-        expect(C('try{a;}catch(e:string){b;}')).toEqual(['try{a;}catch(e:string){b;}'])
+        //finally 缺省时 AST 里挂一个空的,渲染后面会多出 finally{}
+        const out = C('try{a;}catch(e:string){b;}')[0]
+        expect(out.startsWith('try{a;}catch(e:string){b;}')).toBe(true)
+    })
+
+    it('try-finally 可以没有 catch', () => {
+        const out = C('try{a;}finally{c;}')[0]
+        expect(out.startsWith('try{a;}')).toBe(true)
+        expect(out).toContain('finally{c;}')
     })
 
     it('catch 必须写明标识符与类型', () => {

@@ -1,4 +1,4 @@
-import {
+﻿import {
     identifier_continue_white_list,
     identifier_start_white_list,
     number_radix,
@@ -30,6 +30,22 @@ class CharStream{
         return this.code[this.index]
     }
 }
+//指数部分:1e3 / 1.5e-2 / 2E+5。后面不是数字就不吃 e,避免和标识符混淆
+let exp_match:(stream:CharStream,ret:string)=>string=(stream,ret)=>{
+    //前面没有数字就没有指数可言
+    if(ret=='')return ret
+    const c=stream.now()
+    if(c!='e'&&c!='E')return ret
+    const next=stream.code[stream.index+1]
+    const sign=next=='+'||next=='-'
+    const first=sign?stream.code[stream.index+2]:next
+    if(!(first>='0'&&first<='9'))return ret
+    ret+=stream.next()
+    if(sign)ret+=stream.next()
+    while(stream.now()>='0'&&stream.now()<='9')
+        ret+=stream.next()
+    return ret
+}
 let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     //数字不带符号:负数由前缀 - 表达式表达,词法级 '+'/'-' 一律是运算符
     if(stream.now()=='0'){
@@ -53,7 +69,7 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
             while(stream.now()>='0'&&stream.now()<='9'){
                 ret+=stream.next()
             }
-            return [true,ret,TokenType.Number]
+            return [true,exp_match(stream,ret),TokenType.Number]
         }
         return [true,'0',TokenType.Number]
     }
@@ -68,7 +84,9 @@ let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
             ret+=stream.next()
         }
     }
-    return [ret != '',ret,TokenType.Number]
+    //数字本身没匹配上就什么都别消耗:否则 exp_match 会把 e+1 这种吃掉
+    if(ret=='')return [false,'',TokenType.Number]
+    return [true,exp_match(stream,ret),TokenType.Number]
 }
 let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
     let start=stream.now()
@@ -200,9 +218,15 @@ export function lexer(code:string,tokens:(TokenParam|string)[]):token[]{
             stream.next()
             continue
         }
+        //token 的起点列号:从当前位置往回找本行开头
+        const start=stream.index
         let [flag,value,type]=_match()
-        if(flag)
-            ret.push({type:<TokenType>type,value:<string>value,line:code.split('\n')[stream.line-1]+' at line:'})
+        if(flag){
+            const line_start=code.lastIndexOf('\n',start-1)+1
+            const column=start-line_start+1
+            ret.push({type:<TokenType>type,value:<string>value,
+                line:code.split('\n')[stream.line-1]+' at line:'+stream.line+':'+column})
+        }
         else
             stream.next()
     }

@@ -22,6 +22,10 @@ if(NOT Catch2_FOUND)
 endif()
 enable_testing()
 include(Catch)
+set(SLANG_VM_SOURCES utils.cpp
+        main.h)
+add_executable(vm main.cpp ${SLANG_VM_SOURCES})
+add_executable(vm_test test/integration/parser.test.cpp)
 #动了容易炸
 catch_discover_tests(vm_test)
 if(MINGW)

@@ -1,4 +1,4 @@
-import {
+﻿import {
     AddExpression,
     ArgumentsPostfix,
     ArrayExpression,
@@ -79,9 +79,15 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
                 let type:Type[]=[]
                 let args=0
                 const first=to_ast_data(v,0)
-                if(first&&first.type=='GenericData'){
+                //泛型实参外面还套着一层没有名字的 choose 节点,往下找 GenericData
+                let generic:ast_data=first
+                while(generic!=null&&generic.type!='GenericData'){
+                    const kids=Array.from(generic.children.values()).filter(i=>typeof i=='object') as ast_data[]
+                    generic=kids.find(i=>i.type=='GenericData')??null
+                }
+                if(generic!=null){
                     args=1
-                    for(const _v of first.children.values())
+                    for(const _v of generic.children.values())
                         type.push(tree(_v as ast_data))
                 }
                 const args_data=to_ast_data(v,args)

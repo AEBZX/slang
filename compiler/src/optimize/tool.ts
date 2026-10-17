@@ -1,4 +1,4 @@
-import {CMP, IRArgs, IRTree, LOAD, MOV} from '../utils'
+﻿import {BINARY, BIT_NOT, CMP, IN, IRArgs, IRTree, LOAD, MOV, NOT, OFFSET_GET, PARAM_LOAD} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export const BINARYMap=new Map([
     ['add',(a:number,b:number)=>a+b],
@@ -139,9 +139,12 @@ export function oper_of(cmp:CMP,tool:OPTTool){
     const v=read_const(cmp.oper,tool)
     return typeof v=='number'?v:null
 }
-//两个操作数指向同一个槽(左值/右值形式不同也算)
-export function same_slot(a:IRArgs,b:IRArgs){
-    return a!=null&&b!=null&&a.data===b.data
+export function same_slot(dst:IRArgs,src:IRArgs){
+    return dst!=null&&src!=null&&dst.data===src.data&&dst.type!==src.type
+}
+//两个操作数是不是同一个值(槽号与形式都相同)
+export function same_arg(a:IRArgs,b:IRArgs){
+    return a!=null&&b!=null&&a.data===b.data&&a.type===b.type
 }
 //写一个操作数。只在原对象上原地改,不占用 sweep 的位置,
 //这样后面的 constant_fold / peephole 还能对同一个位置做真改写
@@ -194,7 +197,6 @@ export function cprop(ir:IRArgs,tool:OPTTool){
 }
 export function to_load(ir:IRTree,key:string,tool:OPTTool,bid:number,index:number){
     let arg:IRArgs=ir[key]
-    //已经是"读槽"或者干脆就是立即数,都不用动
     if(arg.type=='value')return
     if(Number.isInteger(arg.data)&&arg.data>=0)return
     const id=tool.id_pool.has(arg.data)?tool.id_pool.get(arg.data):(()=>{
@@ -205,4 +207,33 @@ export function to_load(ir:IRTree,key:string,tool:OPTTool,bid:number,index:numbe
     //先把常量搬进槽,操作数再从这个槽里读:右值写 reg(槽号) 会变成"数字槽号"
     ir[key]=IRArgs.value(id)
     tool.sweep(bid,index,new LOAD(IRArgs.reg(id),IRArgs.reg(tool.pool_id(arg.data))),ir)
+}
+
+export function writes_of(ir:IRTree):number[]{
+    const out:number[]=[]
+    const put=(a:IRArgs)=>{
+        if(a==null)return
+        if(a.type=='reg')out.push(a.data)
+        else out.push(-1)
+    }
+    if(ir instanceof MOV)put((ir as any).left)
+    else if(ir instanceof LOAD)put((ir as any).reg)
+    else if(ir instanceof BINARY)put((ir as any).result)
+    else if(ir instanceof NOT||ir instanceof BIT_NOT)put((ir as any).left)
+    else if(ir instanceof CMP)put((ir as any).left)
+    else if(ir instanceof OFFSET_GET)put((ir as any).target)
+    else if(ir instanceof IN)put((ir as any).target)
+    else if(ir instanceof PARAM_LOAD)put((ir as any).data)
+    return out
+}
+export function kill(tool:OPTTool,slots:number[]){
+    if(slots.includes(-1)){
+        tool.clear()
+        return
+    }
+    for(const s of slots){
+        tool.cpy_rep_table.delete(s)
+        tool.cpy_set_table.delete(s)
+        tool.cprop_table.delete(s)
+    }
 }
