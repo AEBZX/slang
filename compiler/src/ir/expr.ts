@@ -1,4 +1,4 @@
-import {BinaryDict, CmpDict, fast_call, read, slang_ir_factory} from './tool'
+﻿import {BinaryDict, CmpDict, fast_call, read, slang_ir_factory} from './tool'
 import {
     BINARY, BIT_NOT, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
@@ -42,7 +42,7 @@ const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
     //param_load依次取所有东西
     //0预留给return
     for(const [index,id] of data.params.entries())
-        tool.push(new PARAM_LOAD(IRArgs.reg(id),tool._pool(index+1)))
+        tool.push(new PARAM_LOAD(IRArgs.reg(id),IRArgs.reg(index+1)))
     call(data.commands)
     tool.block_id=block_id
     //lambda变量就是存储block_id
@@ -78,13 +78,13 @@ const I_PostfixIncrementOrDecrement:slang_ir_factory=(data:HPostIncrementExpr|HP
     //拿到target的地址:结果要写回这个地址,所以结果操作数用值形式(写穿)
     const target_address=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
     const target_data=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',target_address,target_data,tool._pool(1)))
+    tool.push(new BINARY(data instanceof HPostIncrementExpr?'add':'sub',target_address,target_data,IRArgs.reg(1)))
 }
 const I_PrefixIncrementOrDecrement:slang_ir_factory=(data:HPreIncrementExpr|HPreDecrementExpr,tool,call)=>{
     const target=tool.ls_arg
     call(data.target)
     //++i等价于先+再赋值:结果写回 target 这个槽,左操作数取槽里的值
-    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',target,read(target),tool._pool(1)))
+    tool.push(new BINARY(data instanceof HPreIncrementExpr?'add':'sub',target,read(target),IRArgs.reg(1)))
 }
 const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     const ls_arg=tool.ls_arg
@@ -96,9 +96,9 @@ const I_ArgumentsExpr:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
         tool.push(new PARAM_SET(IRArgs.reg(index+1),fast_call(IRArgs.reg(tool.id()),arg,tool,call)))
     //被调用者:它的值(块号)要读出来当跳转目标
     const arg_id=fast_call(IRArgs.reg(tool.id()),data.target,tool,call)
-    tool.push(new CALL(arg_id,tool._pool(1)))
+    tool.push(new CALL(arg_id,IRArgs.reg(1)))
     //拿到返回值
-    tool.push(new PARAM_LOAD(ls_arg,tool._pool(0)))
+    tool.push(new PARAM_LOAD(ls_arg,IRArgs.reg(0)))
     for(const i of tool.get_param())
         tool.push(new POP())
 }
@@ -135,7 +135,7 @@ const I_BinaryExpr:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
         tool.push(new BINARY(BinaryDict.get(data.op),arg,left,right))
     if(Array.from(CmpDict.keys()).includes(data.op)){
         //cmp 的第一个操作数既当目标又当左值(就地),所以给槽号;右值与运算符编号取值
-        tool.push(new CMP(left_arg,right,tool._pool(CmpDict.get(data.op))))
+        tool.push(new CMP(left_arg,right,IRArgs.reg(CmpDict.get(data.op))))
         tool.push(new MOV(arg,left))
     }
 }
@@ -157,10 +157,10 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     tool.block_id=block_id
     //data.condition是不是1
     const cmp_arg=IRArgs.reg(tool.id())
-    tool.push(new CMP(cmp_arg,condition,tool._pool(CmpDict.get('=='))))
-    tool.push(new CZ(tool._pool(true_id),tool._pool(0),read(cmp_arg)))
+    tool.push(new CMP(cmp_arg,condition,IRArgs.reg(CmpDict.get('=='))))
+    tool.push(new CZ(IRArgs.reg(true_id),IRArgs.reg(0),read(cmp_arg)))
     tool.push(new NOT(cmp_arg,read(cmp_arg)))
-    tool.push(new CZ(tool._pool(false_id),tool._pool(0),read(cmp_arg)))
+    tool.push(new CZ(IRArgs.reg(false_id),IRArgs.reg(0),read(cmp_arg)))
 }
 export default new Map<any,slang_ir_factory>([
     [HLiteral,I_Literal],

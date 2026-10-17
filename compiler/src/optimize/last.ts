@@ -1,4 +1,4 @@
-//将优化过程中不规范的reg 数字变为load
+﻿//将优化过程中不规范的reg 数字变为load
 import {BINARYMap, CMPMap, is_constant, slang_opt_visitor, to_load, to_v} from './tool'
 import {
     BINARY,
@@ -16,7 +16,6 @@ import {
     THREAD,
     TZ
 } from '../utils'
-import optimize from "./index";
 const L_MOV:slang_opt_visitor=(data:MOV,tool,bid,index)=>{
     to_load(data,'right',tool,bid,index)
 }

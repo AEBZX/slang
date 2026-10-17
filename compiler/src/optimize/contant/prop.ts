@@ -1,92 +1,78 @@
 //常量传播
-import {cprop, cprop_offset_record, cprop_param_record, cprop_record, slang_opt_visitor, to_v} from '../tool'
+import {cprop, cprop_offset_record, cprop_param_record, cprop_record, pool_const, read_const, set_arg, slang_opt_visitor} from '../tool'
 import {
     BINARY,
     BIT_NOT,
     CMP,
     ControlStream,
-    ControlStreamCond, IN,
+    ControlStreamCond,
+    IN,
     IRArgs,
     LOAD,
     MOV,
     NOT, OFFSET_GET, OFFSET_SET,
-    opt_visitor, OUT, PARAM_LOAD, PARAM_SET, POP, PUSH,
+    OUT, PARAM_LOAD, PARAM_SET, PUSH,
     RET
 } from '../../utils'
 const CPROP_LOAD:slang_opt_visitor=(data:LOAD, tool, bid, index)=>{
-    if(data.reg.type=='reg')
-        tool.cprop_table.delete(data.reg)
-    if(data.reg.type=='reg'&&data.data.type=='reg')
-        tool.cprop_table.set(to_v(data.reg),tool.pool.get(data.data.data))
-    //能转mov reg a reg b就转
-    if(typeof tool.pool.get(data.data.data)=='number')
-        tool.sweep(bid,index,new MOV(data.reg,IRArgs.reg(tool.pool.get(data.data.data) as number)))
+    //load 的目标槽里就是这个常量
+    const v=pool_const(data.data,tool)
+    if(typeof v=='number'){
+        tool.cprop_table.set(data.reg.data,v)
+        tool.sweep(bid,index,new MOV(data.reg,IRArgs.reg(v)))
+        return
+    }
+    tool.cprop_table.delete(data.reg.data)
 }
 const CPROP_MOV:slang_opt_visitor=(data:MOV,tool,bid,index)=>{
+    set_arg(data,'right',cprop(data.right,tool),tool,bid,index)
     cprop_record(data.left,data.right,tool)
-    data.right=cprop(data.right,tool)
-    tool.sweep(bid,index,data)
 }
 const CPROP_BINARY:slang_opt_visitor=(data:BINARY,tool,bid,index)=>{
-    data.left=cprop(data.left,tool)
-    data.right=cprop(data.right,tool)
-    tool.sweep(bid,index,data)
+    set_arg(data,'left',cprop(data.left,tool),tool,bid,index)
+    set_arg(data,'right',cprop(data.right,tool),tool,bid,index)
 }
 const CPROP_NOT_OR_BIT_NOT:slang_opt_visitor=(data:NOT|BIT_NOT,tool,bid,index)=>{
-    data.right=cprop(data.right,tool)
+    set_arg(data,'right',cprop(data.right,tool),tool,bid,index)
 }
 const CPROP_CMP:slang_opt_visitor=(data:CMP,tool,bid,index)=>{
-    data.right=cprop(data.right,tool)
-    data.oper=cprop(data.left,tool)
-    tool.sweep(bid,index,data)
+    //左值是就地写回的目标,不能换;右值可以
+    set_arg(data,'right',cprop(data.right,tool),tool,bid,index)
 }
 const CPROP_ControlStream:slang_opt_visitor=(data:ControlStream,tool,bid,index)=>{
-    data.target=cprop(data.target,tool)
-    data.frame=cprop(data.frame,tool)
+    set_arg(data,'target',cprop(data.target,tool),tool,bid,index)
+    set_arg(data,'frame',cprop(data.frame,tool),tool,bid,index)
     if(data instanceof ControlStreamCond)
-        data.cond=cprop(data.cond,tool)
-    tool.sweep(bid,index,data)
+        set_arg(data,'cond',cprop(data.cond,tool),tool,bid,index)
 }
 const CPROP_RET:slang_opt_visitor=(data:RET,tool,bid,index)=>{
-    data.frame=cprop(data.frame,tool)
-    tool.sweep(bid,index,data)
+    set_arg(data,'frame',cprop(data.frame,tool),tool,bid,index)
 }
 const CPROP_PUSH:slang_opt_visitor=(data:PUSH,tool,bid,index)=>{
-    if(data.target.type=='reg')
-        tool.cprop_table.delete(data.target)
-    tool.sweep(bid,index,data)
+    //push 之后要跨调用,这个槽的已知值不再可信
+    tool.cprop_table.delete(data.target.data)
 }
 const CPROP_OFFSET_SET:slang_opt_visitor=(data:OFFSET_SET,tool,bid,index)=>{
-    if(data.target.type=='reg'&&data.offset.type=='reg')
-        tool.cprop_offset_table.delete([data.target,data.offset])
     cprop_offset_record([data.target,data.offset],data.value,tool)
-    data.offset=cprop(data.offset,tool)
-    data.value=cprop(data.value,tool)
-    tool.sweep(bid,index,data)
+    set_arg(data,'value',cprop(data.value,tool),tool,bid,index)
 }
 const CPROP_OFFSET_GET:slang_opt_visitor=(data:OFFSET_GET,tool,bid,index)=>{
-    data.data=cprop(data.data,tool)
-    data.offset=cprop(data.offset,tool)
-    tool.sweep(bid,index,data)
+    set_arg(data,'data',cprop(data.data,tool),tool,bid,index)
+    set_arg(data,'offset',cprop(data.offset,tool),tool,bid,index)
 }
 const CPROP_IN_OR_OUT:slang_opt_visitor=(data:IN|OUT,tool,bid,index)=>{
-    tool.cprop_table.clear()
-    tool.cprop_param_table.clear()
-    tool.cprop_offset_table.clear()
-    data.oper=cprop(data.oper,tool)
-    data.target=cprop(data.target,tool)
-    tool.sweep(bid,index,data)
+    //操作数照旧先用已知常量换掉
+    set_arg(data,'oper',cprop(data.oper,tool),tool,bid,index)
+    set_arg(data,'target',cprop(data.target,tool),tool,bid,index)
+    //io 一执行,槽里是什么就完全不可控:后面所有推导必须截断
+    tool.clear()
 }
 const CPROP_PARAM_SET:slang_opt_visitor=(data:PARAM_SET,tool,bid,index)=>{
-    if(data.param.type=='reg')
-        tool.cprop_param_table.delete(data.param)
-    data.value=cprop(data.value,tool)
+    set_arg(data,'value',cprop(data.value,tool),tool,bid,index)
     cprop_param_record(data.param,data.value,tool)
-    tool.sweep(bid,index,data)
 }
 const CPROP_PARAM_LOAD:slang_opt_visitor=(data:PARAM_LOAD,tool,bid,index)=>{
-    data.param=cprop(data.param,tool)
-    tool.sweep(bid,index,data)
+    set_arg(data,'param',cprop(data.param,tool),tool,bid,index)
 }
 export default ['constant_prop',new Map<any,slang_opt_visitor>([
     [LOAD,CPROP_LOAD],

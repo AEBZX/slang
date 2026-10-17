@@ -1,9 +1,9 @@
 import PeepholeTool, {PeepholeScope, PeepholeTree} from './tool'
-import {writeFileSync} from "fs";
+import {writeFileSync} from 'fs'
 export type generate_machine=(tool:PeepholeScope,call:(data:PeepholeTree)=>Buffer)=>Buffer
 export type generate_visitor=(data:PeepholeTree)=>Buffer
 export default class Generate extends PeepholeTool{
-    ref:Map<any,generate_visitor>
+    ref:Map<any,generate_visitor>=new Map()
     machine:generate_machine
     local:string
     constructor() {
@@ -15,7 +15,7 @@ export default class Generate extends PeepholeTool{
                 this.ref.set(k,v)
         else if(typeof data=='string')
             this.local = data
-        this.machine = data as generate_machine
+        else this.machine = data as generate_machine
         return this
     }
     run(param:PeepholeScope){
@@ -23,6 +23,7 @@ export default class Generate extends PeepholeTool{
             for(const [k,v] of this.ref)
                 if(data instanceof k) return v(data)
         })
-        writeFileSync(this.local,buffer,'utf-8')
+        writeFileSync(this.local,buffer)
+        return buffer
     }
 }

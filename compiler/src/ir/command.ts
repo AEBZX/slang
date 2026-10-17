@@ -1,4 +1,4 @@
-import {
+﻿import {
     Break,
     CALL, Continue, CZ,
     HAssign, HAwait,
@@ -41,7 +41,7 @@ const I_Await:slang_ir_factory=(data:HAwait,tool,call)=>{
     tool.block_id=id
     call(data.command)
     tool.block_id=block_id
-    tool.push(new THREAD(tool._pool(id),tool._pool(0)))
+    tool.push(new THREAD(IRArgs.reg(id),IRArgs.reg(0)))
 }
 const I_ListCommand:slang_ir_factory=(data:HListCommand,tool,call)=>{
     data.commands.forEach(call)
@@ -52,8 +52,8 @@ const I_ExprCommand:slang_ir_factory=(data:HExprCommand,tool,call)=>{
 }
 const I_Return:slang_ir_factory=(data:HReturn,tool,call)=>{
     const ret=fast_call(IRArgs.reg(tool.id()),data.data,tool,call)
-    tool.push(new PARAM_SET(tool._pool(0),ret))
-    tool.push(new RET(tool._pool(1)))
+    tool.push(new PARAM_SET(IRArgs.reg(0),ret))
+    tool.push(new RET(IRArgs.reg(1)))
 }
 const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
     const id=tool.block_id
@@ -67,9 +67,9 @@ const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
     tool.block_id=false_id
     call(data.else_)
     tool.block_id=id
-    tool.push(new CZ(tool._pool(true_id),tool._pool(0),condition_value))
+    tool.push(new CZ(IRArgs.reg(true_id),IRArgs.reg(0),condition_value))
     tool.push(new NOT(condition,read(condition)))
-    tool.push(new CZ(tool._pool(false_id),tool._pool(0),read(condition)))
+    tool.push(new CZ(IRArgs.reg(false_id),IRArgs.reg(0),read(condition)))
 }
 const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{
     const id=tool.block_id
@@ -78,16 +78,16 @@ const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{
     tool.loop_id.push(loop_id)
     const condition_arg=fast_call(IRArgs.reg(tool.id()),data.condition,tool,call)
     call(data.commands)
-    tool.push(new CZ(tool._pool(loop_id),tool._pool(0),condition_arg))
+    tool.push(new CZ(IRArgs.reg(loop_id),IRArgs.reg(0),condition_arg))
     tool.loop_id.pop()
     tool.block_id=id
-    tool.push(new CALL(tool._pool(loop_id),tool._pool(2)))
+    tool.push(new CALL(IRArgs.reg(loop_id),IRArgs.reg(2)))
 }
 const I_Break:slang_ir_factory=(data:Break,tool,call)=>{
-    tool.push(new RET(tool._pool(2)))
+    tool.push(new RET(IRArgs.reg(2)))
 }
 const I_Continue:slang_ir_factory=(data:Continue,tool,call)=>{
-    tool.push(new JMP(tool._pool(tool.loop()),tool._pool(0)))
+    tool.push(new JMP(IRArgs.reg(tool.loop()),IRArgs.reg(0)))
 }
 const I_VM:slang_ir_factory=(data:HVM,tool,call)=>{
     //内联指令的操作数先各自求值到一个槽,VMMap 再按该指令的语义决定哪个操作数取值、哪个取槽

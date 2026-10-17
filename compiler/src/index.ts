@@ -33,13 +33,19 @@ class Runner{
     }
     run(code:string[],local:string){
         let ret:any=code
-        for(const i of this.plu) ret=i(this.tool);
-        (this.tool[toolToRound.get('generate')] as Generate).local=local
-        for(const t of this.tool)
-            ret=t.run(ret)
+        //插件换的是工具链,不能覆盖流水线数据
+        for(const i of this.plu) this.tool=i(this.tool)
+        ;(this.tool[toolToRound.get('generate')] as Generate).local=local
+        for(const t of this.tool){
+            const out=t.run(ret)
+            //check 产出的是符号表与诊断,流水线数据仍然是 files,不能往后传
+            if(t.name!='check')ret=out
+        }
+        //最后一级(generate)的产物:字节码
+        return ret
     }
 }
-export default function(code:string[],local:string,plugin:plugin[]){
-    new Runner().register(lexer).register(parser).register(check).register(desugar).register(hir).register(ir)
+export default function(code:string[],local:string,plugin:plugin[]=[]){
+    return new Runner().register(lexer).register(parser).register(check).register(desugar).register(hir).register(ir)
         .register(optimize).register(generate).plugin(...plugin).run(code,local)
 }

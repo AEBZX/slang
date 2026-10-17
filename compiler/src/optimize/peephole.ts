@@ -1,68 +1,36 @@
-import {BINARYMap, CMPMap, is_constant, slang_opt_visitor, to_peephole_l, to_v, value} from './tool'
-import {
-    BINARY,
-    BIT_NOT,
-    CALL,
-    CMP,
-    ControlStreamCond,
-    CZ,
-    IRArgs,
-    JMP,
-    JZ, LOAD,
-    MOV,
-    NOT, OFFSET_GET,
-    OFFSET_STR_SET, PARAM_LOAD, PARAM_SET,
-    THREAD,
-    TZ
-} from '../utils'
-import {CmpDict} from "../ir/tool";
+import {oper_of, same_slot, slang_opt_visitor, value} from './tool'
+import {BINARY, CMP, ControlStreamCond, IRArgs, MOV, NOT} from '../utils'
+import {CmpDict} from '../ir/tool'
+//窥孔:只做"结果就等于某个操作数/常量"的等价替换,一律换成 mov,不能整条删掉
+//(删掉的话目标槽就没人写了)
 const PEEPHOLE_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
-    //两者相同
-    if(to_peephole_l(data.left)==data.right)
-        tool.sweep(bid,index,)
+    //mov x,x
+    if(same_slot(data.left,data.right))tool.sweep(bid,index,)
 }
 const PEEPHOLE_BINARY:slang_opt_visitor=(data:BINARY,tool,bid,index)=>{
-    if(data.id=='shl'||data.id=='shr'&&value(data.right)==0)
-        //a>>0=a<<0=a
-        tool.sweep(bid,index,)
-    //+0/-0
-    if(data.id=='add'||data.id=='sub'&&value(data.right)==0)
-        //a+0=a-0=a
-        tool.sweep(bid,index,)
-    //*1,/1
-    if(data.id=='mul'||data.id=='div'&&value(data.right)==1)
-        //a*1=a/a=a
-        tool.sweep(bid,index,)
-    //*0
-    if(data.id=='mul'&&value(data.right)==0)
-        //a*0=0
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
-    //a-a
-    if(data.id=='sub'&&to_peephole_l(data.right)==data.left)
-        //a-a=0
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
-    //and/or a a
-    if(data.id=='and'||data.id=='or'&&to_peephole_l(data.right)==data.left)
-        //a&a=a|a=a
-        tool.sweep(bid,index,)
-    //xor a a
-    if(data.id=='xor'&&to_peephole_l(data.right)==data.left)
-        //a^a=0
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
-    //and a 0
-    if(data.id=='and'||data.id=='or'||data.id=='xor'&&value(data.right)==0)
-        //a&0=0
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
+    const result=data.result
+    const to_left=()=>tool.sweep(bid,index,new MOV(result,data.left))
+    const to_zero=()=>tool.sweep(bid,index,new MOV(result,IRArgs.reg(0)))
+    const right=value(data.right)
+    const same=same_slot(data.left,data.right)
+    //结果就是另一个操作数:a+0 a-0 a<<0 a>>0 a|0 a^0
+    if((data.id=='add'||data.id=='sub'||data.id=='or'||data.id=='xor')&&right==0)return to_left()
+    if((data.id=='shl'||data.id=='shr')&&right==0)return to_left()
+    if((data.id=='mul'||data.id=='div')&&right==1)return to_left()
+    if((data.id=='and'||data.id=='or')&&same)return to_left()
+    //结果恒为 0:a-a a^a a&0 a*0
+    if((data.id=='sub'||data.id=='xor')&&same)return to_zero()
+    if((data.id=='and'||data.id=='mul')&&right==0)return to_zero()
 }
 const PEEPHOLE_CMP:slang_opt_visitor=(data:CMP,tool,bid,index)=>{
-    if(data.oper.type!='reg')return
-    const flag=data.oper.data
-    //a>a=a<a=a!=a=0
-    if(CmpDict.get('>')==flag||CmpDict.get('<')==flag||CmpDict.get('!=')==flag)
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
-    //a<=a=a>=a=a==a=1
-    if(CmpDict.get('<=')==flag||CmpDict.get('>=')==flag||CmpDict.get('==')==flag)
-        tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(1)))
+    //只有两个操作数是同一个槽时才成立:a>a / a<a / a!=a 恒 0,a<=a / a>=a / a==a 恒 1
+    if(!same_slot(data.left,data.right))return
+    const oper=oper_of(data,tool)
+    if(oper==null)return
+    const zero=[CmpDict.get('>'),CmpDict.get('<'),CmpDict.get('!=')]
+    const one=[CmpDict.get('<='),CmpDict.get('>='),CmpDict.get('==')]
+    if(zero.includes(oper))tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(0)))
+    if(one.includes(oper))tool.sweep(bid,index,new MOV(data.left,IRArgs.reg(1)))
 }
 export default ['peephole',new Map<any,slang_opt_visitor>([
     [MOV,PEEPHOLE_MOV],

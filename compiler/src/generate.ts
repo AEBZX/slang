@@ -64,42 +64,33 @@ const BinaryOffset=new Map<string,number>([
     ['or',8],
     ['xor',9]
 ])
-const IRArgOffset=new Map<string[],number>([
-    [['reg','reg','reg'],0],
-    [['reg','reg','value'],1],
-    [['reg','value','reg'],2],
-    [['reg','value','value'],3],
-    [['value','reg','reg'],4],
-    [['value','reg','value'],5],
-    [['value','value','reg'],6],
-    [['value','value','value'],7]
-])
+//操作数形式偏移:三个操作数的 reg/value 就是三位,reg=0、value=1
 function offest(v1:IRArgs,v2:IRArgs,v3:IRArgs){
+    return (v1.type=='value'?4:0)+(v2.type=='value'?2:0)+(v3.type=='value'?1:0)
+}
+function ins_id(data:IRTree,v1:IRArgs,v2:IRArgs,v3:IRArgs){
+    //先按具体类精确匹配:OFFSET_ADDR 继承 OFFSET_GET、OFFSET_STR_* 继承 OFFSET_*,
+    //照 instanceof 的顺序扫会被认成父类的操作码
+    let ins_offset:number=null
+    for(const [key,value] of CommandOffset)
+        if(data.constructor===key)ins_offset=value
+    if(ins_offset==null)
+        for(const [key,value] of CommandOffset)
+            if(data instanceof key)ins_offset=value
+    const type_offset=data instanceof BINARY?BinaryOffset.get(data.id):0
+    const v_offset=offest(v1,v2,v3)
+    return (ins_offset+type_offset)*8+v_offset
+}
+function fill(data:IRTree,v1:IRArgs=null,v2:IRArgs=null,v3:IRArgs=null){
+    //只有一两个操作数的指令(load/ret/push/pop/gc…)缺的按 reg 0 补,类型也要参与操作码计算
     v1=v1??IRArgs.reg(0)
     v2=v2??IRArgs.reg(0)
     v3=v3??IRArgs.reg(0)
-    return IRArgOffset.get([v1.type,v2.type,v3.type])
-}
-function ins_id(data:IRTree,v1:IRArgs,v2:IRArgs,v3:IRArgs){
-    const ins_offset=(()=>{
-        for(const [key,value] of CommandOffset){
-            if(data instanceof OFFSET_STR_ADDR||data instanceof OFFSET_STR_GET||data instanceof OFFSET_SET)
-                if(!(key instanceof OFFSET_STR_ADDR||key instanceof OFFSET_STR_GET||key instanceof OFFSET_STR_SET))
-                    continue
-            if(data instanceof key)
-                return value
-        }
-    })()
-    const type_offset=data instanceof BINARY?BinaryOffset.get(data.id):0
-    const v_offset=offest(v1,v2,v3)
-    return ins_offset+type_offset+v_offset
-}
-function fill(data:IRTree,v1:IRArgs=null,v2:IRArgs=null,v3:IRArgs=null){
     let buffer=Buffer.alloc(16)
-    buffer.writeUint32BE(ins_id(data,v1,v2,null))
-    buffer.writeUint32BE(v1.data)
-    buffer.writeUint32BE(v2.data)
-    buffer.writeUint32BE(v3.data)
+    buffer.writeUint32BE(ins_id(data,v1,v2,v3),0)
+    buffer.writeUint32BE(v1.data,4)
+    buffer.writeUint32BE(v2.data,8)
+    buffer.writeUint32BE(v3.data,12)
     return buffer
 }
 const G_LOAD:slang_generate_visitor=(data:LOAD)=>fill(data,data.reg,data.data)
@@ -139,6 +130,11 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
     [POP,G_POP],
     [OFFSET_SET,G_OFFSET_SET],
     [OFFSET_GET,G_OFFSET_GET],
+    //OFFSET_ADDR 与 OFFSET_STR_* 的操作数形状与父类一致,复用同一套
+    [OFFSET_ADDR,G_OFFSET_GET],
+    [OFFSET_STR_SET,G_OFFSET_SET],
+    [OFFSET_STR_GET,G_OFFSET_GET],
+    [OFFSET_STR_ADDR,G_OFFSET_GET],
     [IN,G_IN_OUT],
     [OUT,G_IN_OUT],
     [GC,G_GC],
@@ -155,12 +151,12 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
         let head=Buffer.alloc(9)
         const data=type==1?(()=>{
             let ls=Buffer.alloc(8)
-            ls.writeDoubleBE(v as number)
+            ls.writeDoubleBE(v as number,0)
             return ls
         })():Buffer.from(v as string,'utf-8')
-        head.writeUint32BE(k)
-        head.writeUint8(type)
-        head.writeUint32BE(data.length)
+        head.writeUint32BE(k,0)
+        head.writeUint8(type,4)
+        head.writeUint32BE(data.length,5)
         pool.push(head,data)
     }
     pool.push(Buffer.from('POOL_END','utf-8'))
@@ -168,19 +164,19 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
     code.push(Buffer.from('CODE_START','utf-8'))
     for(const [id,ir] of tool.command){
         let block=Buffer.alloc(16)
-        block.writeUint32BE(0xFFFFFFFF)
-        block.writeUint32BE(id)
-        block.writeUint32BE(0)
-        block.writeUint32BE(0)
+        block.writeUint32BE(0xFFFFFFFF,0)
+        block.writeUint32BE(id,4)
+        block.writeUint32BE(0,8)
+        block.writeUint32BE(0,12)
         let commands:Buffer[]=[]
         for(const command of ir)
             commands.push(call(command))
         code.push(block,Buffer.concat(commands))
         let end=Buffer.alloc(16)
-        end.writeUint32BE(0xFFFFFFFF-1)
-        end.writeUint32BE(0)
-        end.writeUint32BE(0)
-        end.writeUint32BE(0)
+        end.writeUint32BE(0xFFFFFFFF-1,0)
+        end.writeUint32BE(0,4)
+        end.writeUint32BE(0,8)
+        end.writeUint32BE(0,12)
         code.push(end)
     }
     return Buffer.concat([...head,...pool,...code])

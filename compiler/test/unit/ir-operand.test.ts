@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import {pipeline} from './helper'
 import ir from '../../src/ir'
 import {BINARY, CALL, CMP, CZ, IN, IRArgs, LOAD, MOV, NOT, OFFSET_GET, OUT, PARAM_LOAD, PARAM_SET} from '../../src/utils'
@@ -50,7 +50,9 @@ describe('ir/操作数形式', () => {
         const not: any = all.find(i => i instanceof NOT)
         expect(form(cz.cond)).toBe('value')
         expect(form(cz.target)).toBe('reg')
-        expect(form(not.data)).toBe('reg')
+        //NOT 现在是 (目标槽, 操作数):就地取反要给槽号,读的那个操作数取值
+        expect(form(not.left)).toBe('reg')
+        expect(form(not.right)).toBe('value')
     })
 
     it('取下标:目标是槽(reg),对象与下标取值(value)', () => {

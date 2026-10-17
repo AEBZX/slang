@@ -86,8 +86,13 @@ const H_LambdaExpr:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
     for(const [k,v] of old)v==null?scope.symbol.delete(k):scope.symbol.set(k,v)
     return new HLambdaExpr(params,body)
 }
+//字符串取下标要单独的偏移指令,靠 check 标注出来的类型判断
+const is_string_type=(node:any)=>{
+    const t=node?.type
+    return t!=null&&t.constructor?.name=='StringType'
+}
 const H_IndexExpr:slang_hir_visitor=(node:IndexPostfix,scope,call)=>
-    new HIndexExpr(call(node.expr), call(node.index))
+    new HIndexExpr(call(node.expr), call(node.index), is_string_type(node.expr))
 const ast_path=(node:ASTTree):string=>{
     if(node instanceof IdentifierExpr)return node.name
     if(node instanceof MemberPostfix)return ast_path(node.expr)+'.'+node.name

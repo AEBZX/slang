@@ -1,5 +1,5 @@
 import {
-    BINARY,
+    BINARY, BIT_NOT,
     CALL,
     CMP,
     CZ, DELETE, GC,
@@ -62,8 +62,8 @@ export const VMMap=new Map<string,any>([
     ['xor',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('xor',p1,read(p2),read(p3))],
     //load 的源就是池 id 本身,不能取槽值
     ['load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new LOAD(p1,p2)],
-    //not/bit_not 就地取反,操作数就是那个槽
-    ['not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new NOT(p1)],
+    ['not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new NOT(p1,p2)],
+    ['bit_not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BIT_NOT(p1,p2)],
     //cmp 第一个操作数既当目标又当左值(就地),右值与运算符编号取槽里的值
     ['cmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CMP(p1,read(p2),read(p3))],
     ['jmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JMP(read(p1),read(p2))],
@@ -75,7 +75,7 @@ export const VMMap=new Map<string,any>([
     ['ret',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new RET(p1)],
     //push/pop/delete 操作的是槽本身
     ['push',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PUSH(p1)],
-    ['pop',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new POP(p1)],
+    ['pop',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new POP()],
     ['param_load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_LOAD(p1,read(p2))],
     ['param_set',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new PARAM_SET(read(p1),read(p2))],
     //offset_* 目标槽用 reg,对象与键取槽里的值
@@ -129,7 +129,8 @@ export class IRTool extends PeepholeScope{
         this.ir.get(this.block_id).push(ir)
     }
     create(num:number=null){
-        const id=num||this.id()
+        //0 是合法块号(main),不能用 || 兜底
+        const id=num==null?this.id():num
         this.ir.set(id,[])
         return id
     }
