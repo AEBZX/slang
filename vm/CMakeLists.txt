@@ -23,7 +23,8 @@ endif()
 enable_testing()
 include(Catch)
 set(SLANG_VM_SOURCES utils.cpp
-        main.h)
+        main.h
+        instruction/instruction.h)
 add_executable(vm main.cpp ${SLANG_VM_SOURCES})
 add_executable(vm_test test/integration/parser.test.cpp)
 #动了容易炸
