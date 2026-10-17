@@ -1,7 +1,7 @@
-import {describe, expect, it} from 'vitest'
+﻿import {describe, expect, it} from 'vitest'
 import Parser, {$} from '../../src/utils/lib/parser'
 import {ast_data, ast_rule, ASTTree, TokenType} from '../../src/utils'
-import {lex_src} from './helper'
+import {lex_src, parse} from './helper'
 
 //用一个「原样返回 cst」的生成器跑规则,这样能直接断言 CST 结构本身
 function cst(rule: ast_rule, code: string): any {
@@ -155,5 +155,16 @@ describe('parser/规则引擎', () => {
         expect(out.length).toBe(2)
         expect(out[0].children.get(0)).toBe('1')
         expect(out[1].children.get(0)).toBe('2')
+    })
+})
+
+//回溯会吞异常,但报错时要带上最深的那次失败,否则错误永远指向文件第一个 token
+describe('parser/错误定位', () => {
+    it('语法错误会带出最内层失败的位置', () => {
+        const src = 'public m:module{ public static f:number(a:number){ var b:number=; return a; } }'
+        let msg = ''
+        try { parse(src) } catch (e: any) { msg = e.message }
+        expect(msg).toContain('最内层失败')
+        expect(/at line:\d+:\d+/.test(msg)).toBe(true)
     })
 })

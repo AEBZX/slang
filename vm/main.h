@@ -4,11 +4,28 @@
 #include <iostream>
 #include<fstream>
 #include<filesystem>
+#include <unordered_map>
 #include <vector>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 namespace util{
+    class Net
+    {
+    public:
+        Net(const std::string&,const short&);
+        ~Net();
+        void send(const std::string&);
+        void close();
+    };
+    class NetPool
+    {
+    public:
+        NetPool();
+        ~NetPool();
+    private:
+        std::unordered_map<int,Net> nets;
+    };
     void print(const std::string&);
     std::string input();
     void init();

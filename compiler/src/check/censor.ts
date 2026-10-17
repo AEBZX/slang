@@ -1,5 +1,6 @@
-//round0:无需符号表等的静态检查
+﻿//round0:无需符号表等的静态检查
 import {
+    GenericType,
     ArgumentsPostfix,
     ArrayExpression,
     Assign,
@@ -115,9 +116,9 @@ const Check_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,call
     if(ast.implement!=null&&!(ast.implement instanceof ClassType))
         scope.thr(`类的/接口implement的模块必须是接口,在行${ast.line.join('\n')}`)
     check_dup(ast.generic,scope,'类/接口中泛型',ast.line)
-    //generic implement必须是ClassType
+    //generic implement必须是ClassType;裸名字 <T> 是 GenericType,属于无约束占位
     for(const i of ast.generic.values())
-        if(!(i instanceof ClassType))
+        if(!(i instanceof ClassType||i instanceof GenericType||i instanceof VoidType))
             scope.thr(`类/接口中泛型的implement的模块必须是接口,在行${ast.line.join('\n')}`)
     for(const i of ast.generic.values())
         call(i,0)

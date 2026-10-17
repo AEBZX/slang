@@ -1,4 +1,4 @@
-﻿import {BinaryDict, CmpDict, container_of, fast_call, inc_place_target, inc_slot, is_place_target, read, slang_ir_factory} from './tool'
+﻿import {BinaryDict, CmpDict, container_element, container_of, fast_call, inc_place_target, inc_slot, is_place_target, read, slang_ir_factory} from './tool'
 import {
     BINARY, BIT_NOT, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
@@ -26,12 +26,12 @@ const I_ArrayExpr:slang_ir_factory=(data:HArrayExpr,tool,call)=> {
     const array = tool.ls_arg
     //offset index elements
     for (const [index, element] of data.elements.entries())
-        tool.push(new OFFSET_SET(array,tool._pool(index),fast_call(IRArgs.reg(tool.id()),element,tool,call)))
+        tool.push(new OFFSET_SET(array,tool._pool(index),container_element(element,tool,call)))
 }
 const I_MapExpr:slang_ir_factory=(data:HMapExpr,tool,call)=>{
     const map=tool.ls_arg
     for(const [key,value] of data.elements)
-        tool.push(new OFFSET_SET(map,tool._pool(key),fast_call(IRArgs.reg(tool.id()),value,tool,call)))
+        tool.push(new OFFSET_SET(map,tool._pool(key),container_element(value,tool,call)))
 }
 const I_LambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
     const reg=tool.ls_arg

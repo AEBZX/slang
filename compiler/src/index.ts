@@ -1,4 +1,4 @@
-//内置
+﻿//内置
 import generate from './generate'
 import lexer from './lexer'
 import parser from './parser'
@@ -39,7 +39,15 @@ class Runner{
         for(const t of this.tool){
             const out=t.run(ret)
             //check 产出的是符号表与诊断,流水线数据仍然是 files,不能往后传
-            if(t.name!='check')ret=out
+            if(t.name!='check'){
+                ret=out
+                continue
+            }
+            //诊断不能静默丢掉:有错就停在这里,把整批消息带出去
+            const scope:any=out
+            const errs:string[]=Array.isArray(scope?.error)?scope.error:((scope?.global?.error)??[])
+            if(errs.length>0)
+                throw new Error(`check 报错:\n${errs.join('\n')}`)
         }
         //最后一级(generate)的产物:字节码
         return ret

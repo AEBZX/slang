@@ -100,6 +100,32 @@ describe('集成/成员容器·自增', () => {
     })
 })
 
+describe('集成/容器·嵌套', () => {
+    it('二维数组:字面量里存的是内层容器的身份', () => {
+        const src = M('var d:number[][]=[[1]]; return d[0][0];')
+        expect(run(src).ret).toBe(1)
+        expect(run_opt(src).ret).toBe(1)
+    })
+
+    it('二维数组写入', () => {
+        const src = M('var d:number[][]=[[1],[2]]; d[1][0]=a; return d[1][0];')
+        expect(run(src, 7).ret).toBe(7)
+        expect(run_opt(src, 7).ret).toBe(7)
+    })
+
+    it('二维数组元素自增', () => {
+        const src = M('var d:number[][]=[[1]]; d[0][0]++; return d[0][0];')
+        expect(run(src).ret).toBe(2)
+        expect(run_opt(src).ret).toBe(2)
+    })
+
+    it('嵌套字面量会为内层单独分配容器', () => {
+        const tool = ir_of(M('var d:number[][]=[[1]]; return d[0][0];'))
+        //内层一次写入 + 外层一次写入 + 模块登记
+        expect(all_of(tool, OFFSET_SET).length).toBeGreaterThanOrEqual(3)
+    })
+})
+
 describe('集成/数组容器·结构', () => {
     it('下标读生成 OFFSET_GET,下标写生成 OFFSET_SET', () => {
         const tool = ir_of(M('var d:number[]=[1,2]; d[0]=a; return d[1];'))

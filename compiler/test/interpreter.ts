@@ -35,17 +35,32 @@ const CMP_FN: Record<number, (a: any, b: any) => number> = {
 export type exec_result = {ret: any, steps: number, halt: string}
 
 //函数体所在的块:单函数程序里指令最多那块
-export function body_block(tool: any): number {
+//函数块(以 RET frame=1 结束)的块号,按块号升序(块号跟着源码顺序)
+export function function_blocks(tool: any): number[] {
+    const flow: Map<number, any[]> = tool.command ?? tool.ir
+    return [...flow.entries()]
+        .filter(([, list]) => list.some((i: any) => i.constructor.name == 'RET' && i.frame != null && i.frame.data == 1))
+        .map(([bid]) => bid)
+        .sort((a, b) => a - b)
+}
+//登记块:不含 PARAM_LOAD、没有 RET(1),就是模块/文件容器的初始化
+function reg_blocks(flow: Map<number, any[]>, entry: number): number[] {
+    return [...flow.entries()]
+        .filter(([bid, list]) => bid != entry && list.length > 0
+            && !list.some((i: any) => i.constructor.name == 'PARAM_LOAD')
+            && !list.some((i: any) => i.constructor.name == 'RET' && i.frame != null && i.frame.data == 1))
+        .map(([bid]) => bid)
+        .sort((a, b) => a - b)
+}
+export function body_block(tool: any, which = -1): number {
     const flow: Map<number, any[]> = tool.command ?? tool.ir
     const entries = [...flow.entries()]
-    //优先选函数块(以 RET frame=1 结束),没有函数块时退回指令最多的块
-    const fn = entries.filter(([, list]) =>
-        list.some((i: any) => i.constructor.name == 'RET' && i.frame != null && i.frame.data == 1))
-    const pick = fn.length > 0 ? fn : entries
-    return pick.reduce((a, b) => b[1].length > a[1].length ? b : a)[0]
+    const fn = function_blocks(tool)
+    if (fn.length > 0) return fn[which < 0 ? fn.length - 1 : which]
+    return entries.reduce((a, b) => b[1].length > a[1].length ? b : a)[0]
 }
 
-export function exec(tool: any, args: number[] = [], max_steps = 100000): exec_result {
+export function exec(tool: any, args: number[] = [], max_steps = 100000, opts: {entry?: number, which?: number, prelude?: boolean} = {}): exec_result {
     //字节码流:IRTool 用 .ir,OPTTool 用 .command
     const flow: Map<number, IRTree[]> = tool.command ?? tool.ir
     //常量池统一成 id -> 值:IRTool 的 pool 是 值->id,OPTTool 的已经是 id->值
@@ -66,12 +81,17 @@ export function exec(tool: any, args: number[] = [], max_steps = 100000): exec_r
     }
     const key = (a: IRArgs) => a.type == 'reg' ? a.data : slots.get(a.data)
 
-    let block = body_block(tool)
+    const entry = opts.entry ?? body_block(tool, opts.which ?? -1)
+    //先把模块/文件登记块(straight-line)跑一遍,再进目标函数
+    const prelude: any[] = []
+    if (opts.prelude)
+        for (const bid of reg_blocks(flow, entry)) prelude.push(...flow.get(bid))
+    let block = entry
     let index = 0
     let steps = 0
     const frames: [number, number, number][] = []
     while (steps++ < max_steps) {
-        const list = flow.get(block)
+        const list = block == entry && prelude.length > 0 ? [...prelude, ...flow.get(entry)] : flow.get(block)
         if (list == null) return {ret: params[0], steps, halt: 'bad-block-' + block}
         if (index >= list.length) {
             //块跑完:有帧就回,没有就结束
@@ -109,13 +129,25 @@ export function exec(tool: any, args: number[] = [], max_steps = 100000): exec_r
         } else if (ir instanceof OFFSET_GET) {
             write(ir.target, containers.get(`${key(ir.data)}|${key(ir.offset)}`))
         } else if (ir instanceof PUSH) {
-            stack.push(slots.get(ir.target.data))
+            //POP 没有操作数,靠这个栈记住"弹回来写哪个槽"
+            stack.push([ir.target.data, slots.get(ir.target.data)])
         } else if (ir instanceof POP) {
-            //精简解释器里 pop 不还原(调用语义由作者维护)
-            stack.pop()
+            const saved = stack.pop()
+            if (saved != null) slots.set(saved[0], saved[1])
         } else if (ir instanceof RET) {
             const frame = read(ir.frame)
-            if (frame == 1) return {ret: params[0], steps, halt: 'ret'}
+            if (frame == 1) {
+                //有调用点就返回调用之后,否则是顶层结束
+                let at = -1
+                for (let i = frames.length - 1; i >= 0; i--)
+                    if (frames[i][2] == 1) { at = i; break }
+                if (at < 0) return {ret: params[0], steps, halt: 'ret'}
+                const f = frames[at]
+                frames.length = at
+                block = f[0]
+                index = f[1]
+                continue
+            }
             //break:一直弹到循环帧
             let done = false
             while (frames.length > 0) {
@@ -139,6 +171,7 @@ export function exec(tool: any, args: number[] = [], max_steps = 100000): exec_r
             }
             //CALL 和条件跳转要记下返回点:那个块跑完时回到这里
             else if (ir.constructor.name == 'CALL' || truthy(cond)) {
+                    console.error('CALL target=' + JSON.stringify(target) + ' key22=' + JSON.stringify(slots.get(22)) + ' pool23=' + JSON.stringify(pool.get(23)) + ' cont=' + JSON.stringify([...containers.entries()]))
                 frames.push([block, index, typeof frame == 'number' ? frame : 0])
                 block = target
                 index = 0

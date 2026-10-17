@@ -61,6 +61,18 @@ describe('check/泛型', () => {
         expect(() => parse('public C:class<T>{ public v:@T; }')).not.toThrow()
     })
 
+    //裸名字 <T> 现在是"无约束占位",不再被盖成未知类型
+    it('无约束泛型声明不会被当成具体类型', () => {
+        const src = `public m:module{ public static g:<T>@T(v:@T){ return v; } }`
+        expect(non_std(check_src(src))).toEqual([])
+    })
+
+    it('写了 implements 的约束仍会被检查', () => {
+        const src = `public m:module{ public static x:number; }
+                     public q:module{ public static g:<T implements m.x>@T(v:@T){ return v; } }`
+        expect(has(check_src(src), 'generic implement')).toBe(true)
+    })
+
     it('泛型实参个数不匹配会报错', () => {
         const src = `public C:class<T>{ public v:@T; }
                      public m:module{ public static f:number(a:number){ var x:C<number,number>; return a; } }`
@@ -97,10 +109,20 @@ describe('check/泛型', () => {
         expect(e.generic.map((g: any) => g.constructor.name)).toEqual(['NumberType'])
     })
 
-    //已知缺陷:类型后面紧跟 = 时会被词法成 >=
-    it.fails('泛型类型后面直接跟 = 也能解析', () => {
+    //泛型闭合的 > 紧跟 = 时会被词法成 >=,解析器现在会把它切开
+    it('泛型类型后面直接跟 = 能解析', () => {
         expect(() => parse(`public m:module{ public static f:number(a:number){
             var x:C<number>=a; return a; } }`)).not.toThrow()
+    })
+
+    it('嵌套泛型后面直接跟 = 能解析', () => {
+        expect(() => parse(`public m:module{ public static f:number(a:number){
+            var x:C<C<number>>=a; return a; } }`)).not.toThrow()
+    })
+
+    it('切分不会影响普通的 >= 和 >>=', () => {
+        expect(() => parse(`${CLASS} public static f:number(a:number){ if(a>=1)a=2; a>>=1; return a; } }`)).not.toThrow()
+        expect(() => parse(`${CLASS} public static f:number(a:number){ var b:number=1; if(a>=b)a=2; return a; } }`)).not.toThrow()
     })
 })
 

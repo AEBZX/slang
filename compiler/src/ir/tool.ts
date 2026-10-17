@@ -1,4 +1,5 @@
 ﻿import {
+    HArrayExpr, HMapExpr,
     BINARY, BIT_NOT,
     CALL,
     CMP,
@@ -62,8 +63,9 @@ export const VMMap=new Map<string,any>([
     ['xor',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BINARY('xor',p1,read(p2),read(p3))],
     //load 的源就是池 id 本身,不能取槽值
     ['load',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new LOAD(p1,p2)],
-    ['not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new NOT(p1,p2)],
-    ['bit_not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BIT_NOT(p1,p2)],
+    //not a b 就是 a=!b:第二个操作数是源,要取槽里的值
+    ['not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new NOT(p1,read(p2))],
+    ['bit_not',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new BIT_NOT(p1,read(p2))],
     //cmp 第一个操作数既当目标又当左值(就地),右值与运算符编号取槽里的值
     ['cmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new CMP(p1,read(p2),read(p3))],
     ['jmp',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new JMP(read(p1),read(p2))],
@@ -160,10 +162,12 @@ export class IRTool extends PeepholeScope{
 }
 //容器(offset_* 的 b)的身份就是槽号:变量本身直接用它的槽,复合表达式求值到新槽后也用槽号
 export function container_of(expr:any,tool:IRTool,call:(data:any)=>void){
+    //变量本身就是一个容器(容器的身份就是它的槽号)
     if(expr!=null&&expr.constructor!=null&&expr.constructor.name=='HIdentifierExpr')return IRArgs.reg(expr.name)
+    //表达式求值出来的是"容器的号",存在槽里(d[0][0] 这种),所以要读槽
     const slot=IRArgs.reg(tool.id())
     fast_call(slot,expr,tool,call)
-    return slot
+    return IRArgs.value(slot.data)
 }
 export function inc_slot(data:any){
     const target:any=data.target
@@ -187,6 +191,17 @@ export function inc_place_target(data:any,tool:IRTool,call:any,op:string,is_pref
     tool.push(new OFFSET_SET(container,offset,IRArgs.value(next.data)))
     //前缀的结果是新值,后缀是旧值
     return is_prefix?IRArgs.value(next.data):IRArgs.value(old.data)
+}
+//容器字面量作为另一个容器的元素时,存的是"容器的身份"(槽号),不是槽里的值
+export function container_element(element:any,tool:IRTool,call:(data:any)=>void){
+    if(!(element instanceof HArrayExpr||element instanceof HMapExpr))
+        return fast_call(IRArgs.reg(tool.id()),element,tool,call)
+    const slot=IRArgs.reg(tool.id())
+    const saved=tool.ls_arg
+    tool.ls_arg=slot
+    call(element)
+    tool.ls_arg=saved
+    return IRArgs.reg(slot.data)
 }
 export function fast_call(arg:IRArgs,value:HExpr,tool:IRTool,call:(data:HIRTree)=>void){
     tool.ls_arg=arg

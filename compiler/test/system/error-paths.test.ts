@@ -1,4 +1,4 @@
-//系统测试:错误路径。每个特性都要有对应的负例,且报的是"具体那一条"
+﻿//系统测试:错误路径。每个特性都要有对应的负例,且报的是"具体那一条"
 import {describe, expect, it} from 'vitest'
 import {check_src} from '../unit/helper'
 import {opt_of} from '../unit/helper-ir'
@@ -28,7 +28,11 @@ const CASES: [string, string, string][] = [
     ['cast 不存在', 'return (number)"s";', '类型转换失败'],
     ['泛型未声明', 'var x:@T=a; return x;', '泛型T不存在'],
     ['变量名重复', 'var b:number=1; var b:number=2; return a;', '重复声明'],
-    ['void 声明', 'var b:void=1; return a;', '声明类型为void']
+    ['void 声明', 'var b:void=1; return a;', '声明类型为void'],
+    ['string[] 赋给 number[]', 'var s:string[]=["a"]; var d:number[]=s; return a;', '赋值类型错误'],
+    ['数组整体赋给另一数组', 'var s:string[]=["a"]; var d:number[]=[1]; d=s; return a;', '赋值类型错误'],
+    ['非空数组赋给 map', 'var d:number[]=[1]; var m:number{}=d; return a;', '赋值类型错误'],
+    ['非空 map 赋给数组', 'var m:number{}=[k:1]; var d:number[]=m; return a;', '赋值类型错误']
 ]
 
 describe('system/错误路径', () => {
@@ -53,7 +57,11 @@ describe('system/错误路径·不该报错的情形', () => {
         ['字符串数组', 'var d:string[]=["a","b"]; return a;'],
         ['除零常量(运行期问题)', 'return a/0;'],
         ['空语句块', '{ } return a;'],
-        ['同类型赋值', 'var b:number=a; return b;']
+        ['同类型赋值', 'var b:number=a; return b;'],
+        ['同元素类型数组赋值', 'var s:number[]=[1]; var d:number[]=s; return a;'],
+        ['字符串数组赋值', 'var s:string[]=["a"]; var d:string[]=s; return a;'],
+        ['空字面量既能当空数组也能当空 map', 'var m:number{}=[]; return a;'],
+        ['正常 map 字面量', 'var m:number{}=[k:1]; return a;']
     ]
     for (const [name, body] of OK)
         it(name, () => {

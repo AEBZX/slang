@@ -54,6 +54,15 @@ describe('ir/vm 内联指令表', () => {
         expect(ir.data.data).toBe(B.data)
     })
 
+    //not a b 就是 a=!b:第二个操作数是源,按读槽处理(和 NOT 生成的形态一致)
+    it('not / bit_not 的源操作数取槽值', () => {
+        for (const key of ['not', 'bit_not']) {
+            const ir: any = (VMMap.get(key) as any)(A, B, C)
+            expect(ir.left.type).toBe('reg')
+            expect(ir.right.type).toBe('value')
+        }
+    })
+
     it('push 操作槽本身,param_load 的索引取槽值', () => {
         const push: any = (VMMap.get('push') as any)(A, B, C)
         expect(push.target.type).toBe('reg')

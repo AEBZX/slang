@@ -1,4 +1,4 @@
-//系统测试:走公开 API(compiler/src/index.ts)的完整编译链路
+﻿//系统测试:走公开 API(compiler/src/index.ts)的完整编译链路
 import {afterAll, describe, expect, it} from 'vitest'
 import {readFileSync, rmSync} from 'node:fs'
 import {join} from 'node:path'
@@ -75,6 +75,20 @@ describe('system/api·公开编译入口', () => {
         compile(SRC, a)
         compile(SRC, b)
         expect(readFileSync(b).equals(readFileSync(a))).toBe(true)
+    })
+
+    it('有诊断时直接抛错,不产出字节码', () => {
+        const local = out('diag')
+        expect(() => compile(['public m:module{ public static f:number(a:number){ return zzz; } }'], local))
+            .toThrow(/check 报错/)
+        expect(() => rmSync(local, {force: true})).not.toThrow()
+    })
+
+    it('诊断里带着行号列号', () => {
+        let msg = ''
+        try { compile(['public m:module{\n public static f:number(a:number){\n  return zzz; } }'], out('diag2')) }
+        catch (e: any) { msg = e.message }
+        expect(msg).toMatch(/at line:\d+:\d+/)
     })
 
     it('多文件输入会一起参与编译', () => {

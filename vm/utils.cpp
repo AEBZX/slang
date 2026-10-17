@@ -1,4 +1,8 @@
 #include "main.h"
+std::filesystem::path tou8(const std::string& path)
+{
+    return std::filesystem::u8path(path);
+}
 void util::init()
 {
     std::ios::sync_with_stdio(false);
@@ -19,8 +23,7 @@ std::string util::input()
 
 bool util::writeText(const std::string& path, const std::string& text)
 {
-    std::filesystem::path p = std::filesystem::u8path(path);
-    std::ofstream out(p);
+    std::ofstream out(tou8(path));
     if (!out)return false;
     out<<text;
     out.close();
@@ -29,8 +32,7 @@ bool util::writeText(const std::string& path, const std::string& text)
 
 std::string util::readText(const std::string& path)
 {
-    std::filesystem::path p=std::filesystem::u8path(path);
-    std::ifstream in(p);
+    std::ifstream in(tou8(path));
     std::stringstream ss;
     ss << in.rdbuf();
     return ss.str();
@@ -38,8 +40,7 @@ std::string util::readText(const std::string& path)
 
 bool util::writeBinary(const std::string& path, const std::string& binary)
 {
-    const std::filesystem::path p = std::filesystem::u8path(path);
-    std::ofstream out(p, std::ios::binary);
+    std::ofstream out(tou8(path), std::ios::binary);
     if (!out)return false;
     out<<binary;
     out.close();
@@ -48,8 +49,7 @@ bool util::writeBinary(const std::string& path, const std::string& binary)
 
 std::string util::readBinary(const std::string& path)
 {
-    std::filesystem::path p=std::filesystem::u8path(path);
-    std::ifstream in(p, std::ios::binary);
+    std::ifstream in(tou8(path), std::ios::binary);
     std::stringstream ss;
     ss << in.rdbuf();
     return ss.str();
@@ -79,4 +79,34 @@ std::vector<std::string> util::list(const std::string& path) {
         names.emplace_back(reinterpret_cast<const char*>(u8.data()), u8.size());
     }
     return names;
+}
+
+bool util::mkdir(const std::string& path)
+{
+    return std::filesystem::create_directories(tou8(path));
+}
+
+bool util::rmdir(const std::string& path)
+{
+    return std::filesystem::remove_all(tou8(path))>0;
+}
+
+bool util::remove(const std::string& path)
+{
+    return std::filesystem::remove(tou8(path));
+}
+
+bool util::exists(const std::string& path)
+{
+    return std::filesystem::exists(tou8(path));
+}
+
+bool util::isFile(const std::string& path)
+{
+    return std::filesystem::is_regular_file(tou8(path));
+}
+
+bool util::isDir(const std::string& path)
+{
+    return std::filesystem::is_directory(tou8(path));
 }

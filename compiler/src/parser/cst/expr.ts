@@ -1,4 +1,4 @@
-import {TokenType} from '../../utils'
+﻿import {TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
@@ -29,7 +29,7 @@ const PostfixExpression=$.s('PostfixExpression',
             $.s('DecrementPostfix',$.d('--')),
             $.s('MemberPostfix',$.d('.'),TokenType.Identifier),
             $.s('IndexPostfix',$.d('['),$.r('Expression'),$.d(']')),
-            $.s('ArgumentsPostfix',$.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.d('>'))
+            $.s('ArgumentsPostfix',$.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.g('>'))
                 ,$.d('('),$.w('Args',$.r('Expression'),','),$.d(')')))
     )
 )

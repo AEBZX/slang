@@ -1,4 +1,4 @@
-# compiler 测试体系
+﻿# compiler 测试体系
 
 按编译流水线分层建立。目标是"每一层的行为都有测试钉住，每个修过的 bug 都有对应回归"。
 
@@ -31,6 +31,7 @@ node .\node_modules\vitest\vitest.mjs run -t '相邻 token'
 | `helper-ir.ts` | IR 与编码阶段：`ir_of` `opt_of` `bin_of`（写 `os.tmpdir()`）`all_of` `count_of` `dump_ir` `dump_flow` `names_of` `null_args` |
 | `interpreter.ts` | 最小 IR 解释器：`exec(tool, args)` 返回 `{ret, halt, steps}`，用于"优化前后语义一致"的差分测试与具体数值断言 |
 | `sbin.ts` | `.sbin` 只读解码器：`decode(buf)` 把产物整体解一遍（文件头/池条目/块头尾/操作码/尾部字节），不自洽直接抛错；导出合法操作码集合 `OPCODES` |
+| `std.ts` | 最小 std fixture（`std.ObjectInterface` 等）。真实 std 不在仓库里，类/接口路径必须靠它才能编译 |
 
 ## 分层清单
 
@@ -130,17 +131,32 @@ node .\node_modules\vitest\vitest.mjs run -t '相邻 token'
 | `system/error-paths.test.ts` | **错误路径 26 条**：每条断言具体诊断片段 + 行列号；另有 6 条"不该报错" |
 | `system/sbin-decode.test.ts` | **全字节解码**：10 个真实程序，池/块/操作码/尾部字节全部解释过；截断与篡改能被发现 |
 | `system/mini-lib.test.ts` | 小库整体编译 |
+| `system/stress.test.ts` | **压力**：多模块多特性大程序、100 条连写语句、20 个模块、200 元素数组字面量、三层嵌套容器 —— 全部解码 + 确定性 + 优化不动点 |
+| `system/std-class.test.ts` | **类/接口/枚举**：字段+实例方法+`this`+`new`、静态成员、`implements`、枚举；负例走 check 阶段 |
 | `integration/pipeline.test.ts` / `integration/compiler.test.ts` | 流水线整体与程序矩阵、确定性 |
 | `integration/runnable.test.ts` | 结构 + 定值使用校验，**生成阶段与优化后各跑一遍** |
 
 ## 已知缺口
 
-只有一条（用 `it.fails` 固定，修好后转正例）：
+测试里已经**没有 `it.fails`**，全部为正例。
 
-- `泛型类型后面直接跟 = 也能解析`：`var x:C<T>=a;` 里泛型闭合的 `>` 紧跟 `=` 时被词法成 `>=`。
-  需要能回滚的 token 拆分或事务式回溯，试过四次都因为回溯点不唯一而回退。
+历史缺口「`var x:C<T>=a;` 里泛型闭合的 `>` 紧跟 `=` 被词法成 `>=`」已修复，做法在解析器里：
+
+- 泛型闭合改用专用规则 `$.g('>')`（只在这里允许切分，普通比较的 `>` 保持严格）；
+- 切分**不动 token 数组**：把 `>` 与剩余部分放进该位置的虚拟队列（`extra`），队列吃完时原 token 作废、位置前进一格；
+- 每个回溯点用 `checkpoint()` 记录「位置 + 切分序号」，回溯时按序号还原被切分的 token，因此试探性切分不会污染后面的解析。
+
+覆盖用例见 `unit/check-cast-generic.test.ts`：`C<T>=a`、`C<C<T>>=a`、以及「切分不影响 `>=` / `>>=`」的正例。
 
 另有一项按作者要求**搁置**：`POP` 指令没有操作数（VM 侧恢复约定由作者决定）。
+
+### 已知限制（不是缺陷，是当前实现的边界）
+
+- 公开 API 现在**有诊断就抛错**（`check 报错: …`，带行列号），不再产出字节码；要逐条断言诊断仍走 `check_src` / `errors_of`。
+- **类方法调用的实参个数不检查**（`c.work()` 少传参不报错）—— `it.fails` 固化在 `system/std-class.test.ts`。
+- **`implements` 不检查成员是否实现完整** —— 同上，`it.fails` 固化。
+- 解释器（`interpreter.ts`）**不支持函数调用**，所以带调用/跨模块调用的程序只做解码、确定性与优化不动点，不做绝对数值断言；`try/catch`、`foreach` 的绝对语义也因此尚未覆盖。
+- 空 map 字面量不可写（`[k:v]` 至少一个键值对），`[]` 是空数组。
 
 ## 维护约定
 

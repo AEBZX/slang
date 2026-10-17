@@ -360,6 +360,18 @@ const Label_IncrementOrDecrementPostfixOrPrefix:slang_check_visitor=(ast:Increme
 const Label_MemberPostfix:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
     call(ast.expr,3)
     const type=real_type(ast.expr.type,scope)
+    //类实例:成员是实例成员(静态成员要写成 C.m)
+    if(type instanceof ClassType){
+        const block=scope.get(localToName(type.local)) as Class
+        if(block instanceof Class){
+            const member=block.children.find(i=>i.name==ast.name&&i.modifiers.unstatic&&!i.modifiers._private)
+            if(member instanceof Function){ast.type=member.type;return}
+            if(member instanceof Variable){ast.type=real_type(member.t,scope);return}
+            if(member!=null){ast.type=new BlockType([...type.local,ast.name]);return}
+            scope.thr(`${type.local.join('.')}没有成员${ast.name}在行${(ast.line??[]).join('`n')}`)
+            return
+        }
+    }
     if(type instanceof BlockType){
         const block=scope.get(localToName(type.local)) as Block
         if(block==null){

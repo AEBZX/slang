@@ -1,5 +1,6 @@
 ﻿//round:符号表构建和相关检查
 import {
+    ClassType,
     ArgumentsPostfix,
     ArrayExpression,
     Assign,
@@ -10,7 +11,6 @@ import {
     BooleanType,
     Cast,
     Class,
-    ClassType,
     DoWhileStatement,
     Enum,
     EnumType,
@@ -195,6 +195,13 @@ const Verify_ClassOrInterface:slang_check_visitor=(ast:Class|Interface,scope,cal
         const implement=resolve_named(scope,ast.implement.local.join('.'))
         if(!(implement instanceof Interface))
             scope.thr(`implement的类型${ast.implement.local.join('.')}不是Interface,在行${ast.line.join('\n')}`)
+        else if(ast instanceof Class)
+            //implements 的成员必须都实现:接口里声明了函数,类里就得有同名函数
+            //(接口的 implements 是"继承接口",不能要求它自己实现)
+            for(const m of implement.children)
+                if(m instanceof Function
+                    &&!ast.children.some(c=>c instanceof Function&&c.name==m.name))
+                    scope.thr(`类${ast.name}没有实现接口成员${m.name},在行${ast.line.join('\n')}`)
     }
     //generic implement且是否是Interface的是否存在
     verify_generics(ast,scope,call)

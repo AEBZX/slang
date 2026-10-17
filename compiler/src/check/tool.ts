@@ -229,6 +229,8 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
                 scope.set_generic(decl.generic,real_type(iden[i],scope))
             continue
         }
+        //裸名字 <T> 的声明现在是 VoidType,同样是无约束通配
+        if(decl instanceof VoidType)continue
         if(!type_is(real_type(decl,scope),real_type(iden[i],scope),scope))return false
     }
     return true
@@ -236,14 +238,15 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
 //泛型声明里写的是裸名字(<T>),会被解析成 ClassType(['T']);@T 才是 GenericType。
 //两种都要当成"占位符"
 export function generic_placeholder(decl:Type,name:string){
-    if(decl==null||decl instanceof GenericType)return true
+    //无约束占位:null / GenericType(@T) / VoidType(<T> 没写 implements)
+    if(decl==null||decl instanceof GenericType||decl instanceof VoidType)return true
     //泛型声明写裸名字时会解析成 ClassType(['T'])
     if(decl instanceof ClassType&&decl.generic.length==0&&decl.local.length==1&&decl.local[0]==name)return true
-    //声明的类型信息被"未知类型"占位符盖掉了(cast 失败时的 stamp),只能当通配
-    if(decl instanceof ClassType&&decl.local.length==2&&decl.local[0]=='std'&&decl.local[1]=='ObjectInterface')return true
     return false
 }
 export function generic_is(iden:Type[],param:Map<string,Type>,scope:Scope){
+    //没写显式泛型实参:交给实参推断,不在这里拒绝
+    if(iden.length==0)return true
     if(iden.length!=param.size)return false
     const list=Array.from(param.entries())
     for(let i=0;i<list.length;i++){
@@ -499,6 +502,14 @@ export function cast_best(result:Type,_cast:Type,scope:Scope):{id:string,type:Ty
     }
 }
 //类型检查:a 是实际/来源类型,b 是期望/目标类型
+//空容器字面量(元素是 Void)在赋值时当通配
+export function void_like(type:Type):boolean{
+    if(type==null)return true
+    if(type instanceof VoidType)return true
+    if(type instanceof ArrayType)return void_like(type.t)
+    if(type instanceof MapType)return void_like(type.t)
+    return false
+}
 export function type_(a:Type,b:Type,scope:Scope){
     if(a==null)return b==null||real_type(b,scope) instanceof VoidType
     if(b==null)return false
@@ -512,6 +523,14 @@ export function type_(a:Type,b:Type,scope:Scope){
         return ra instanceof VoidType&&rb instanceof VoidType
     //同型直接通过(结构相等,不要求同一实例),剩下的才看 cast 表
     if(type_same(ra,rb))return true
+    //容器:元素类型也要能赋(元素是 Void 的空字面量放行)
+    if(ra instanceof ArrayType&&rb instanceof ArrayType)
+        return void_like(ra.t)||type_(ra.t,rb.t,scope)
+    if(ra instanceof MapType&&rb instanceof MapType)
+        return void_like(ra.t)||type_(ra.t,rb.t,scope)
+    //空字面量是中性的:[] 既能当空数组也能当空 map(前者由上面的分支处理)
+    if((ra instanceof ArrayType&&rb instanceof MapType)||(ra instanceof MapType&&rb instanceof ArrayType))
+        return void_like(ra)
     if(!(type_merge(ra,rb,scope) instanceof VoidType))return true
     let e_a=new Expression()
     e_a.type=a
@@ -623,6 +642,8 @@ export function check_dup(keys: Map<string,any>|Iterable<string>, scope: Scope, 
 }
 export function verify_generics(ast:Class|Interface|LambdaExpression|Function|LambdaType, scope:Scope, call) {
     for (const i of ast.generic.values()) {
+        //无约束占位(<T> 没写 implements)不用当类型检查
+        if(i==null||i instanceof VoidType||i instanceof GenericType)continue
         call(i, 2, scope)
         check_implement(i, scope, ast.line)
     }

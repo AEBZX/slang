@@ -1,4 +1,6 @@
 ﻿import {
+    VoidType,
+    GenericType,
     AAssign, AddAssign, LogicAndAssign, LogicOrAssign,
     AddExpression, AndAssign,
     AndExpression, ast_data, ASTTree, ClassType, DivAssign,
@@ -77,7 +79,12 @@ export function parseGeneric(data:ast_data,tree:(data:ast_data)=>ASTTree){
     }
     let ret=new KeyMap<string,Type>()
     for(const v of to_ast_data(generic,0).children.values())
-        if(typeof v=='object')
-            ret.set(to_string(v,0),parseImplement(v,tree,1).data)
+        if(typeof v=='object'){
+            const name=to_string(v,0)
+            const impl=parseImplement(v,tree,1)
+            //裸名字 <T> 是无约束占位:用 GenericType 表示,不要造一个叫 T 的普通类型
+            //裸名字 <T> 是无约束占位:用 VoidType 表示,不要造一个叫 T 的普通类型
+            ret.set(name,impl.is?impl.data:new VoidType())
+        }
     return {is:true,data:ret}
 }

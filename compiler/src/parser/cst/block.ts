@@ -1,8 +1,8 @@
-import {TokenType,operations} from '../../utils'
+﻿import {TokenType,operations} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const GenericList=$.s('GenericList',$.d('<'),
     $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),',')
-    ,$.d('>'))
+    ,$.g('>'))
 const ModuleName=$.s('ModuleName',$.r('Type'))
 const ImplementsName=$.s('ImplementsName',$.r('BasicType'))
 const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
