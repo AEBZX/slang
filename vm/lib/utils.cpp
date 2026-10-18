@@ -1,9 +1,9 @@
-#include "main.h"
+#include "../main.h"
 std::filesystem::path tou8(const std::string& path)
 {
     return std::filesystem::u8path(path);
 }
-void util::init()
+void util::init(const std::vector<std::string>& args)
 {
 #ifdef _WIN32
     std::ios::sync_with_stdio(false);
@@ -12,6 +12,7 @@ void util::init()
     static WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
+    util::args=args;
 }
 void util::print(const std::string& data)
 {

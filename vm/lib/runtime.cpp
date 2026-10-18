@@ -1,6 +1,6 @@
 #include <algorithm>
 
-#include "main.h"
+#include "../main.h"
 static uint64_t seed = 88172645463325252ULL;
 static inline int32_t random() {
     seed ^= seed << 13;

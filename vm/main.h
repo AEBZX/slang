@@ -17,6 +17,7 @@
 #include <mutex>
 #include <deque>
 #include <condition_variable>
+#include <stack>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -85,7 +86,7 @@ namespace util{
     };
     void print(const std::string&);
     std::string input();
-    void init();
+    void init(const std::vector<std::string>&);
     bool writeText(const std::string&,const std::string&);
     bool writeBinary(const std::string&,const std::string&);
     std::string readText(const std::string&);
@@ -99,6 +100,7 @@ namespace util{
     std::vector<std::string> list(const std::string&);
     std::string cwd();
     std::string homedir();
+    static std::vector<std::string> args;
 }
 namespace data
 {
@@ -115,7 +117,18 @@ namespace data
             key3 = k3;
         }
     };
-     using Task = std::coroutine_handle<>;
+    template<typename K,typename  V>
+    struct KV
+    {
+        K key;
+        V value;
+        KV(K k, V v)
+        {
+            key = k;
+            value = v;
+        }
+    };
+    using Task = std::coroutine_handle<>;
     class SpinLock
     {
         std::atomic_flag f = ATOMIC_FLAG_INIT;
@@ -244,12 +257,19 @@ namespace data
         }
     };
 }
+namespace runtime{class Runtime;}
+namespace instruction
+{
+    using instruction=std::function<void(runtime::Runtime*)>;
+    void init();
+    static std::unordered_map<int,instruction> run_table;
+}
 namespace runtime
 {
     class ConstPool;
     class Manage;
     using pool_task=data::three_key<std::vector<int>,std::function<void(ConstPool*,std::vector<int>)>,bool>;
-    using instruction_task=data::three_key<std::vector<int>,std::function<void(Manage*,std::vector<int>)>,bool>;
+    using instruction_task=data::three_key<std::vector<int>,instruction::instruction,bool>;
     class ConstPool
     {
         bool _stop;
@@ -299,18 +319,27 @@ namespace runtime
     };
     class Runtime
     {
+    public:
         Manage* father;
         frame now;
-    public:
+        std::stack<frame> frames;
+        std::stack<data::KV<int,Reg>> _stack;
+        std::unordered_map<int,Reg> param;
         Runtime();
         ~Runtime();
         Runtime(const Runtime&) = delete;
         Runtime& operator=(const Runtime&) = delete;
+        void run();
     };
     class Manage
     {
         std::mutex mtx;
-        std::unordered_map<int,int> reg;
+        std::unordered_map<int,Reg> reg;
+        std::unordered_map<int,bool> lock;
+        std::vector<instruction_task> task;
+        std::condition_variable cv;
+        std::mutex wait_mtx;
+        bool _stop;
         ConstPool pool;
         std::unordered_map<int,std::vector<instruction_task>> command;
     public:
@@ -320,9 +349,8 @@ namespace runtime
         Manage& operator=(const Manage&) = delete;
         std::vector<instruction_task>* get(const int&);
         void malloc(const int&);
+        void start();
+        void stop();
     };
-}
-namespace instruction
-{
 }
 #endif

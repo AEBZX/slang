@@ -22,11 +22,11 @@ if(NOT Catch2_FOUND)
 endif()
 enable_testing()
 include(Catch)
-set(SLANG_VM_SOURCES utils.cpp
+set(SLANG_VM_SOURCES lib/utils.cpp
         main.h
-        instruction/instruction.h
-        data.cpp
-        runtime.cpp)
+        lib/data.cpp
+        lib/runtime.cpp
+        lib/instruction.cpp)
 add_executable(vm main.cpp ${SLANG_VM_SOURCES})
 add_executable(vm_test test/integration/parser.test.cpp)
 #动了容易炸
