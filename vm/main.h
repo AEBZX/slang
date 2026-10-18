@@ -6,11 +6,17 @@
 #include<fstream>
 #include<filesystem>
 #include <functional>
-#include <set>
+#include <unordered_set>
 #include <unordered_map>
 #include <vector>
-#include <queue>
-#include <list>
+#include <coroutine>
+#include <memory>
+#include <cstdint>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <deque>
+#include <condition_variable>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -29,6 +35,15 @@ inline constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
 #else
 using SocketHandle = int;
 inline constexpr SocketHandle kInvalidSocket = -1;
+#endif
+#if defined(_MSC_VER)
+#include <intrin.h>
+#define SLANG_SCHED_PAUSE() _mm_pause()
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+#include <immintrin.h>
+#define SLANG_SCHED_PAUSE() _mm_pause()
+#else
+#define SLANG_SCHED_PAUSE() ((void)0)
 #endif
 namespace util{
     class Net
@@ -62,9 +77,9 @@ namespace util{
     {
         int handle = 0;
     public:
-        explicit GUI(const std::string& title);
+        explicit GUI(const std::string&);
         ~GUI();
-        void load(const std::string& html);
+        void load(const std::string&);
         GUI(const GUI&) = delete;
         GUI& operator=(const GUI&) = delete;
     };
@@ -84,77 +99,228 @@ namespace util{
     std::vector<std::string> list(const std::string&);
     std::string cwd();
     std::string homedir();
-    template<class T>
-    class Queue {
-            std::queue<T> q_;
-            mutable std::mutex m_;
-            std::condition_variable cv_;
-            bool stop_ = false;
-        public:
-            void push(T t) {
-                {
-                    std::lock_guard lk(m_);
-                    q_.push(std::move(t));
-                }
-                cv_.notify_one();
-            }
-            bool pop(T& out) {
-                std::unique_lock lk(m_);
-                cv_.wait(lk, [&]{ return stop_ || !q_.empty(); });
-                if (q_.empty()) return false;
-                out = std::move(q_.front());
-                q_.pop();
-                return true;
-            }
-            bool try_pop(T& out) {
-                std::lock_guard<std::mutex> lk(m_);
-                if (q_.empty()) return false;
-                out = std::move(q_.front());
-                q_.pop();
-                return true;
-            }
-            bool empty() const {
-                std::lock_guard<std::mutex> lk(m_);
-                return q_.empty();
-            }
-            void stop() {
-                { std::lock_guard<std::mutex> lk(m_); stop_ = true; }
-                cv_.notify_all();
-            }
-    };
+}
+namespace data
+{
     template<typename K1,typename K2,typename K3>
     struct three_key
     {
         K1 key1;
         K2 key2;
         K3 key3;
+        three_key(K1 k1, K2 k2, K3 k3)
+        {
+            key1 = k1;
+            key2 = k2;
+            key3 = k3;
+        }
+    };
+     using Task = std::coroutine_handle<>;
+    class SpinLock
+    {
+        std::atomic_flag f = ATOMIC_FLAG_INIT;
+    public:
+        void lock() noexcept;
+        void unlock() noexcept;
+    };
+    struct SpinGuard
+    {
+        SpinLock& l;
+        explicit SpinGuard(SpinLock& x) : l(x)
+        {
+            l.lock();
+        }
+        ~SpinGuard()
+        {
+            l.unlock();
+        }
+        SpinGuard(const SpinGuard&) = delete;
+        SpinGuard& operator=(const SpinGuard&) = delete;
+    };
+    class WorkQueue
+    {
+        alignas(64) SpinLock lk;
+        std::deque<Task> d;
+    public:
+        void push_back(Task);
+        bool pop_back(Task&);
+        bool steal(Task&);
+        size_t size();
+        bool empty();
+    };
+    inline thread_local int g_current_worker = -1;
+    inline unsigned sched_rand() {
+        thread_local unsigned x = static_cast<unsigned>(reinterpret_cast<std::uintptr_t>(&x)) ^ 0x9E3779B9u;
+        x ^= x << 13; x ^= x >> 17; x ^= x << 5; return x;
+    }
+    class Scheduler;
+    struct YieldAwaiter
+    {
+        Scheduler* s;
+        bool await_ready() const noexcept { return false; }
+        void await_resume() const noexcept {}
+        void await_suspend(std::coroutine_handle<> h) const noexcept;
+    };
+    struct Coro
+    {
+        struct promise_type
+        {
+            Coro get_return_object()
+            {
+                return Coro{ std::coroutine_handle<promise_type>::from_promise(*this) };
+            }
+            std::suspend_always initial_suspend() noexcept
+            {
+                return {};
+            }
+            std::suspend_always final_suspend() noexcept
+            {
+                return {};
+            }
+            void return_void() noexcept {}
+            void unhandled_exception() noexcept {}
+        };
+        std::coroutine_handle<promise_type> h;
+        [[nodiscard]] Task handle() const noexcept
+        {
+            return Task(h);
+        }
+    };
+    template<class F>
+    Coro once(F f){
+        f();
+        co_return;
+    }
+    class Scheduler
+    {
+        std::vector<std::unique_ptr<WorkQueue>> qs;
+        std::vector<std::thread> ts;
+        size_t n = 0;
+        std::atomic<bool> running{true};
+        std::atomic<int> sleepers{0};
+        std::mutex mtx;
+        std::condition_variable cv;
+        static constexpr int SPIN_LIMIT = 64;
+        [[nodiscard]] bool has_any_work() const;
+        [[nodiscard]] size_t pick_queue() const;
+        bool steal_any(size_t, Task&) const;
+        bool take_any(size_t, Task&) const;
+        void wake();
+        void run(Task);
+        void worker_loop(size_t);
+    public:
+        explicit Scheduler(size_t=0);
+        ~Scheduler();
+        Scheduler(const Scheduler&) = delete;
+        Scheduler& operator=(const Scheduler&) = delete;
+        void post(Task);
+        void submit(Coro);
+        YieldAwaiter yield() noexcept;
+        void yield_self(Task);
+        void shutdown();
+        template<class Fn>
+        void spawn(Fn fn)
+        {
+            submit(once(std::move(fn)));
+        }
+    };
+    inline Scheduler& scheduler() {
+        static Scheduler inst;
+        return inst;
+    }
+    inline void YieldAwaiter::await_suspend(std::coroutine_handle<> h) const noexcept
+    {
+        s->yield_self(h);
+    }
+    struct instruction
+    {
+        int id;int arg1;int arg2;int arg3;
+        instruction(const int i, const int a1, const int a2, const int a3)
+        {
+            id = i;
+            arg1 = a1;
+            arg2 = a2;
+            arg3 = a3;
+        }
     };
 }
 namespace runtime
 {
+    class ConstPool;
+    class Manage;
+    using pool_task=data::three_key<std::vector<int>,std::function<void(ConstPool*,std::vector<int>)>,bool>;
+    using instruction_task=data::three_key<std::vector<int>,std::function<void(Manage*,std::vector<int>)>,bool>;
     class ConstPool
     {
+        bool _stop;
+        std::mutex mtx;
+        std::unordered_map<int,bool> lock;
+        std::vector<pool_task> task;
+        std::condition_variable cv;
+        std::mutex wait_mtx;
+        bool _continue;
         void run();
     public:
+        void stop()
+        {
+            _stop=true;
+            std::unique_lock lk(wait_mtx);
+            cv.wait(lk, [this]{ return _continue; });
+        }
+        ConstPool(std::unordered_map<int,std::string>,std::unordered_map<int,double>);
+        ConstPool(const ConstPool&) = delete;
+        ConstPool& operator=(const ConstPool&) = delete;
         std::unordered_map<int,double> number_pool;
         std::unordered_map<int,std::string> string_pool;
+        //反表用来取id
+        std::unordered_map<double,int> number_pool_rev;
+        std::unordered_map<std::string_view,int> string_pool_rev;
         //引用计数
-        std::unordered_map<int,int> linked;
+        std::unordered_map<int,std::atomic<int>> linked;
         //需要gc的
-        std::set<int> gc_list;
-        /*
-         *
-         */
-        std::mutex mtx;
-        std::vector<util::three_key<int,std::function<void(ConstPool*)>,bool>> task;
-        int link(const int&);
+        std::unordered_set<int> gc_list;
+        void link(const int&);
+        int id_number(const double&);
+        int id_string(const std::string&);
         void unlink(const int&);
         void gc();
     };
+    struct frame
+    {
+        int type;
+        int pc;
+        std::vector<instruction_task>* instruction;
+    };
+    struct Reg
+    {
+        int bind=0;
+        std::unordered_map<int,int> offset_bind;
+        std::unordered_map<std::string,int> name_bind;
+    };
     class Runtime
     {
+        Manage* father;
+        frame now;
+    public:
+        Runtime();
+        ~Runtime();
+        Runtime(const Runtime&) = delete;
+        Runtime& operator=(const Runtime&) = delete;
     };
-    class Manage{};
+    class Manage
+    {
+        std::mutex mtx;
+        std::unordered_map<int,int> reg;
+        ConstPool pool;
+        std::unordered_map<int,std::vector<instruction_task>> command;
+    public:
+        Manage();
+        ~Manage();
+        Manage(const Manage&) = delete;
+        Manage& operator=(const Manage&) = delete;
+        std::vector<instruction_task>* get(const int&);
+        void malloc(const int&);
+    };
 }
 namespace instruction
 {
