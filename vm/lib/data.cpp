@@ -83,9 +83,23 @@ void data::Scheduler::wake() {
 void data::Scheduler::run(const Task t)
 {
     if (!t)
-        return; t.resume();
+        return;
+    t.resume();
     if (t.done())
         t.destroy();
+}
+static thread_local data::Task* g_yield_slot = nullptr;
+void data::Scheduler::run_one(const size_t idx, const Task t)
+{
+    Task yielded = nullptr;
+    g_yield_slot = &yielded;
+    run(t);
+    g_yield_slot = nullptr;
+    if (!yielded)
+        return;
+    //yield 出来的活由本线程收尾:此时原来那次 resume 已经退出
+    qs[idx]->push_back(yielded);
+    wake();
 }
 void data::Scheduler::worker_loop(const size_t idx) {
     g_current_worker = static_cast<int>(idx);
@@ -94,7 +108,7 @@ void data::Scheduler::worker_loop(const size_t idx) {
         Task t = nullptr;
         if (take_any(idx, t))
         {
-            spins = 0; run(t); continue;
+            spins = 0; run_one(idx, t); continue;
         }
         if (spins < SPIN_LIMIT)
         {
@@ -148,6 +162,12 @@ data::YieldAwaiter data::Scheduler::yield() noexcept
     return YieldAwaiter{ this };
 }
 void data::Scheduler::yield_self(Task t) {
+    //在 worker 里:交给 run_one 在 resume 返回后入队,避免被别的 worker 提前偷走
+    if (g_yield_slot != nullptr)
+    {
+        *g_yield_slot = t;
+        return;
+    }
     int id = g_current_worker;
     if (id >= 0 && static_cast<size_t>(id) < n)
         qs[id]->push_back(t);

@@ -100,10 +100,26 @@ namespace util{
     std::vector<std::string> list(const std::string&);
     std::string cwd();
     std::string homedir();
-    static std::vector<std::string> args;
+    inline std::vector<std::string> args;
 }
 namespace data
 {
+    struct any
+    {
+        std::string str;
+        double num;
+        bool is_num;
+        any(const std::string& s)
+        {
+            str=s;
+            is_num=false;
+        }
+        any(const double n)
+        {
+            num=n;
+            is_num=false;
+        }
+    };
     template<typename K1,typename K2,typename K3>
     struct three_key
     {
@@ -220,6 +236,9 @@ namespace data
         bool take_any(size_t, Task&) const;
         void wake();
         void run(Task);
+        //当前 worker 跑一个任务:yield 出去的协程要等 resume 返回后才入队,
+        //否则别的 worker 会在它还没挂起完成时把它偷走,导致同一协程被两个线程恢复
+        void run_one(size_t, Task);
         void worker_loop(size_t);
     public:
         explicit Scheduler(size_t=0);
@@ -241,6 +260,12 @@ namespace data
         static Scheduler inst;
         return inst;
     }
+    static std::atomic<int> max_id;
+    inline int id()
+    {
+        max_id.fetch_add(1);
+        return max_id.load();
+    }
     inline void YieldAwaiter::await_suspend(std::coroutine_handle<> h) const noexcept
     {
         s->yield_self(h);
@@ -260,7 +285,7 @@ namespace data
 namespace runtime{class Runtime;}
 namespace instruction
 {
-    using instruction=std::function<void(runtime::Runtime*)>;
+    using instruction=std::function<void(runtime::Runtime*,int,int,int)>;
     void init();
     static std::unordered_map<int,instruction> run_table;
 }
@@ -274,22 +299,23 @@ namespace runtime
     {
         bool _stop;
         std::mutex mtx;
-        std::unordered_map<int,bool> lock;
         std::vector<pool_task> task;
         std::condition_variable cv;
         std::mutex wait_mtx;
         bool _continue;
+        std::atomic<int> inflight{0};
+        std::thread worker;
         void run();
     public:
-        void stop()
-        {
-            _stop=true;
-            std::unique_lock lk(wait_mtx);
-            cv.wait(lk, [this]{ return _continue; });
-        }
+        void stop();
         ConstPool(std::unordered_map<int,std::string>,std::unordered_map<int,double>);
+        ~ConstPool();
         ConstPool(const ConstPool&) = delete;
         ConstPool& operator=(const ConstPool&) = delete;
+        //观察用:引用计数与"待回收"状态都加锁读,避免外部直接翻内部容器
+        int ref_count(const int&);
+        bool pending_gc(const int&);
+        bool has(const int&);
         std::unordered_map<int,double> number_pool;
         std::unordered_map<int,std::string> string_pool;
         //反表用来取id
@@ -334,21 +360,21 @@ namespace runtime
     class Manage
     {
         std::mutex mtx;
-        std::unordered_map<int,Reg> reg;
         std::unordered_map<int,bool> lock;
         std::vector<instruction_task> task;
         std::condition_variable cv;
         std::mutex wait_mtx;
         bool _stop;
-        ConstPool pool;
-        std::unordered_map<int,std::vector<instruction_task>> command;
     public:
+        std::unordered_map<int,Reg> reg;
+        std::unordered_map<int,std::vector<instruction_task>> command;
+        ConstPool pool;
         Manage();
         ~Manage();
         Manage(const Manage&) = delete;
         Manage& operator=(const Manage&) = delete;
         std::vector<instruction_task>* get(const int&);
-        void malloc(const int&);
+        void malloc(const int&,const int&);
         void start();
         void stop();
     };

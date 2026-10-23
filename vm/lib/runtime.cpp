@@ -1,116 +1,118 @@
 #include <algorithm>
 
 #include "../main.h"
-static uint64_t seed = 88172645463325252ULL;
-static inline int32_t random() {
-    seed ^= seed << 13;
-    seed ^= seed >> 7;
-    seed ^= seed << 17;
-    return (int32_t)seed%0xFFFFFF;
-}
-static inline int pool_random(const runtime::ConstPool* data)
-{
-    int rand;
-    while (true)
-    {
-        rand=random();
-        if (data->number_pool.contains(rand)||data->string_pool.contains(rand))continue;
-        return rand;
-    }
-}
 void runtime::ConstPool::run()
 {
     while (true)
     {
         if (_stop)return;
-        _continue=false;
-        std::vector<pool_task> snap;
+        std::vector<std::pair<size_t, pool_task>> batch;
         {
             std::lock_guard lk(mtx);
-            std::ranges::copy_if(this->task,std::back_inserter(snap),[](const runtime::pool_task p)
+            for (size_t i = 0; i < task.size() && batch.size() < 64; ++i)
+                if (!task[i].key3)
+                {
+                    task[i].key3 = true;
+                    batch.emplace_back(i, task[i]);
+                }
+        }
+        if (!batch.empty())
+        {
+            ++inflight;
+            data::scheduler().spawn([this, batch = std::move(batch)]
             {
-                return !p.key3;
+                for (auto& [idx, t] : batch)
+                    t.key2(this, t.key1);
+                {
+                    std::lock_guard lk(mtx);
+                    for (auto& [idx, t] : batch)
+                        task[idx].key3 = true;
+                }
+                {
+                    std::lock_guard w(wait_mtx);
+                    _continue = true;
+                }
+                cv.notify_all();
+                --inflight;
             });
         }
-        std::vector<int> ok_list;
-        for (size_t i = 0; i < snap.size(); ++i)
-        {
-            bool _run=true;
-            for (int j : snap[i].key1)
-                if (this->lock[j])
-                {
-                    _run=false;
-                    break;
-                }
-            if (!_run)break;
-            for (int j : snap[i].key1)
-                this->lock[j]=true;
-            data::scheduler().spawn([&]
-            {
-                snap[i].key2(this,snap[i].key1);
-                ok_list.push_back(i);
-                for (int j : snap[i].key1)
-                {
-                    this->lock[j]=false;
-                    std::lock_guard lk(wait_mtx);
-                    this->_continue=true;
-                }
-            });
-        }
-        data::scheduler().spawn([&]
-        {
-            std::lock_guard lk(mtx);
-            for (const int i:ok_list)
-                this->task[i].key3=true;
-        });
-        std::unique_lock lk(wait_mtx);
-        cv.wait(lk, [this]{return _continue;});
+        std::unique_lock<std::mutex> idle(wait_mtx);
+        cv.wait_for(idle, std::chrono::milliseconds(2),
+            [this] { return _stop || _continue; });
+        _continue = false;
     }
+}
+void runtime::ConstPool::stop()
+{
+    {
+        std::lock_guard lk(mtx);
+        if (_stop)return;
+        _stop = true;
+    }
+    cv.notify_all();
+    if (worker.joinable())
+        worker.join();
+    for (int i = 0; i < 2000 && inflight.load() > 0; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::lock_guard lk(mtx);
+    task.clear();
 }
 void runtime::ConstPool::link(const int& id)
 {
-    task.push_back(pool_task
-        ({},[id](ConstPool* data, const std::vector<int>&)
+    pool_task t({id},[id](ConstPool* data, const std::vector<int>&)
         {
             if (data->gc_list.contains(id))
                 data->gc_list.erase(id);
             ++data->linked[id];
-        },false));
+        },false);
+    {
+        std::lock_guard lk(mtx);
+        task.push_back(std::move(t));
+    }
+    cv.notify_all();
 }
 int runtime::ConstPool::id_number(const double& num)
 {
+    std::lock_guard lk(mtx);
     if (number_pool_rev.contains(num))
         return number_pool_rev[num];
-    const int id=pool_random(this);
+    const int id=data::id();
     number_pool[id]=num;
     number_pool_rev[num]=id;
     return id;
 }
 int runtime::ConstPool::id_string(const std::string& str)
 {
+    std::lock_guard lk(mtx);
     if (string_pool_rev.contains(str))
         return string_pool_rev[str];
-    const int id=pool_random(this);
+    const int id=data::id();
     string_pool[id]=str;
-    string_pool_rev[str]=id;
+    string_pool_rev[std::string_view(string_pool[id])]=id;
     return id;
 }
 void runtime::ConstPool::unlink(const int& id)
 {
-    task.push_back(pool_task
-        ({},[id](ConstPool* data,const std::vector<int>&)
+    pool_task t({id},[id](ConstPool* data,const std::vector<int>&)
         {
             if (data->gc_list.contains(id))
                 return;
-            --data->linked[id];
-            if (data->linked[id]==0)
+            if (data->linked[id] > 0)
+                --data->linked[id];
+            if (data->linked[id] == 0)
                 data->gc_list.insert(id);
-        },false));
+        },false);
+    {
+        std::lock_guard lk(mtx);
+        task.push_back(std::move(t));
+    }
+    cv.notify_all();
 }
 void runtime::ConstPool::gc()
 {
+    std::lock_guard lk(mtx);
     task.emplace_back(
-        std::vector(gc_list.begin(), gc_list.end()),
+        std::vector<int>(gc_list.begin(), gc_list.end()),
         [](ConstPool* data,const std::vector<int>& cond)
         {
             for (int i : cond)
@@ -131,9 +133,8 @@ void runtime::ConstPool::gc()
         );
 }
 runtime::ConstPool::ConstPool(std::unordered_map<int, std::string> str, std::unordered_map<int, double> num)
+    : _stop(false), _continue(false)
 {
-    this->_stop=false;
-    this->_continue=false;
     for (const auto& [id, n] : num)
     {
         number_pool[id]=n;
@@ -144,4 +145,24 @@ runtime::ConstPool::ConstPool(std::unordered_map<int, std::string> str, std::uno
         string_pool[id]=s;
         string_pool_rev[s]=id;
     }
+}
+runtime::ConstPool::~ConstPool()
+{
+    stop();
+}
+int runtime::ConstPool::ref_count(const int& id)
+{
+    std::lock_guard lk(mtx);
+    const auto it = linked.find(id);
+    return it == linked.end() ? 0 : it->second.load();
+}
+bool runtime::ConstPool::pending_gc(const int& id)
+{
+    std::lock_guard lk(mtx);
+    return gc_list.contains(id);
+}
+bool runtime::ConstPool::has(const int& id)
+{
+    std::lock_guard lk(mtx);
+    return number_pool.contains(id) || string_pool.contains(id);
 }

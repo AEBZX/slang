@@ -1,12 +1,12 @@
 #include "../main.h"
 std::filesystem::path tou8(const std::string& path)
 {
-    return std::filesystem::u8path(path);
+    return std::filesystem::path(std::u8string(
+        reinterpret_cast<const char8_t*>(path.data()), path.size()));
 }
 void util::init(const std::vector<std::string>& args)
 {
 #ifdef _WIN32
-    std::ios::sync_with_stdio(false);
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
     static WSADATA wsa;
@@ -82,27 +82,36 @@ std::vector<std::string> util::list(const std::string& path) {
 }
 bool util::mkdir(const std::string& path)
 {
-    return std::filesystem::create_directories(tou8(path));
+     std::error_code ec;
+    const auto p = tou8(path);
+    std::filesystem::create_directories(p, ec);
+    return std::filesystem::is_directory(p, ec);
 }
 bool util::rmdir(const std::string& path)
 {
-    return std::filesystem::remove_all(tou8(path))>0;
+    std::error_code ec;
+    return std::filesystem::remove_all(tou8(path), ec)>0;
 }
 bool util::remove(const std::string& path)
 {
-    return std::filesystem::remove(tou8(path));
+    //非空目录/权限不足都只返回 false,不能把 filesystem_error 抛给运行时
+    std::error_code ec;
+    return std::filesystem::remove(tou8(path), ec);
 }
 bool util::exists(const std::string& path)
 {
-    return std::filesystem::exists(tou8(path));
+    std::error_code ec;
+    return std::filesystem::exists(tou8(path), ec);
 }
 bool util::isFile(const std::string& path)
 {
-    return std::filesystem::is_regular_file(tou8(path));
+    std::error_code ec;
+    return std::filesystem::is_regular_file(tou8(path), ec);
 }
 bool util::isDir(const std::string& path)
 {
-    return std::filesystem::is_directory(tou8(path));
+    std::error_code ec;
+    return std::filesystem::is_directory(tou8(path), ec);
 }
 util::Net::Net(const std::string& addr) : host(addr)
 {
