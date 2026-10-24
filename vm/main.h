@@ -130,22 +130,14 @@ namespace data
         K2 key2;
         K3 key3;
         three_key(K1 k1, K2 k2, K3 k3)
-        {
-            key1 = k1;
-            key2 = k2;
-            key3 = k3;
-        }
+        : key1(std::move(k1)), key2(std::move(k2)), key3(std::move(k3)) {}
     };
     template<typename K,typename  V>
     struct KV
     {
         K key;
         V value;
-        KV(K k, V v)
-        {
-            key = k;
-            value = v;
-        }
+        KV(K k, V v) : key(std::move(k)), value(std::move(v)) {}
     };
     using Task = std::coroutine_handle<>;
     class SpinLock
@@ -315,7 +307,6 @@ namespace runtime
         ~ConstPool();
         ConstPool(const ConstPool&) = delete;
         ConstPool& operator=(const ConstPool&) = delete;
-        //观察用:引用计数与"待回收"状态都加锁读,避免外部直接翻内部容器
         int ref_count(const int&);
         bool pending_gc(const int&);
         bool has(const int&);
@@ -363,9 +354,12 @@ namespace runtime
     };
     class Manage
     {
+        bool _start=false;
+        std::atomic<int> id=0;
         std::mutex mtx;
         std::unordered_map<int,bool> lock;
-        std::vector<instruction_task> task;
+        std::vector<data::KV<int,instruction_task>> task;
+        std::unordered_map<int,Runtime> runtime;
         std::condition_variable cv;
         std::mutex wait_mtx;
         bool _stop;
@@ -375,12 +369,13 @@ namespace runtime
         std::unordered_map<int,Reg> reg;
         std::unordered_map<int,std::vector<instruction_task>> command;
         ConstPool pool;
-        Manage();
+        Manage(const std::unordered_map<int,std::string>&, const std::unordered_map<int,double>&,
+            std::unordered_map<int,std::vector<data::KV<int,data::three_key<int,int,int>>>>);
         ~Manage();
         Manage(const Manage&) = delete;
         Manage& operator=(const Manage&) = delete;
         std::vector<instruction_task>* get(const int&);
-        void malloc(const int&,const int&,const Runtime* extends);
+        void malloc(const int&,const int&,const Runtime*);
         void start();
         void stop();
         void gc();

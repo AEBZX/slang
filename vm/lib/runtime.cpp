@@ -36,7 +36,7 @@ void runtime::ConstPool::run()
                 --inflight;
             });
         }
-        std::unique_lock<std::mutex> idle(wait_mtx);
+        std::unique_lock idle(wait_mtx);
         cv.wait_for(idle, std::chrono::milliseconds(2),
             [this] { return _stop || _continue; });
         _continue = false;
@@ -165,4 +165,84 @@ bool runtime::ConstPool::has(const int& id)
 {
     std::lock_guard lk(mtx);
     return number_pool.contains(id) || string_pool.contains(id);
+}
+runtime::Manage::Manage(const std::unordered_map<int, std::string>& pool_str, const std::unordered_map<int, double>& pool_num,
+    std::unordered_map<int, std::vector<data::KV<int, data::three_key<int, int, int>>>> commands):
+    pool(pool_str, pool_num)
+{
+    pool.string_pool[0]="\0";
+    reg[0].bind=0;
+    null_reg=&reg[0];
+    _stop = false;
+    net=util::NetPool();
+    for (const auto& [id, cmd] : commands)
+        for (const auto& ins:cmd)
+            command[id].push_back(instruction_task{{ins.value.key1, ins.value.key2, ins.value.key3},
+                instruction::run_table[ins.key],false});
+}
+runtime::Manage::~Manage()
+{
+}
+void runtime::Manage::gc()
+{
+    {
+        std::lock_guard lk(mtx);
+        task.push_back(data::KV(0, instruction_task{{},[](Runtime* rt,int,int,int)
+        {
+            rt->father->gc();
+        }, false}));
+    }
+}
+std::vector<runtime::instruction_task>* runtime::Manage::get(const int& id)
+{
+    return &command[id];;
+}
+void runtime::Manage::delete_reg(const int& id)
+{
+    {
+        std::lock_guard lk(mtx);
+        task.emplace_back(0,instruction_task{{id},[id](Runtime* rt,int,int,int)
+        {
+            rt->father->reg.erase(id);
+        }, false});
+    }
+}
+void runtime::Manage::stop()
+{
+    _stop=true;
+}
+void runtime::Manage::malloc(const int& _id , const int& frame, const Runtime* extends)
+{
+    const int __id=id++;
+    if (!_start)
+    {
+        _start=true;
+        runtime[__id].father=this;
+        runtime[__id].now.instruction=get(0);
+        runtime[__id].now.pc=0;
+        runtime[__id].now.type=0;
+        runtime[__id].run();
+        return;
+    }
+    runtime[__id].param=extends->param;
+    runtime[__id].out=extends->out;
+    runtime[__id]._stack=extends->_stack;
+    runtime[__id].father=this;
+    runtime[__id].now.instruction=this->get(_id);
+    runtime[__id].now.pc=0;
+    runtime[__id].now.type=frame;
+    runtime[__id].run();
+}
+void runtime::Manage::start()
+{
+    malloc(0,0,nullptr);
+}
+runtime::Runtime::Runtime()
+{
+}
+runtime::Runtime::~Runtime()
+{
+}
+void runtime::Runtime::run()
+{
 }
