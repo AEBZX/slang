@@ -70,6 +70,7 @@ namespace util{
         ~NetPool();
         int connect(const std::string&);
         std::string send(const int&,const std::string&);
+        std::string recv(const int&,const int&);
         void close(const int&);
     private:
         std::unordered_map<int,Net> nets;
@@ -91,12 +92,14 @@ namespace util{
     bool writeBinary(const std::string&,const std::string&);
     std::string readText(const std::string&);
     std::string readBinary(const std::string&);
+    bool create(const std::string&);
     bool mkdir(const std::string&);
     bool rmdir(const std::string&);
     bool remove(const std::string&);
     bool exists(const std::string&);
     bool isFile(const std::string&);
     bool isDir(const std::string&);
+    void command(const std::string&);
     std::vector<std::string> list(const std::string&);
     std::string cwd();
     std::string homedir();
@@ -348,6 +351,7 @@ namespace runtime
     public:
         Manage* father;
         frame now;
+        std::unordered_map<std::string,std::unordered_map<int,Reg>> out;
         std::stack<frame> frames;
         std::stack<data::KV<int,Reg>> _stack;
         std::unordered_map<int,Reg> param;
@@ -366,6 +370,7 @@ namespace runtime
         std::mutex wait_mtx;
         bool _stop;
     public:
+        util::NetPool net;
         Reg* null_reg;
         std::unordered_map<int,Reg> reg;
         std::unordered_map<int,std::vector<instruction_task>> command;

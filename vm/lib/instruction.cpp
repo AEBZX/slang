@@ -5,6 +5,185 @@ data::any to_any(const int param_id, const runtime::Runtime* rt)
         return data::any(rt->father->pool.string_pool[param_id]);
     return data::any(rt->father->pool.number_pool[param_id]);
 }
+data::any offset_get(std::string key,runtime::Reg* reg,runtime::Runtime* rt)
+{
+    runtime::Reg ls=rt->father->reg[reg->name_bind[key]];
+    if (rt->father->pool.number_pool.contains(ls.bind))return data::any(rt->father->pool.number_pool[ls.bind]);
+    if (rt->father->pool.string_pool.contains(ls.bind))return data::any(rt->father->pool.string_pool[ls.bind]);
+    return data::any("\0");
+}
+void in(const std::string& type,runtime::Reg reg,runtime::Runtime* rt)
+{
+    const std::string oper=offset_get("oper",&reg,rt).str;
+    const int get_id=static_cast<int>(offset_get("id",&reg,rt).num);
+    runtime::Reg output;
+    if (type == "file")
+    {
+        if (oper=="read")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            const std::string read_type=offset_get("mode",&reg,rt).str;
+            std::string result;
+            if (read_type=="binary")
+            {
+                result=util::readBinary(path);
+                int link_id;
+                int reg_id;
+                for (int i=0;i<result.size();i++)
+                {
+                    reg_id=data::id();
+                    link_id=rt->father->pool.id_number(result[i]);
+                    rt->father->pool.link(link_id);
+                    rt->father->reg[reg_id]={link_id};
+                    output.offset_bind[i]=reg_id;
+                }
+            }
+            if (read_type=="text")
+            {
+                result=util::readText(path);
+                int linked_id=rt->father->pool.id_string(result);
+                rt->father->pool.link(linked_id);
+                output.bind=linked_id;
+            }
+        }
+        if (oper=="write")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            const std::string write_type=offset_get("mode",&reg,rt).str;
+            runtime::Reg data=rt->father->reg[reg.name_bind["data"]];
+            if (write_type=="binary")
+            {
+                std::string write;
+                for (int i=0;i<data.offset_bind.size();i++)
+                    write[i]=rt->father->pool.number_pool[data.offset_bind[i]];
+                int linked_id=rt->father->pool.id_number(util::writeBinary(path,write));
+                rt->father->pool.link(linked_id);
+                output.bind=linked_id;
+            }
+            if (write_type=="text")
+            {
+                std::string write=rt->father->pool.string_pool[data.bind];
+                int linked_id=rt->father->pool.id_number(util::writeText(path,write));
+                rt->father->pool.link(linked_id);
+                output.bind=linked_id;
+            }
+        }
+        if (oper=="delete")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            const std::string mode=offset_get("mode",&reg,rt).str;
+            int result;
+            if (mode=="file")result=util::remove(path);
+            if (mode=="dir")result=util::rmdir(path);
+            result=rt->father->pool.id_number(result);
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="create")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            const std::string mode=offset_get("mode",&reg,rt).str;
+            int result;
+            if (mode=="file")result=util::create(path);
+            if (mode=="dir")result=util::mkdir(path);
+            result=rt->father->pool.id_number(result);
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="exists")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            const std::string mode=offset_get("mode",&reg,rt).str;
+            int result;
+            if (mode=="file")result=util::isFile(path);
+            if (mode=="dir")result=util::isDir(path);
+            if (mode=="all")result=util::exists(path);
+            result=rt->father->pool.id_number(result);
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="list")
+        {
+            const std::string path=offset_get("path",&reg,rt).str;
+            std::vector<std::string> result=util::list(path);
+            int linked_id;
+            for (int i=0;i<result.size();i++)
+            {
+                linked_id=rt->father->pool.id_string(result[i]);
+                rt->father->pool.link(linked_id);
+                output.offset_bind[i]=linked_id;
+            }
+        }
+        if (oper=="dir")
+        {
+            const std::string mode=offset_get("mode",&reg,rt).str;
+            std::string result;
+            if (mode=="home")result=util::homedir();
+            if (mode=="cwd")result=util::cwd();
+            int linked_id=rt->father->pool.id_string(result);
+            rt->father->pool.link(linked_id);
+            output.bind=linked_id;
+        }
+    }
+    if (type == "shell")
+    {
+        if (oper=="input")
+        {
+            std::string data=util::input();
+            int linked_id=rt->father->pool.id_string(data);
+            rt->father->pool.link(linked_id);
+            output.bind=linked_id;
+        }
+        if (oper=="output")
+        {
+            std::string data=offset_get("data",&reg,rt).str;
+            util::print(data);
+        }
+        if (oper=="bash")
+        {
+            std::string data=offset_get("data",&reg,rt).str;
+            util::command(data);
+        }
+    }
+    if (type == "net")
+    {
+        if (oper=="connect")
+        {
+            std::string host=offset_get("host",&reg,rt).str;
+            int result=rt->father->pool.id_number(
+                rt->father->net.connect(host)
+            );
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="send")
+        {
+            int handle=offset_get("handle",&reg,rt).num;
+            std::string data=offset_get("data",&reg,rt).str;
+            int result=rt->father->pool.id_string(
+                rt->father->net.send(handle,data)
+            );
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="recv")
+        {
+            int handle=offset_get("handle",&reg,rt).num;
+            int num=offset_get("num",&reg,rt).num;
+            int result=rt->father->pool.id_string(
+                rt->father->net.recv(handle,num)
+            );
+            rt->father->pool.link(result);
+            output.bind=result;
+        }
+        if (oper=="close")
+        {
+            int handle=offset_get("handle",&reg,rt).num;
+            rt->father->net.close(handle);
+        }
+    }
+    rt->out[oper][get_id]=output;
+}
 #define _reg(A,B) int A=B;
 #define _value(A,B) int A=static_cast<int>(rt->father->pool.number_pool[B]);
 #define _head (runtime::Runtime* rt,const int param1,const int param2,const int param3)
@@ -332,6 +511,8 @@ INSTRUCTION_THREE_PARAM(offset_str_set,{
     int id=data::id();
     rt->father->reg[id]=rt->father->reg[p3];
     reg->offset_bind[offset.num]=id;
+    std::string bind=rt->father->pool.string_pool[reg->bind];
+    bind[offset.num]=rt->father->pool.string_pool[rt->father->reg[id].bind][0];
 })
 INSTRUCTION_THREE_PARAM(offset_str_get,{
     runtime::Reg* reg=&rt->father->reg[p2];
@@ -357,5 +538,16 @@ INSTRUCTION_TWO_PARAM(param_set,{
     rt->param[p1]=rt->father->reg[p2];
 })
 INSTRUCTION_TWO_PARAM(param_load,{
-    rt->father->reg[p1]=rt->param[p2];
+    if (rt->param.contains(p2))rt->father->reg[p1]=rt->param[p2];
+    else rt->father->reg[p1]=*rt->father->null_reg;
+})
+INSTRUCTION_TWO_PARAM(in,{
+    std::string type=rt->father->pool.string_pool[p1];
+    in(type,rt->father->reg[p2],rt);
+})
+INSTRUCTION_TWO_PARAM(out,{
+    std::string type=rt->father->pool.string_pool[rt->father->reg[p2].bind];
+    int pid=offset_get("pid",&rt->father->reg[p2],rt).num;
+    rt->father->reg[offset_get("data",&rt->father->reg[p2],rt).num]=
+        rt->out[type][pid];
 })

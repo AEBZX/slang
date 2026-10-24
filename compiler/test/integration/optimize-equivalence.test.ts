@@ -24,6 +24,8 @@ const PROGRAMS: [string, string][] = [
     ['常量折叠后的分支', M('if(1+1>1)return 7; else return 8;')],
     ['恒真条件', M('var b:number=0; while(a>0){ b=b+1; if(b>10)break; } return b;')],
     ['多次赋值', M('var b:number=1; b=b+1; b=b*2; b=b-1; return b;')],
+    //拷贝传播的记录要在源槽被改写时失效:b 读的是改写前的 a
+    ['先拷贝再改写', M('var b:number=a; a=9; var c:number=b; return c;')],
     ['变量当条件', M('var b:number=a; if(b)return 1; return 0;')],
     ['深表达式', M('return ((a+1)*2-3)/4;')],
     ['复合赋值', M('var b:number=a; b+=1; b-=2; b*=3; b/=2; return b;')],

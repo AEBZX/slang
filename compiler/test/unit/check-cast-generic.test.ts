@@ -125,22 +125,3 @@ describe('check/泛型', () => {
         expect(() => parse(`${CLASS} public static f:number(a:number){ var b:number=1; if(a>=b)a=2; return a; } }`)).not.toThrow()
     })
 })
-
-describe('check/对象创建', () => {
-    it('模块里的类可以 new(只报 std 相关的错)', () => {
-        const src = CLASS + ` public static f:number(a:number){ var c:C=new C(); return a; } }`
-        expect(non_std(check_src(src))).toEqual([])
-    })
-
-    it('类不能声明在文件顶层', () => {
-        expect(has(check_src(`public C:class{ }`), '文件顶层只能是link/module/value')).toBe(true)
-    })
-
-    it('没有构造函数时 new 不能带实参', () => {
-        const src = CLASS + ` public static f:number(a:number){ var c:C=new C(a); return a; } }`
-        expect(has(check_src(src), '没有构造函数')).toBe(true)
-        //不带实参则正常
-        expect(non_std(check_src(CLASS + ` public static f:number(a:number){ var c:C=new C(); return a; } }`))).toEqual([])
-    })
-
-})

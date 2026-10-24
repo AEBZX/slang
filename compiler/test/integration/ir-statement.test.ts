@@ -1,7 +1,7 @@
 ﻿//集成:各类语句从源码到字节码,并核对生成出来的结构
 import {describe, expect, it} from 'vitest'
 import {exec} from '../interpreter'
-import {BINARY, CALL, CMP, CZ, JMP, OFFSET_GET, RET, THREAD} from '../../src/utils'
+import {BINARY, CALL, CMP, CZ, JMP, OFFSET_ADDR, OFFSET_GET, RET, THREAD} from '../../src/utils'
 import {all_of, bin_of, count_of, null_args, opt_of} from '../unit/helper-ir'
 
 const M = (body: string) => `public m:module{ public static f:number(a:number){ ${body} } }`
@@ -39,7 +39,7 @@ describe('集成/语句·生成的结构', () => {
         expect(all_of(tool, OFFSET_GET).length).toBeGreaterThan(0)
     })
 
-    it('while 用 CALL 进循环块、CZ 回跳', () => {
+    it('while 用 CALL 进循环块、CZ 进循环体', () => {
         const tool = structural(M('while(a>0){ a=a-1; } return a;'))
         const calls = all_of(tool, CALL)
         expect(calls.length).toBeGreaterThan(0)
@@ -162,6 +162,27 @@ describe('集成/语句·语义(解释执行)', () => {
     it('三元', () => {
         expect(run(M('var b:number=a>0?7:9; return b;'), 1).ret).toBe(7)
         expect(run(M('var b:number=a>0?7:9; return b;'), -1).ret).toBe(9)
+    })
+
+    //三元的判真和 if 一致是非零:以前按 ==1 判,2 会落进假分支
+    it('三元的条件和 if 一样按非零判真', () => {
+        expect(run(M('var b:number=a?1:3; return b;'), 2).ret).toBe(1)
+        expect(run(M('var b:number=a?1:3; return b;'), 0).ret).toBe(3)
+    })
+
+    //while 的条件在块首:条件为假的那一轮循环体不能再跑
+    it('while 条件为假后不再多跑一次', () => {
+        expect(run(M('var s:number=0; var k:number=0; while(k<3){ s=s+k; k=k+1; } return s;'), 0).ret).toBe(3)
+    })
+
+    it('do-while 先跑一次,条件为假即停', () => {
+        expect(run(M('do{ a=a-1; }while(a>0); return a;'), 1).ret).toBe(0)
+    })
+
+    //取址走 OFFSET_ADDR:以前 HIndexExpr 判错了对象,发成了取值的 OFFSET_GET
+    it('下标取址生成 OFFSET_ADDR', () => {
+        const tool = structural(M('var d:number[]=[1]; var p:number* = &d[0]; return a;'))
+        expect(all_of(tool, OFFSET_ADDR).length).toBeGreaterThan(0)
     })
 
     it('数组读写', () => {

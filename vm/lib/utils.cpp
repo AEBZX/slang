@@ -80,9 +80,15 @@ std::vector<std::string> util::list(const std::string& path) {
     }
     return names;
 }
+
+bool util::create(const std::string& path)
+{
+    std::ofstream file(path);
+    return file.is_open();
+}
 bool util::mkdir(const std::string& path)
 {
-     std::error_code ec;
+    std::error_code ec;
     const auto p = tou8(path);
     std::filesystem::create_directories(p, ec);
     return std::filesystem::is_directory(p, ec);
@@ -207,7 +213,20 @@ std::string util::NetPool::send(const int& id, const std::string& data)
     if (it == nets.end()) return "unknown handle";
     return it->second.send(data);
 }
+
+std::string util::NetPool::recv(const int& id,const int& num)
+{
+    const auto it = nets.find(id);
+    if (it == nets.end()) return "unknown handle";
+    return it->second.recv(num);
+}
+
 void util::NetPool::close(const int& id)
 {
     nets.erase(id);
+}
+
+void util::command(const std::string& data)
+{
+    system(data.c_str());
 }
