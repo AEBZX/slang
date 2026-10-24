@@ -81,11 +81,15 @@ const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
 const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{
     const id=tool.block_id
     const loop_id=tool.create()
+    const body_id=tool.create()
+    //条件放块首,每轮回到这里重新求值,循环体不会在条件为假后再跑一次
     tool.block_id=loop_id
     tool.loop_id.push(loop_id)
     const condition_arg=fast_call(IRArgs.reg(tool.id()),data.condition,tool,call)
+    tool.push(new CZ(IRArgs.reg(body_id),IRArgs.reg(0),condition_arg))
+    tool.block_id=body_id
     call(data.commands)
-    tool.push(new CZ(IRArgs.reg(loop_id),IRArgs.reg(0),condition_arg))
+    tool.push(new JMP(IRArgs.reg(loop_id),IRArgs.reg(0)))
     tool.loop_id.pop()
     tool.block_id=id
     tool.push(new CALL(IRArgs.reg(loop_id),IRArgs.reg(2)))

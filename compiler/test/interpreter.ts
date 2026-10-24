@@ -125,9 +125,11 @@ export function exec(tool: any, args: number[] = [], max_steps = 100000, opts: {
             if (fn == null) return {ret: params[0], steps, halt: 'bad-cmp-' + read(ir.oper)}
             write(ir.left, fn(slots.get(ir.left.data), read(ir.right)))
         } else if (ir instanceof OFFSET_SET) {
+            //OFFSET_STR_* 继承自 OFFSET_*,容器语义相同
             containers.set(`${key(ir.target)}|${key(ir.offset)}`, read(ir.value))
         } else if (ir instanceof OFFSET_GET) {
-            write(ir.target, containers.get(`${key(ir.data)}|${key(ir.offset)}`))
+            //Slang 里下标越界返回 null,池里 null 的值是 '\0'
+            write(ir.target, containers.get(`${key(ir.data)}|${key(ir.offset)}`) ?? '\0')
         } else if (ir instanceof PUSH) {
             //POP 没有操作数,靠这个栈记住"弹回来写哪个槽"
             stack.push([ir.target.data, slots.get(ir.target.data)])

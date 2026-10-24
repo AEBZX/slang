@@ -236,4 +236,8 @@ export function kill(tool:OPTTool,slots:number[]){
         tool.cpy_set_table.delete(s)
         tool.cprop_table.delete(s)
     }
+    //被改写的槽也可能是别的槽的替身:指向它的拷贝记录一并作废
+    for(const s of slots)
+        for(const [k,v] of tool.cpy_rep_table)
+            if(v.type=='value'&&v.data==s)tool.cpy_rep_table.delete(k)
 }

@@ -164,6 +164,12 @@ export class IRTool extends PeepholeScope{
 export function container_of(expr:any,tool:IRTool,call:(data:any)=>void){
     //变量本身就是一个容器(容器的身份就是它的槽号)
     if(expr!=null&&expr.constructor!=null&&expr.constructor.name=='HIdentifierExpr')return IRArgs.reg(expr.name)
+    //数组/map 字面量的元素就建在承载它的那个槽号下,身份同样是槽号本身([1,2][0] 这种)
+    if(expr instanceof HArrayExpr||expr instanceof HMapExpr){
+        const literal=IRArgs.reg(tool.id())
+        fast_call(literal,expr,tool,call)
+        return IRArgs.reg(literal.data)
+    }
     //表达式求值出来的是"容器的号",存在槽里(d[0][0] 这种),所以要读槽
     const slot=IRArgs.reg(tool.id())
     fast_call(slot,expr,tool,call)

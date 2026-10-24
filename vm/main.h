@@ -366,6 +366,7 @@ namespace runtime
         std::mutex wait_mtx;
         bool _stop;
     public:
+        Reg* null_reg;
         std::unordered_map<int,Reg> reg;
         std::unordered_map<int,std::vector<instruction_task>> command;
         ConstPool pool;
@@ -374,9 +375,11 @@ namespace runtime
         Manage(const Manage&) = delete;
         Manage& operator=(const Manage&) = delete;
         std::vector<instruction_task>* get(const int&);
-        void malloc(const int&,const int&);
+        void malloc(const int&,const int&,const Runtime* extends);
         void start();
         void stop();
+        void gc();
+        void delete_reg(const int&);
     };
 }
 #endif

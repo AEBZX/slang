@@ -1,8 +1,14 @@
 #include "../main.h"
+data::any to_any(const int param_id, const runtime::Runtime* rt)
+{
+    if (rt->father->pool.string_pool.contains(param_id))
+        return data::any(rt->father->pool.string_pool[param_id]);
+    return data::any(rt->father->pool.number_pool[param_id]);
+}
 #define _reg(A,B) int A=B;
 #define _value(A,B) int A=static_cast<int>(rt->father->pool.number_pool[B]);
 #define _head (runtime::Runtime* rt,const int param1,const int param2,const int param3)
-#define INSTRUCTION_NO_PARAM(A,...) void A_ _head\
+#define INSTRUCTION_NO_PARAM(A,...) void A##_ _head\
     {\
         __VA_ARGS__\
     }
@@ -234,7 +240,7 @@ INSTRUCTION_TWO_PARAM(call,{
 INSTRUCTION_TWO_PARAM(thread,{
     int data=(int)rt->father->pool.number_pool[p1];
     int frame=(int)rt->father->pool.number_pool[p2];
-    rt->father->malloc(data,frame);
+    rt->father->malloc(data,frame,rt);
 })
 INSTRUCTION_THREE_PARAM(jz,{
     int data=(int)rt->father->pool.number_pool[p1];
@@ -256,7 +262,7 @@ INSTRUCTION_THREE_PARAM(thread,{
     int frame=(int)rt->father->pool.number_pool[p2];
     int cond=(int)rt->father->pool.number_pool[p3];
     if (cond==0)return;
-    rt->father->malloc(data,frame);
+    rt->father->malloc(data,frame,rt);
 })
 INSTRUCTION_ONE_PARAM(ret,{
     int need_frame=rt->father->pool.number_pool[p1];
@@ -277,6 +283,79 @@ INSTRUCTION_NO_PARAM(pop,{
     rt->_stack.pop();
     rt->father->reg[pop_reg->key]=pop_reg->value;
 })
-INSTRUCTION_ONE_PARAM(offset_set,{
+INSTRUCTION_THREE_PARAM(offset_set,{
     runtime::Reg* reg=&rt->father->reg[p1];
+    data::any offset=to_any(p2,rt);
+    if (offset.is_num&&reg->offset_bind.contains(offset.num))
+    {
+        rt->father->reg[reg->offset_bind[offset.num]]=rt->father->reg[p3];
+        return;
+    }
+    if (!offset.is_num&&reg->name_bind.contains(offset.str))
+    {
+        rt->father->reg[reg->name_bind[offset.str]]=rt->father->reg[p3];
+        return;
+    }
+    int id=data::id();
+    rt->father->reg[id]=rt->father->reg[p3];
+    if (offset.is_num)reg->offset_bind[offset.num]=id;
+    else reg->name_bind[offset.str]=id;
+})
+INSTRUCTION_THREE_PARAM(offset_get,{
+    data::any offset=to_any(p3,rt);
+    runtime::Reg* reg=&rt->father->reg[p2];
+    if ((offset.is_num&&!reg->offset_bind.contains(offset.num))
+        ||(!offset.is_num&&!reg->name_bind.contains(offset.str)))
+    {
+        rt->father->reg[p1]=*rt->father->null_reg;
+        return;
+    }
+    rt->father->reg[p1]=
+        rt->father->reg[offset.is_num?reg->offset_bind[offset.num]:reg->name_bind[offset.str]];
+})
+INSTRUCTION_THREE_PARAM(offset_addr,{
+    data::any offset=to_any(p3,rt);
+    runtime::Reg* reg=&rt->father->reg[p2];
+    int id=rt->father->pool.id_number(offset.is_num?reg->offset_bind[offset.num]:reg->name_bind[offset.str]);
+    rt->father->pool.link(id);
+    rt->father->reg[p1].bind=id;
+})
+INSTRUCTION_THREE_PARAM(offset_str_set,{
+    runtime::Reg* reg=&rt->father->reg[p1];
+    data::any offset=to_any(p2,rt);
+    if (!offset.is_num)return;
+    if (reg->offset_bind.contains(offset.num))
+    {
+        rt->father->reg[reg->offset_bind[offset.num]]=rt->father->reg[p3];
+        return;
+    }
+    int id=data::id();
+    rt->father->reg[id]=rt->father->reg[p3];
+    reg->offset_bind[offset.num]=id;
+})
+INSTRUCTION_THREE_PARAM(offset_str_get,{
+    runtime::Reg* reg=&rt->father->reg[p2];
+    data::any offset=to_any(p3,rt);
+    if (!offset.is_num)return;
+    rt->father->reg[p1]=rt->father->reg[reg->offset_bind[offset.num]];
+})
+INSTRUCTION_THREE_PARAM(offset_str_addr,{
+    runtime::Reg* reg=&rt->father->reg[p2];
+    data::any offset=to_any(p3,rt);
+    if (!offset.is_num)return;
+    int id=rt->father->pool.id_number(reg->offset_bind[offset.num]);
+    rt->father->pool.link(id);
+    rt->father->reg[p1].bind=id;
+})
+INSTRUCTION_NO_PARAM(gc,{
+    rt->father->gc();
+})
+INSTRUCTION_ONE_PARAM(delete,{
+    rt->father->delete_reg(p1);
+})
+INSTRUCTION_TWO_PARAM(param_set,{
+    rt->param[p1]=rt->father->reg[p2];
+})
+INSTRUCTION_TWO_PARAM(param_load,{
+    rt->father->reg[p1]=rt->param[p2];
 })

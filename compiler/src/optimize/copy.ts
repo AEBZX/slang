@@ -18,7 +18,7 @@ import {
     PUSH,
     RET
 } from '../utils'
-import {copy, mov_rep, set_arg, slang_opt_visitor} from './tool'
+import {copy, kill, mov_rep, set_arg, slang_opt_visitor} from './tool'
 const CPY_MOV:slang_opt_visitor=(data:MOV, tool, bid, index)=>{
     set_arg(data,'right',copy(data.right,tool),tool,bid,index)
     //注意:这里不能把 mov 删掉换成"让产出指令直接写目标槽"。
@@ -74,11 +74,7 @@ const CPY_IN_OR_OUT:slang_opt_visitor=(data:IN|OUT,tool,bid,index)=>{
 const CPY_DELETE:slang_opt_visitor=(data:DELETE,tool,bid,index)=>{
     if(data.data.type=='value')return
     //槽被释放,关于它的记录全部作废
-    tool.cpy_set_table.delete(data.data.data)
-    tool.cpy_rep_table.delete(data.data.data)
-    for(const [k,v] of tool.cpy_rep_table)
-        if(v.data==data.data.data)
-            tool.cpy_rep_table.delete(k)
+    kill(tool,[data.data.data])
 }
 const CPY_PARAM_LOAD:slang_opt_visitor=(data:PARAM_LOAD,tool,bid,index)=>{
     set_arg(data,'param',copy(data.param,tool),tool,bid,index)

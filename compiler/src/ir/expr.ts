@@ -142,7 +142,7 @@ const I_ReferenceExpr:slang_ir_factory=(data:HReferenceExpr,tool,call)=>{
 const I_AddressExpr:slang_ir_factory=(data:HAddressExpr,tool,call)=>{
     const ls_arg=tool.ls_arg
     if(data.target instanceof HReferenceExpr)call(data.target.target)
-    if(data.target instanceof HMemberExpr||data instanceof HIndexExpr){
+    if(data.target instanceof HMemberExpr||data.target instanceof HIndexExpr){
         tool.index_address=true
         call(data.target)
     }
@@ -180,14 +180,10 @@ const I_TernaryExpr:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     tool.block_id=false_id
     tool.push(new MOV(arg,false_arg))
     tool.block_id=block_id
-    //data.condition是不是1
-    const cmp_arg=IRArgs.reg(tool.id())
-    //cmp 的左操作数是就地的:先把它置成 1,再比 condition 等不等于 1
-    tool.push(new MOV(cmp_arg,IRArgs.reg(1)))
-    tool.push(new CMP(cmp_arg,condition,IRArgs.reg(CmpDict.get('=='))))
-    tool.push(new CZ(IRArgs.reg(true_id),IRArgs.reg(0),read(cmp_arg)))
-    tool.push(new NOT(cmp_arg,read(cmp_arg)))
-    tool.push(new CZ(IRArgs.reg(false_id),IRArgs.reg(0),read(cmp_arg)))
+    //判真和 if 一致用非零:条件留在槽里,判真跳 true,就地取非再判 false
+    tool.push(new CZ(IRArgs.reg(true_id),IRArgs.reg(0),condition))
+    tool.push(new NOT(condition_reg,read(condition_reg)))
+    tool.push(new CZ(IRArgs.reg(false_id),IRArgs.reg(0),condition))
 }
 export default new Map<any,slang_ir_factory>([
     [HLiteral,I_Literal],
