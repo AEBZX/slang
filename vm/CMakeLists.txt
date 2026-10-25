@@ -56,7 +56,8 @@ function(slang_check_single_exe target)
     endif()
 endfunction()
 
-add_executable(vm main.cpp ${SLANG_VM_SOURCES})
+add_executable(vm main.cpp ${SLANG_VM_SOURCES}
+        lib/decode.cpp)
 #utils 的网络部分用了 winsock,缺这个库会在链接期报 __imp_WSAStartup 未定义
 if(WIN32)
     target_link_libraries(vm PRIVATE ws2_32)

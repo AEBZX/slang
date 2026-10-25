@@ -129,8 +129,10 @@ void runtime::ConstPool::gc()
                     data->string_pool.erase(i);
                 }
             }
-        },false
-        );
+            for (int i=0;i<data->task.size();i++)
+                if (data->task[i].key3)
+                    data->task.erase(data->task.begin()+i);
+        },false);
 }
 runtime::ConstPool::ConstPool(std::unordered_map<int, std::string> str, std::unordered_map<int, double> num)
     : _stop(false), _continue(false)
@@ -187,10 +189,13 @@ void runtime::Manage::gc()
 {
     {
         std::lock_guard lk(mtx);
-        task.push_back(data::KV(0, instruction_task{{},[](Runtime* rt,int,int,int)
+        task.emplace_back(0, instruction_task{{},[](Runtime* rt,int,int,int)
         {
             rt->father->gc();
-        }, false}));
+            for (int i=0;i<rt->father->task.size();i++)
+                if (rt->father->task[i].value.key3)
+                    rt->father->task.erase(rt->father->task.begin()+i);
+        }, false});
     }
 }
 std::vector<runtime::instruction_task>* runtime::Manage::get(const int& id)
@@ -201,7 +206,7 @@ void runtime::Manage::delete_reg(const int& id)
 {
     {
         std::lock_guard lk(mtx);
-        task.emplace_back(0,instruction_task{{id},[id](Runtime* rt,int,int,int)
+        task.emplace_back(0,instruction_task{{id},[id](const Runtime* rt,int,int,int)
         {
             rt->father->reg.erase(id);
         }, false});
@@ -221,7 +226,7 @@ void runtime::Manage::malloc(const int& _id , const int& frame, const Runtime* e
         runtime[__id].now.instruction=get(0);
         runtime[__id].now.pc=0;
         runtime[__id].now.type=0;
-        runtime[__id].run();
+        runtime[__id].run(__id);
         return;
     }
     runtime[__id].param=extends->param;
@@ -231,11 +236,51 @@ void runtime::Manage::malloc(const int& _id , const int& frame, const Runtime* e
     runtime[__id].now.instruction=this->get(_id);
     runtime[__id].now.pc=0;
     runtime[__id].now.type=frame;
-    runtime[__id].run();
+    runtime[__id].run(__id);
 }
 void runtime::Manage::start()
 {
     malloc(0,0,nullptr);
+    while (true)
+    {
+        if (_stop)return;
+        std::vector<std::pair<size_t,data::KV<int,instruction_task>>> batch;
+        {
+            std::lock_guard lk(mtx);
+            for (size_t i = 0; i < task.size() && batch.size() < 64; ++i)
+                if (!task[i].value.key3)
+                {
+                    task[i].value.key3 = true;
+                    batch.emplace_back(i, task[i]);
+                }
+        }
+        if (!batch.empty())
+        {
+            ++inflight;
+            data::scheduler().spawn([this, batch = std::move(batch)]
+            {
+                for (auto& [idx, t] : batch)
+                {
+                    if (this->lock[t.value.key1[0]]&&this->lock[t.value.key1[1]]&&this->lock[t.value.key1[2]])continue;
+                    t.value.key2(&this->runtime[idx],t.value.key1[0],t.value.key1[1],t.value.key1[2]);
+                    {
+                        std::lock_guard lk(mtx);
+                        task[idx].value.key3 = true;
+                    }
+                }
+                {
+                    std::lock_guard w(wait_mtx);
+                    _continue = true;
+                }
+                cv.notify_all();
+                --inflight;
+            });
+        }
+        std::unique_lock idle(wait_mtx);
+        cv.wait_for(idle, std::chrono::milliseconds(2),
+            [this] { return _stop || _continue; });
+        _continue = false;
+    }
 }
 runtime::Runtime::Runtime()
 {
@@ -243,6 +288,12 @@ runtime::Runtime::Runtime()
 runtime::Runtime::~Runtime()
 {
 }
-void runtime::Runtime::run()
+void runtime::Runtime::run(int id)
 {
+    std::lock_guard lk(father->mtx);
+    for (const auto & i : *now.instruction)
+        father->task.push_back({0,{{},[&](const Runtime* rt,int,int,int)
+        {
+            rt->father->task.push_back({id,i});
+        },false}});
 }

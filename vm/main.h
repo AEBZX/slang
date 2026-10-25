@@ -350,20 +350,22 @@ namespace runtime
         ~Runtime();
         Runtime(const Runtime&) = delete;
         Runtime& operator=(const Runtime&) = delete;
-        void run();
+        void run(int id);
     };
     class Manage
     {
         bool _start=false;
         std::atomic<int> id=0;
-        std::mutex mtx;
         std::unordered_map<int,bool> lock;
-        std::vector<data::KV<int,instruction_task>> task;
         std::unordered_map<int,Runtime> runtime;
         std::condition_variable cv;
         std::mutex wait_mtx;
-        bool _stop;
+        bool _continue=false;
+        bool _stop=false;
+        std::atomic<int> inflight{0};
     public:
+        std::mutex mtx;
+        std::vector<data::KV<int,instruction_task>> task;
         util::NetPool net;
         Reg* null_reg;
         std::unordered_map<int,Reg> reg;
@@ -381,5 +383,10 @@ namespace runtime
         void gc();
         void delete_reg(const int&);
     };
+}
+namespace sbin
+{
+    using commands=std::unordered_map<int,std::vector<data::KV<int,data::three_key<int,int,int>>>>;
+    bool decode(const std::string&,std::unordered_map<int,std::string>&,std::unordered_map<int,double>&,commands&);
 }
 #endif

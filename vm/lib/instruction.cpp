@@ -144,6 +144,18 @@ void in(const std::string& type,runtime::Reg reg,runtime::Runtime* rt)
             std::string data=offset_get("data",&reg,rt).str;
             util::command(data);
         }
+        if (oper=="param")
+        {
+            int linked_id,reg_id;
+            for (int i=0;i<util::args.size();i++)
+            {
+                reg_id=data::id();
+                linked_id=rt->father->pool.id_string(util::args[i]);
+                rt->father->pool.link(linked_id);
+                rt->father->reg[reg_id].bind=linked_id;
+                output.offset_bind[i]=reg_id;
+            }
+        }
     }
     if (type == "net")
     {

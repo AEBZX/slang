@@ -18,5 +18,13 @@ int main(const int argc, char** argv)
     std::vector<std::string> args;
     for (int i=0;i<argc;i++)
         args.push_back(acp_to_utf8(argv[i]));
+    util::args=args;
+    std::unordered_map<int,std::string> strings;
+    std::unordered_map<int,double> numbers;
+    sbin::commands commands;
+    if (!sbin::decode(util::readBinary(args[1]),strings,numbers,commands))
+        return 1;
+    runtime::Manage manage(strings,numbers,std::move(commands));
+    manage.start();
     return 0;
 }
