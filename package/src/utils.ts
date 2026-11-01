@@ -1,5 +1,5 @@
-import {EmailData, Result} from './model'
-import {Transporter} from 'nodemailer'
+import {Config, EmailData, Result} from './model'
+import nodemailer, {Mail, Transporter} from 'nodemailer'
 import SMTPTransport from 'nodemailer/lib/smtp-transport'
 import crypto from 'crypto'
 import {writeFileSync,readFileSync} from 'fs'
@@ -26,7 +26,7 @@ export function result<T>(code:200|400|401|404|500|403|409,message:string='',dat
     }
     if(code==401)return {
         code:code,
-        message:'用户名,密码错误或者你没登录',
+        message:'用户名或者密码错了',
         data:null
     }
     if(code==404)return {
@@ -46,9 +46,10 @@ export function result<T>(code:200|400|401|404|500|403|409,message:string='',dat
     }
     if(code==409)return {
         code:code,
-        message:'哥们你账户被别人登了',
+        message:'你的帅名被抢先注册了',
         data:null
     }
+
 }
 export function sha256(str:string){
     return crypto.createHash('sha256').update(str).digest('hex')
@@ -69,3 +70,16 @@ export const configModulePath=process.cwd()+'/data/'+'module.json'
 export const configPluginPath=process.cwd()+'/data/'+'plugin.json'
 export const configUserPath=process.cwd()+'/data/'+'user.json'
 export const configCompilerPath=process.cwd()+'/data/'+'compiler.json'
+export const cfg_dir=()=>process.env.SPM_CONFIG_DIR||'.'
+export function EmailBody():Transporter<SMTPTransport.SentMessageInfo>{
+    const config=readConfig<Config>(configPath)
+    return nodemailer.createTransport({
+        host: config.email.host,
+        port: config.email.port,
+        secure: true,
+        auth: {
+            user: config.email.username,
+            pass: config.email.password
+        }
+    })
+}

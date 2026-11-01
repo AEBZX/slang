@@ -35,6 +35,15 @@ describe('hir/表达式·字面量', () => {
         expect(hir_src(F('return 0o17;'))).toContain('return 15;')
     })
 
+    it('进制字面量里的 0 参与换算(含全 0 与高位 0)', () => {
+        //回归:十六进制的数字位表曾漏掉 '0',0x0 会被切成 0 和标识符 x0
+        expect(hir_src(F('return 0x0;'))).toContain('return 0;')
+        expect(hir_src(F('return 0X0;'))).toContain('return 0;')
+        expect(hir_src(F('return 0x00ff;'))).toContain('return 255;')
+        expect(hir_src(F('return 0b0;'))).toContain('return 0;')
+        expect(hir_src(F('return 0o0;'))).toContain('return 0;')
+    })
+
     it('字符串字面量直接用词法阶段去掉引号后的值', () => {
         //回归:这里若再 slice 一次会把首尾字符吃掉
         expect(hir_src(M("public static g:string(){ return 'ab'; }"))).toContain('return "ab";')

@@ -52,6 +52,8 @@ bool sbin::decode(const std::string& src,std::unordered_map<int,std::string>& st
         p+=9;
         if (buf.size()-p<len)
             return false;
+        if (numbers.contains(id)||strings.contains(id))
+            return false;
         if (type==1)
         {
             if (len!=8)

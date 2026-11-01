@@ -41,6 +41,7 @@ node .\node_modules\vitest\vitest.mjs run -t '相邻 token'
 |---|---|
 | `unit/lexer-token.test.ts` | token 类型与值、进制、三种引号与转义、注释、行号列号、科学计数法、`e+1` 不被误吞 |
 | `unit/lexer-adjacent.test.ts` | **相邻 token 切分矩阵（61 条）**：最长匹配（`<=`/`<<=`/`>>=`/`&&=`/`||=`/`===`/`!==`）、标识符与数字边界、注释、`@T`、`$x`、`#x` |
+| `unit/lexer-edge.test.ts` | 边界：进制里的 `0`（`0x0`/`0X0`/高位 0）、前缀后无数字位的回退、未闭合字符串/块注释、注释到文件尾、CRLF 与行号 |
 
 ### 语法（cst → ast）
 
@@ -149,6 +150,8 @@ node .\node_modules\vitest\vitest.mjs run -t '相邻 token'
 覆盖用例见 `unit/check-cast-generic.test.ts`：`C<T>=a`、`C<C<T>>=a`、以及「切分不影响 `>=` / `>>=`」的正例。
 
 另有一项按作者要求**搁置**：`POP` 指令没有操作数（VM 侧恢复约定由作者决定）。
+
+历史缺口「`0x0` 的 `0` 不被词法接受」已修复：十六进制的数字位表漏了 `'0'`，导致 `0x0` 被切成 `0` 和标识符 `x0`。`0b`/`0o` 的数字位表本来就含 `0`，所以只有十六进制受影响。覆盖见 `unit/lexer-edge.test.ts`（词法）与 `unit/hir-expr.test.ts`（换算成 0/255）。
 
 ### 已知限制（不是缺陷，是当前实现的边界）
 

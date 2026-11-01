@@ -321,6 +321,8 @@ void runtime::Manage::start()
         std::vector<data::KV<int,instruction_task>> batch;
         {
             std::lock_guard lk(mtx);
+            task.erase(std::remove_if(task.begin(),task.end(),
+                [](const data::KV<int,instruction_task>& t){ return t.value.key3; }),task.end());
             for (size_t i = 0; i < task.size() && batch.size() < 64; ++i)
                 if (!task[i].value.key3)
                 {
