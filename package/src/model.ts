@@ -12,12 +12,13 @@ export type Result<T>={
     code:number
 }
 export type User={
-    username:string,
-    password:string
+    password:string,
+    login:boolean,
+    email:string
 }
 export type UserConfig={
     admin:string,
-    users:User[]
+    users:Map<string,User>
 }
 export type Data={
     name:string,
@@ -27,6 +28,13 @@ export type Data={
     author:string,
     version:string,
     license:string
+}
+export type Config={
+    host:string
+    port:string
+    user:string
+    password:string
+    email:EmailData
 }
 export type DataConfig=Data[]
 export type route=(res:Response,req:Request)=>void

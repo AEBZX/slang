@@ -1,4 +1,4 @@
-import {slang_ir_factory} from './tool'
+import {read, slang_ir_factory} from './tool'
 import {HModule, HVariable, HVM, IRArgs, MOV, OFFSET_SET} from '../utils'
 const I_Module:slang_ir_factory=(data:HModule,tool,call)=>{
     //文件级模块(name=null)没有容器槽,子模块不登记
@@ -9,7 +9,7 @@ const I_Module:slang_ir_factory=(data:HModule,tool,call)=>{
     for(const i of data.children){
         tool.ls_arg=arg
         call(i)
-        if(ls_arg!=null)tool.push(new OFFSET_SET(ls_arg,tool._pool(i['name']),arg))
+        if(ls_arg!=null)tool.push(new OFFSET_SET(ls_arg,tool._pool(i['name']),read(arg)))
     }
     if(high)tool.high=true
     //找entry加入块0:只认直属子节点。递归找会把嵌套模块里的 entry 在每一层

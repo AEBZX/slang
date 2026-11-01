@@ -5,16 +5,13 @@ export type generate_visitor=(data:PeepholeTree)=>Buffer
 export default class Generate extends PeepholeTool{
     ref:Map<any,generate_visitor>=new Map()
     machine:generate_machine
-    local:string
     constructor() {
         super('generate')
     }
-    use(data:generate_machine|Map<any,generate_visitor>|string){
+    use(data:generate_machine|Map<any,generate_visitor>){
         if (data instanceof Map)
             for(const [k,v] of data)
                 this.ref.set(k,v)
-        else if(typeof data=='string')
-            this.local = data
         else this.machine = data as generate_machine
         return this
     }
@@ -23,7 +20,6 @@ export default class Generate extends PeepholeTool{
             for(const [k,v] of this.ref)
                 if(data instanceof k) return v(data)
         })
-        writeFileSync(this.local,buffer)
         return buffer
     }
 }

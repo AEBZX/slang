@@ -31,10 +31,9 @@ class Runner{
         this.plu.push(...pl)
         return this
     }
-    run(code:string[],local:string){
+    run(code:string[]){
         let ret:any=code
         for(const i of this.plu) this.tool=i(this.tool)
-        ;(this.tool[toolToRound.get('generate')] as Generate).local=local
         for(const t of this.tool){
             const out=t.run(ret)
             if(t.name!='check'){
@@ -49,7 +48,7 @@ class Runner{
         return ret
     }
 }
-export default function(code:string[],local:string,plugin:plugin[]=[]){
+export default function(code:string[],plugin:plugin[]=[]){
     return new Runner().register(lexer).register(parser).register(check).register(desugar).register(hir).register(ir)
-        .register(optimize).register(generate).plugin(...plugin).run(code,local)
+        .register(optimize).register(generate).plugin(...plugin).run(code)
 }

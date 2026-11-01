@@ -5,6 +5,9 @@ import {input} from '@inquirer/prompts'
 import fs from 'fs'
 import * as path from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
+import {readConfig} from './utils'
+import {Config} from './model'
+import nodemailer from "nodemailer";
 const __dirname=path.dirname(fileURLToPath(import.meta.url))
 const _cors=cors()
 const limiter = rateLimit({
@@ -29,7 +32,7 @@ app.use(express.raw({
 const cfg_dir=()=>process.env.SPM_CONFIG_DIR||'.'
 if(!fs.existsSync(cfg_dir()+'/data/config.json')){
     const username = await input({message: '请输入用户名:',default:'Admin'})
-    const password = await input({message: '请输入密码:',default:'asdfghjkl'})
+    const password = await input({message: '请输入密码:',default:'abaaba'})
     const host=await input({message: '请输入启动地址:',default:'0.0.0.0'})
     const port=parseInt(await input({message: '请输入启动端口号:',default:'2319'}))
     const email=await input({message: '请输入邮箱:',default:''})
@@ -50,6 +53,16 @@ if(!fs.existsSync(cfg_dir()+'/data/config.json')){
     fs.writeFileSync(cfg_dir()+'/data/vm.json',JSON.stringify([],null,4))
     fs.writeFileSync(cfg_dir()+'/data/compiler.json',JSON.stringify([],null,4))
 }
+const Config=readConfig<Config>(cfg_dir()+'/data/config.json')
+export const EmailData=nodemailer.createTransport({
+    host:Config.email.host,
+    port:Config.email.port,
+    secure:false,
+    auth:{
+        user:Config.email.username,
+        pass:Config.email.password
+    }
+})
 app.use('/',(res,req)=>{})
 app.use((err:any, req:any, res:any, next:any)=>{
     const code=err.status||err.statusCode||500

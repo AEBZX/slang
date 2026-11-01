@@ -1,4 +1,4 @@
-﻿import {BINARY, BIT_NOT, CMP, IN, IRArgs, IRTree, LOAD, MOV, NOT, OFFSET_GET, PARAM_LOAD} from '../utils'
+import {BINARY, BIT_NOT, CMP, IN, IRArgs, IRTree, LOAD, MOV, NOT, OFFSET_GET, PARAM_LOAD} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 export const BINARYMap=new Map([
     ['add',(a:number,b:number)=>a+b],
@@ -25,6 +25,8 @@ export type slang_opt_visitor =(data:IRTree, tool:OPTTool, bid:number, index:num
 //用对象身份做键永远命中不了
 export class OPTTool extends PeepholeScope{
     private _sweep:[number,number,IRTree[]][]=[]
+    //已经改过的位置:去重不能线性扫 _sweep,否则大程序上是指数级的
+    private _seen:Set<string>=new Set()
     //常量池:id -> 值(与 IRTool.pool 相反)
     pool:Map<number,number|string>=new Map()
     //槽号 -> 内容与它相同的那个参数(拷贝传播)
@@ -58,7 +60,9 @@ export class OPTTool extends PeepholeScope{
     sweep(bid:number,index:number,...ir:IRTree[]){
         this.changed=true
         //同一位置只认第一次改写(刻意的:更早的轮次语义更贴近原始指令)
-        if(this._sweep.find(i=>i[0]==bid&&i[1]==index))return
+        const key=bid+':'+index
+        if(this._seen.has(key))return
+        this._seen.add(key)
         this._sweep.push([bid,index,ir])
     }
     flush(){
@@ -83,6 +87,7 @@ export class OPTTool extends PeepholeScope{
             this.command.set(bid,out)
         }
         this._sweep=[]
+        this._seen.clear()
         this.changed=false
     }
     clear(){

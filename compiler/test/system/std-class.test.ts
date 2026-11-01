@@ -1,22 +1,17 @@
-﻿//系统测试:类 / 接口 / 枚举这条路。必须靠 test/std.ts 的 fixture 才能跑通
+//系统测试:类 / 接口 / 枚举这条路。必须靠 test/std.ts 的 fixture 才能跑通
 import {describe, expect, it} from 'vitest'
-import {join} from 'node:path'
-import {tmpdir} from 'node:os'
-import {readFileSync} from 'node:fs'
 import compile from '../../src'
 import {decode} from '../sbin'
 import {STD_IFACE, STD_SOURCE} from '../std'
 import {errors_of, parse, run_check} from '../unit/helper'
 
-const local_of = (name: string) => join(tmpdir(), `slang-class-${name}-${process.pid}.sbin`)
 //诊断收集与断言助手(模块级,各 describe 共用)
 const errs = (sources: string[]) => errors_of(run_check(sources.map(s => parse(s))))
 const has = (list: string[], s: string) => list.some(e => e.includes(s))
+//公开入口直接返回产物 Buffer,不落盘
 const build = (name: string, sources: string[]) => {
-    const local = local_of(name)
-    const ret: any = compile(sources, local)
-    const buf = readFileSync(local)
-    return {buf, bin: decode(buf), ret}
+    const buf: any = compile(sources)
+    return {buf, bin: decode(buf), ret: buf}
 }
 
 //类 + 字段 + 实例方法 + this + new

@@ -562,21 +562,40 @@ static data::any offset_key(runtime::Runtime* rt,const int param,const double co
 {
     return to_any(rt->father->reg[param].bind,rt);
 }
-static void offset_set_impl(runtime::Runtime* rt,const int container,const data::any& offset,const int value_slot)
+//容器操作数:reg 形式就是槽号本身,value 形式要解开槽里存的编号
+//(嵌套容器在容器里存的是"容器身份"的槽号,和参考解释器一致)
+static int container_at(runtime::Runtime* rt,const int param,const int immediate)
+{
+    return immediate;
+}
+static int container_at(runtime::Runtime* rt,const int param,const double content)
+{
+    return static_cast<int>(content);
+}
+//元素值:reg 形式是立即数(槽号身份/常量本身),value 形式是整个 Reg(容器连偏移表一起搬)
+static runtime::Reg offset_value(runtime::Runtime* rt,const int param,const int immediate)
+{
+    return immediate_reg(rt,immediate);
+}
+static runtime::Reg offset_value(runtime::Runtime* rt,const int param,const double content)
+{
+    return rt->father->reg[param];
+}
+static void offset_set_impl(runtime::Runtime* rt,const int container,const data::any& offset,const runtime::Reg& value)
 {
     runtime::Reg* reg=&rt->father->reg[container];
     if (offset.is_num&&reg->offset_bind.contains(offset.num))
     {
-        rt->father->reg[reg->offset_bind[offset.num]]=rt->father->reg[value_slot];
+        rt->father->reg[reg->offset_bind[offset.num]]=value;
         return;
     }
     if (!offset.is_num&&reg->name_bind.contains(offset.str))
     {
-        rt->father->reg[reg->name_bind[offset.str]]=rt->father->reg[value_slot];
+        rt->father->reg[reg->name_bind[offset.str]]=value;
         return;
     }
     const int id=data::id();
-    rt->father->write_slot(id,rt->father->reg[value_slot]);
+    rt->father->write_slot(id,value);
     if (offset.is_num)reg->offset_bind[offset.num]=id;
     else reg->name_bind[offset.str]=id;
 }
@@ -599,7 +618,7 @@ static void offset_addr_impl(runtime::Runtime* rt,const int dst,const int contai
     rt->father->pool.link(id);
     rt->father->reg[dst].bind=id;
 }
-static void offset_str_set_impl(runtime::Runtime* rt,const int container,const data::any& offset,const int value_slot)
+static void offset_str_set_impl(runtime::Runtime* rt,const int container,const data::any& offset,const runtime::Reg& value)
 {
     runtime::Reg* reg=&rt->father->reg[container];
     if (!offset.is_num)return;
@@ -610,7 +629,7 @@ static void offset_str_set_impl(runtime::Runtime* rt,const int container,const d
         id=data::id();
         reg->offset_bind[offset.num]=id;
     }
-    rt->father->write_slot(id,rt->father->reg[value_slot]);
+    rt->father->write_slot(id,value);
     //字符串驻留在池里,偏移槽记下之后还得把字符写回池串,读出来才是新的
     rt->father->pool.str_set_char(reg->bind,offset.num,
         rt->father->pool.str_char(rt->father->reg[id].bind,0));
@@ -630,22 +649,22 @@ static void offset_str_addr_impl(runtime::Runtime* rt,const int dst,const int co
     rt->father->reg[dst].bind=id;
 }
 INSTRUCTION_THREE_PARAM(offset_set,{
-    offset_set_impl(rt,param1,offset_key(rt,param2,p2),param3);
+    offset_set_impl(rt,container_at(rt,param1,p1),offset_key(rt,param2,p2),offset_value(rt,param3,p3));
 })
 INSTRUCTION_THREE_PARAM(offset_get,{
-    offset_get_impl(rt,param1,param2,offset_key(rt,param3,p3));
+    offset_get_impl(rt,param1,container_at(rt,param2,p2),offset_key(rt,param3,p3));
 })
 INSTRUCTION_THREE_PARAM(offset_addr,{
-    offset_addr_impl(rt,param1,param2,offset_key(rt,param3,p3));
+    offset_addr_impl(rt,param1,container_at(rt,param2,p2),offset_key(rt,param3,p3));
 })
 INSTRUCTION_THREE_PARAM(offset_str_set,{
-    offset_str_set_impl(rt,param1,offset_key(rt,param2,p2),param3);
+    offset_str_set_impl(rt,container_at(rt,param1,p1),offset_key(rt,param2,p2),offset_value(rt,param3,p3));
 })
 INSTRUCTION_THREE_PARAM(offset_str_get,{
-    offset_str_get_impl(rt,param1,param2,offset_key(rt,param3,p3));
+    offset_str_get_impl(rt,param1,container_at(rt,param2,p2),offset_key(rt,param3,p3));
 })
 INSTRUCTION_THREE_PARAM(offset_str_addr,{
-    offset_str_addr_impl(rt,param1,param2,offset_key(rt,param3,p3));
+    offset_str_addr_impl(rt,param1,container_at(rt,param2,p2),offset_key(rt,param3,p3));
 })
 INSTRUCTION_NO_PARAM(gc,{
     rt->father->gc();

@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
-    "target": "es2020",
-    "module": "es2022",
-    "lib": ["ES6","ES2022"],
-    "moduleResolution": "bundler",
-    "outDir": "./dist",
-    "allowImportingTsExtensions": true,
+    "target": "es2017",
+    "module": "esnext",
+    "lib": ["ES2016","DOM","ES2019"],
     "types": ["node"],
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": false,
