@@ -112,9 +112,8 @@ TEST_CASE("system-parallel thread 派生的运行时各自数到头", "[system]"
     REQUIRE(sbin::decode(program,strings,numbers,commands,max_id));
     runtime::Manage manage(strings,numbers,std::move(commands),max_id);
     manage.start();
-    //步任务表会被复用:30 万条指令跑完若还留着已完成项,说明 start() 又开始
-    //从头扫全表(长循环 O(n²),这个用例会从 5 秒退化到几分钟)
-    REQUIRE(manage.task.size()<1000);
+    //队列由自动 gc 压回阈值以下;这里只防它无限增长(不 gc 的话会是 30 万)
+    REQUIRE(manage.task.size()<10000);
     const auto value=[&](const int slot)
     {
         return manage.pool.number(manage.reg.at(slot).bind);

@@ -1,6 +1,11 @@
 #include <algorithm>
 
 #include "../main.h"
+
+//步任务表/常量池涨到这个量就自动排一次 gc(真正的删除仍由 gc 任务做)
+static constexpr size_t gc_task_limit=4096;
+static constexpr size_t gc_pool_limit=4096;
+
 void runtime::ConstPool::run()
 {
     while (true)
@@ -198,6 +203,16 @@ bool runtime::ConstPool::has(const int& id)
     std::lock_guard lk(mtx);
     return number_pool.contains(id) || string_pool.contains(id);
 }
+size_t runtime::ConstPool::size()
+{
+    std::lock_guard lk(mtx);
+    return number_pool.size() + string_pool.size();
+}
+bool runtime::ConstPool::pending()
+{
+    std::lock_guard lk(mtx);
+    return !gc_list.empty();
+}
 runtime::Manage::Manage(const std::unordered_map<int, std::string>& pool_str, const std::unordered_map<int, double>& pool_num,
     std::unordered_map<int, std::vector<data::KV<int, data::three_key<int, int, int>>>> commands, const int& max_id):
     pool(pool_str, pool_num)
@@ -223,6 +238,9 @@ void runtime::Manage::gc()
 {
     {
         std::lock_guard lk(mtx);
+        //已经排了清理任务就不重复排:自动 gc 每轮都会看阈值
+        if (gc_pending)return;
+        gc_pending=true;
         task.emplace_back(0, instruction_task{{0,0,0},[](Runtime* rt,int,int,int)
         {
             rt->father->pool.gc();
@@ -232,6 +250,9 @@ void runtime::Manage::gc()
                 for (int i=static_cast<int>(rt->father->task.size())-1;i>=0;i--)
                     if (rt->father->task[i].value.key3)
                         rt->father->task.erase(rt->father->task.begin()+i);
+                //缩表之后旧游标的位置已经没有意义,下次从头扫
+                rt->father->scan=0;
+                rt->father->gc_pending=false;
             }
         }, false});
     }
@@ -307,8 +328,24 @@ void runtime::Manage::release(const int& a,const int& b,const int& c)
 void runtime::Manage::schedule(const int& id)
 {
     std::lock_guard lk(mtx);
+    Runtime* rt=nullptr;
+    {
+        std::lock_guard rk(runtime_mtx);
+        const auto it=runtime.find(id);
+        if (it!=runtime.end())rt=&it->second;
+    }
+    //同一运行时的步任务是串行的:已经有一条在等/在跑就不再排,避免跳转后的
+    //指令被旧的步任务抢先分派到另一个批次
+    if (rt==nullptr||rt->step_pending)return;
+    rt->step_pending=true;
     task.push_back({id,instruction_task{{0,0,0},[](Runtime* rt,int,int,int)
     {
+        {
+            std::lock_guard lk(rt->father->mtx);
+            //标记已被别的步任务消费就不要再跑:同一运行时永远只有一条步在推进
+            if (!rt->step_pending)return;
+            rt->step_pending=false;
+        }
         rt->step();
     },false}});
 }
@@ -319,17 +356,24 @@ void runtime::Manage::start()
     {
         if (_stop)break;
         std::vector<data::KV<int,instruction_task>> batch;
+        bool need_gc=false;
         {
             std::lock_guard lk(mtx);
-            task.erase(std::remove_if(task.begin(),task.end(),
-                [](const data::KV<int,instruction_task>& t){ return t.value.key3; }),task.end());
-            for (size_t i = 0; i < task.size() && batch.size() < 64; ++i)
+            //队列涨到阈值且游标前面有已完成项才值得排清理;删除本身仍归 gc
+            need_gc=task.size()>gc_task_limit&&scan>0;
+            //只往后看新追加的任务:已完成的项不重扫,也不在这里搬元素
+            size_t i=scan;
+            for (; i < task.size() && batch.size() < 64; ++i)
                 if (!task[i].value.key3)
                 {
                     task[i].value.key3 = true;
                     batch.push_back(task[i]);
                 }
+            scan=i;
         }
+        //池很大且确实有待回收项时也排一次清理;没有可回收项就不必空转
+        if (!need_gc&&pool.size()>gc_pool_limit&&pool.pending())need_gc=true;
+        if (need_gc)gc();
         if (!batch.empty())
         {
             ++inflight;

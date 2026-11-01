@@ -21,14 +21,16 @@ export type UserConfig={
     users:Map<string,User>
 }
 export type Data={
-    name:string,
     description:string,
-    hash:string,
-    local:string,
     author:string,
-    version:string,
-    license:string
+    lists:Map<string,{
+        local:string
+        license:string
+        hash:string
+        buffer:boolean
+    }>
 }
+export type DataConfig=Map<string,Data>
 export type Config={
     host:string
     port:string
@@ -36,5 +38,4 @@ export type Config={
     password:string
     email:EmailData
 }
-export type DataConfig=Data[]
 export type route=(res:Response,req:Request)=>void

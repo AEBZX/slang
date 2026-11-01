@@ -17,6 +17,23 @@ namespace
     }
 }
 
+TEST_CASE("instruction-control jmp 之后的同块指令不会执行", "[instruction][control]")
+{
+    init();
+    //块 0:r10=2 -> jmp 块1 -> r10+=200(不该执行);块 1:r10+=2
+    sbin::commands commands;
+    commands[0].emplace_back(16,data::three_key<int,int,int>(10,1,1));
+    commands[0].emplace_back(120,data::three_key<int,int,int>(1,0,0));
+    commands[0].emplace_back(16,data::three_key<int,int,int>(10,100,100));
+    commands[1].emplace_back(18,data::three_key<int,int,int>(10,10,3));
+    std::unordered_map<int,std::string> strings;
+    std::unordered_map<int,double> numbers;
+    runtime::Manage manage(strings,numbers,std::move(commands),32);
+    manage.start();
+    //走了跳转就是 2+3;若顺序执行到 jmp 之后会先加 200 再进块 1
+    REQUIRE(manage.pool.number(manage.reg.at(10).bind)==5);
+}
+
 TEST_CASE("instruction-control push 与 pop 复原槽", "[instruction][control]")
 {
     init();

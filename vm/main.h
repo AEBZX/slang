@@ -320,6 +320,10 @@ namespace runtime
         int ref_count(const int&);
         bool pending_gc(const int&);
         bool has(const int&);
+        //池里现有条目数(数字 + 字符串),自动 gc 的阈值判断用
+        size_t size();
+        //有没有待回收的条目:池大但没有可回收项时不用排 gc
+        bool pending();
         data::any value(const int&);
         double number(const int&);
         std::string str(const int&);
@@ -357,6 +361,8 @@ namespace runtime
     public:
         int id=0;
         Manage* father;
+        //同一运行时同一时刻只允许一条步任务在飞:后一条指令不会抢到前一条前面
+        bool step_pending=false;
         frame now;
         std::unordered_map<std::string,std::unordered_map<int,Reg>> out;
         std::stack<frame> frames;
@@ -382,6 +388,10 @@ namespace runtime
         bool _continue=false;
         std::atomic<bool> _stop{false};
         std::atomic<int> inflight{0};
+        //start() 的扫描游标:只往后看新追加的步任务,已完成项的删除交给 gc
+        size_t scan=0;
+        //已经排了清理任务就不再重复排(自动 gc 每轮都会检查阈值)
+        bool gc_pending=false;
     public:
         std::mutex mtx;
         std::vector<data::KV<int,instruction_task>> task;
