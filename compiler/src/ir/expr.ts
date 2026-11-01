@@ -1,4 +1,4 @@
-﻿import {BinaryDict, CmpDict, container_element, container_of, fast_call, inc_place_target, inc_slot, is_place_target, read, slang_ir_factory} from './tool'
+﻿import {BinaryDict, CmpDict, container_element, container_of, fast_call, has_call, inc_place_target, inc_slot, is_place_target, read, slang_ir_factory} from './tool'
 import {
     BINARY, BIT_NOT, CALL, CMP, CZ, HAddressExpr, HArgumentsExpr,
     HArrayExpr, HBinaryExpr, HBitNotExpr,
@@ -154,7 +154,11 @@ const I_BinaryExpr:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
     const left_arg=IRArgs.reg(tool.id())
     const right_arg=IRArgs.reg(tool.id())
     const left=fast_call(left_arg,data.left,tool,call)
+    //右值里有调用时,左结果要跨调用存活:先压栈,右值算完再弹回来
+    const save=has_call(data.right)
+    if(save)tool.push(new PUSH(left_arg))
     const right=fast_call(right_arg,data.right,tool,call)
+    if(save)tool.push(new POP())
     //二元运算:结果写进 arg,两个操作数取槽里的值
     if(Array.from(BinaryDict.keys()).includes(data.op))
         tool.push(new BINARY(BinaryDict.get(data.op),arg,left,right))

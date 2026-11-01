@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = path.dirname(fileURLToPath(import.meta.url))
 const bundle = await rolldown({
-    input: path.join(root, 'server.ts'),
+    input: path.join(root, 'src/server.ts'),
     platform: 'node',
     external: [/^node:/],
 })

@@ -4,7 +4,7 @@
     CALL,
     CMP,
     CZ, DELETE, GC,
-    HExpr, HIdentifierExpr, HIndexExpr, HMemberExpr,
+    HArgumentsExpr, HExpr, HIdentifierExpr, HIndexExpr, HMemberExpr,
     HIRTree, IN,
     IRArgs,
     IRTree,
@@ -108,17 +108,18 @@ export class IRTool extends PeepholeScope{
     //是直接调用还取地址
     index_address:boolean=false
     high:boolean=true
+    //登记块:模块容器
+    reg_block:number=-1
     loop(){
         return this.loop_id[this.loop_id.length-1]
     }
-    //常量池里的东西当右值用时要"读槽":先把常量 load 进槽,再以 value 形式引用。
-    //右值写 reg 只会得到那个数字(池 id),而不是常量本身
     _pool(value:number|string){
-        if(this.arg_pool.has(value))return this.arg_pool.get(value)
-        const slot=IRArgs.reg(this.add(value))
+        const key=this.block_id+':'+value
+        if(this.arg_pool.has(key))return this.arg_pool.get(key)
+        const slot=IRArgs.reg(this.id())
         this.push(new LOAD(slot,IRArgs.reg(this.add(value))))
         const ret=IRArgs.value(slot.data)
-        this.arg_pool.set(value,ret)
+        this.arg_pool.set(key,ret)
         return ret
     }
     add(data:number|string){
@@ -146,31 +147,27 @@ export class IRTool extends PeepholeScope{
     }
     constructor(id:number=0) {
         super(null,null)
-        //id 是上层(HIR 作用域)已经用到的下一个槽号,IR 的槽要与它共用同一段编号
         this.index=id
         this.ir=new Map()
         this.pool=new Map()
         this.arg_pool=new Map()
         this.param=new Map()
         this.loop_id=[]
-        //先开一个块,模块头部生成的指令才有地方落
+        //先开一个块
         this.block_id=this.create()
+        this.reg_block=this.block_id
     }
     id(){
         return this.index++
     }
 }
-//容器(offset_* 的 b)的身份就是槽号:变量本身直接用它的槽,复合表达式求值到新槽后也用槽号
 export function container_of(expr:any,tool:IRTool,call:(data:any)=>void){
-    //变量本身就是一个容器(容器的身份就是它的槽号)
     if(expr!=null&&expr.constructor!=null&&expr.constructor.name=='HIdentifierExpr')return IRArgs.reg(expr.name)
-    //数组/map 字面量的元素就建在承载它的那个槽号下,身份同样是槽号本身([1,2][0] 这种)
     if(expr instanceof HArrayExpr||expr instanceof HMapExpr){
         const literal=IRArgs.reg(tool.id())
         fast_call(literal,expr,tool,call)
         return IRArgs.reg(literal.data)
     }
-    //表达式求值出来的是"容器的号",存在槽里(d[0][0] 这种),所以要读槽
     const slot=IRArgs.reg(tool.id())
     fast_call(slot,expr,tool,call)
     return IRArgs.value(slot.data)
@@ -179,15 +176,18 @@ export function inc_slot(data:any){
     const target:any=data.target
     return target instanceof HIdentifierExpr?target.name:null
 }
-//目标是不是"位置"(下标/成员)
+//表达式里有没有函数调用:被调函数体会覆写同名槽,跨调用存活的槽要先压栈
+export function has_call(expr:any):boolean{
+    if(expr==null||typeof expr!='object')return false
+    if(expr instanceof HArgumentsExpr)return true
+    return Object.values(expr).some(v=>Array.isArray(v)?v.some(has_call):v instanceof Object&&has_call(v))
+}
 export function is_place_target(target:any){
     return target instanceof HIndexExpr||target instanceof HMemberExpr
 }
-//位置目标的自增:读出来、算新值、写回同一个位置
 export function inc_place_target(data:any,tool:IRTool,call:any,op:string,is_prefix:boolean){
     const target:any=data.target
     const container=container_of(target.target,tool,call)
-    //下标要算,成员名是静态的键
     const offset=target instanceof HMemberExpr?tool._pool(target.member)
         :fast_call(IRArgs.reg(tool.id()),target.index,tool,call)
     const old=IRArgs.reg(tool.id())
@@ -195,10 +195,8 @@ export function inc_place_target(data:any,tool:IRTool,call:any,op:string,is_pref
     const next=IRArgs.reg(tool.id())
     tool.push(new BINARY(op,next,IRArgs.value(old.data),IRArgs.reg(1)))
     tool.push(new OFFSET_SET(container,offset,IRArgs.value(next.data)))
-    //前缀的结果是新值,后缀是旧值
     return is_prefix?IRArgs.value(next.data):IRArgs.value(old.data)
 }
-//容器字面量作为另一个容器的元素时,存的是"容器的身份"(槽号),不是槽里的值
 export function container_element(element:any,tool:IRTool,call:(data:any)=>void){
     if(!(element instanceof HArrayExpr||element instanceof HMapExpr))
         return fast_call(IRArgs.reg(tool.id()),element,tool,call)

@@ -144,6 +144,10 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
 ])).use((tool:OPTTool,call)=>{
     let head:Buffer[]=[]
     head.push(Buffer.from('SLANG','utf-8'),Buffer.from('1.0.0','utf-8'))
+    //max_id
+    const max_id=Buffer.alloc(4)
+    max_id.writeUint32BE(tool.index,0)
+    head.push(max_id)
     let pool:Buffer[]=[]
     pool.push(Buffer.from('POOL_START','utf-8'))
     for(const [k,v] of tool.pool){

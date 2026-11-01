@@ -83,7 +83,7 @@ std::vector<std::string> util::list(const std::string& path) {
 
 bool util::create(const std::string& path)
 {
-    std::ofstream file(path);
+    std::ofstream file(tou8(path));
     return file.is_open();
 }
 bool util::mkdir(const std::string& path)
@@ -196,6 +196,7 @@ std::string util::Net::recv(const int& n)
 util::NetPool::NetPool() = default;
 util::NetPool::~NetPool()
 {
+    std::lock_guard g(mtx);
     nets.clear();
 }
 int util::NetPool::connect(const std::string& addr)
@@ -203,12 +204,14 @@ int util::NetPool::connect(const std::string& addr)
     static int nextId = 1;
     Net n(addr);
     if (!n.connected()) return -1;
+    std::lock_guard g(mtx);
     const int id = nextId++;
     nets.emplace(id, std::move(n));
     return id;
 }
 std::string util::NetPool::send(const int& id, const std::string& data)
 {
+    std::lock_guard g(mtx);
     const auto it = nets.find(id);
     if (it == nets.end()) return "unknown handle";
     return it->second.send(data);
@@ -216,6 +219,7 @@ std::string util::NetPool::send(const int& id, const std::string& data)
 
 std::string util::NetPool::recv(const int& id,const int& num)
 {
+    std::lock_guard g(mtx);
     const auto it = nets.find(id);
     if (it == nets.end()) return "unknown handle";
     return it->second.recv(num);
@@ -223,6 +227,7 @@ std::string util::NetPool::recv(const int& id,const int& num)
 
 void util::NetPool::close(const int& id)
 {
+    std::lock_guard g(mtx);
     nets.erase(id);
 }
 

@@ -18,13 +18,21 @@ int main(const int argc, char** argv)
     std::vector<std::string> args;
     for (int i=0;i<argc;i++)
         args.push_back(acp_to_utf8(argv[i]));
-    util::args=args;
+    util::init(args);
+    if (args.size()<2)
+    {
+        std::cout<<"不能执行滚木";
+        return 0;
+    }
     std::unordered_map<int,std::string> strings;
     std::unordered_map<int,double> numbers;
     sbin::commands commands;
-    if (!sbin::decode(util::readBinary(args[1]),strings,numbers,commands))
+    int max_id=0;
+    if (!sbin::decode(util::readBinary(args[1]),strings,numbers,commands,max_id))
         return 1;
-    runtime::Manage manage(strings,numbers,std::move(commands));
+    //分发表得先填好,Manage 构造时才取得到每条指令的实现
+    instruction::init();
+    runtime::Manage manage(strings,numbers,std::move(commands),max_id);
     manage.start();
     return 0;
 }

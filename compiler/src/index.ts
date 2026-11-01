@@ -33,23 +33,19 @@ class Runner{
     }
     run(code:string[],local:string){
         let ret:any=code
-        //插件换的是工具链,不能覆盖流水线数据
         for(const i of this.plu) this.tool=i(this.tool)
         ;(this.tool[toolToRound.get('generate')] as Generate).local=local
         for(const t of this.tool){
             const out=t.run(ret)
-            //check 产出的是符号表与诊断,流水线数据仍然是 files,不能往后传
             if(t.name!='check'){
                 ret=out
                 continue
             }
-            //诊断不能静默丢掉:有错就停在这里,把整批消息带出去
             const scope:any=out
             const errs:string[]=Array.isArray(scope?.error)?scope.error:((scope?.global?.error)??[])
             if(errs.length>0)
                 throw new Error(`check 报错:\n${errs.join('\n')}`)
         }
-        //最后一级(generate)的产物:字节码
         return ret
     }
 }

@@ -4,6 +4,8 @@
 export type sbin_ins = {opcode: number, operands: number[]}
 export type sbin_pool_entry = {id: number, type: number, value: any}
 export type sbin = {
+    //编译器已用掉的号段上界,槽/池/块共用
+    max_id: number,
     pool: Map<number, sbin_pool_entry>,
     blocks: Map<number, sbin_ins[]>,
     //文件里的块顺序
@@ -31,6 +33,9 @@ export function decode(buf: Buffer): sbin {
     if (text(0, HEADER.length) != HEADER)
         throw new Error('文件头不对: ' + JSON.stringify(text(0, 12)))
     let offset = HEADER.length
+    //版本号后是 4 字节 max_id
+    const max_id = buf.readUInt32BE(offset)
+    offset += 4
     if (text(offset, 'POOL_START'.length) != 'POOL_START')
         throw new Error('缺少 POOL_START 在 ' + offset)
     offset += 'POOL_START'.length
@@ -84,7 +89,7 @@ export function decode(buf: Buffer): sbin {
         order.push(id)
     }
     if (offset != buf.length) throw new Error(`文件尾部还有 ${buf.length - offset} 字节没被解析`)
-    return {pool, blocks, order}
+    return {max_id, pool, blocks, order}
 }
 
 //操作码 -> 指令基址(用来反查是不是二元运算)

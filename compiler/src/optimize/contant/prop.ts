@@ -54,7 +54,7 @@ const CPROP_PUSH:slang_opt_visitor=(data:PUSH,tool,bid,index)=>{
 }
 const CPROP_OFFSET_SET:slang_opt_visitor=(data:OFFSET_SET,tool,bid,index)=>{
     cprop_offset_record([data.target,data.offset],data.value,tool)
-    set_arg(data,'value',cprop(data.value,tool),tool,bid,index)
+    //value 不折叠:容器元素的身份是槽(元素住在槽里),换成常量就把这层间接丢了
 }
 const CPROP_OFFSET_GET:slang_opt_visitor=(data:OFFSET_GET,tool,bid,index)=>{
     set_arg(data,'data',cprop(data.data,tool),tool,bid,index)

@@ -73,6 +73,8 @@ namespace util{
         std::string recv(const int&,const int&);
         void close(const int&);
     private:
+        //各连接互不干扰,但表本身增删要护住
+        std::mutex mtx;
         std::unordered_map<int,Net> nets;
     };
     class GUI
@@ -115,12 +117,14 @@ namespace data
         any(const std::string& s)
         {
             str=s;
+            num=0;
             is_num=false;
         }
         any(const double n)
         {
+            str="";
             num=n;
-            is_num=false;
+            is_num=true;
         }
     };
     template<typename K1,typename K2,typename K3>
@@ -255,11 +259,16 @@ namespace data
         static Scheduler inst;
         return inst;
     }
-    static std::atomic<int> max_id;
+    //号从 1 开始,0 留给空槽;直接用 fetch_add 的返回值,两个线程才不会领到同一个号
+    inline std::atomic<int> max_id;
     inline int id()
     {
-        max_id.fetch_add(1);
-        return max_id.load();
+        return max_id.fetch_add(1)+1;
+    }
+    //预置的 id 占掉的号段要让计数器跳过去,不然新分的第一个 id 就会撞上它们
+    inline void reserve(const int used)
+    {
+        if (used>max_id.load())max_id.store(used);
     }
     inline void YieldAwaiter::await_suspend(std::coroutine_handle<> h) const noexcept
     {
@@ -282,7 +291,8 @@ namespace instruction
 {
     using instruction=std::function<void(runtime::Runtime*,int,int,int)>;
     void init();
-    static std::unordered_map<int,instruction> run_table;
+    //得是 inline:static 是内部链接,init 填的和 Manage 读的会变成两张表
+    inline std::unordered_map<int,instruction> run_table;
 }
 namespace runtime
 {
@@ -292,7 +302,7 @@ namespace runtime
     using instruction_task=data::three_key<std::vector<int>,instruction::instruction,bool>;
     class ConstPool
     {
-        bool _stop;
+        std::atomic<bool> _stop{false};
         std::mutex mtx;
         std::vector<pool_task> task;
         std::condition_variable cv;
@@ -310,6 +320,11 @@ namespace runtime
         int ref_count(const int&);
         bool pending_gc(const int&);
         bool has(const int&);
+        data::any value(const int&);
+        double number(const int&);
+        std::string str(const int&);
+        char str_char(const int&,const int&);
+        void str_set_char(const int&,const int&,const char&);
         std::unordered_map<int,double> number_pool;
         std::unordered_map<int,std::string> string_pool;
         //反表用来取id
@@ -327,9 +342,9 @@ namespace runtime
     };
     struct frame
     {
-        int type;
-        int pc;
-        std::vector<instruction_task>* instruction;
+        int type=0;
+        int pc=0;
+        std::vector<instruction_task>* instruction=nullptr;
     };
     struct Reg
     {
@@ -340,6 +355,7 @@ namespace runtime
     class Runtime
     {
     public:
+        int id=0;
         Manage* father;
         frame now;
         std::unordered_map<std::string,std::unordered_map<int,Reg>> out;
@@ -350,34 +366,42 @@ namespace runtime
         ~Runtime();
         Runtime(const Runtime&) = delete;
         Runtime& operator=(const Runtime&) = delete;
-        void run(int id);
+        //执行 now 里 pc 处的一条指令;块尾自动返回上一层,由 schedule 继续排下一步
+        void step();
     };
     class Manage
     {
         bool _start=false;
         std::atomic<int> id=0;
+        //操作数占用表:指令执行期间占住自己的操作数槽,
         std::unordered_map<int,bool> lock;
         std::unordered_map<int,Runtime> runtime;
+        std::mutex runtime_mtx;
         std::condition_variable cv;
         std::mutex wait_mtx;
         bool _continue=false;
-        bool _stop=false;
+        std::atomic<bool> _stop{false};
         std::atomic<int> inflight{0};
     public:
         std::mutex mtx;
         std::vector<data::KV<int,instruction_task>> task;
         util::NetPool net;
-        Reg* null_reg;
+        Reg null_reg;
+        std::mutex reg_mtx;
         std::unordered_map<int,Reg> reg;
         std::unordered_map<int,std::vector<instruction_task>> command;
         ConstPool pool;
         Manage(const std::unordered_map<int,std::string>&, const std::unordered_map<int,double>&,
-            std::unordered_map<int,std::vector<data::KV<int,data::three_key<int,int,int>>>>);
+            std::unordered_map<int,std::vector<data::KV<int,data::three_key<int,int,int>>>>, const int&);
         ~Manage();
         Manage(const Manage&) = delete;
         Manage& operator=(const Manage&) = delete;
         std::vector<instruction_task>* get(const int&);
+        void write_slot(const int&,const Reg&);
         void malloc(const int&,const int&,const Runtime*);
+        void schedule(const int&);
+        bool claim(const int&,const int&,const int&);
+        void release(const int&,const int&,const int&);
         void start();
         void stop();
         void gc();
@@ -387,6 +411,6 @@ namespace runtime
 namespace sbin
 {
     using commands=std::unordered_map<int,std::vector<data::KV<int,data::three_key<int,int,int>>>>;
-    bool decode(const std::string&,std::unordered_map<int,std::string>&,std::unordered_map<int,double>&,commands&);
+    bool decode(const std::string&,std::unordered_map<int,std::string>&,std::unordered_map<int,double>&,commands&,int&);
 }
 #endif

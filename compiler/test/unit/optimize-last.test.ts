@@ -19,10 +19,13 @@ describe('optimize/last·字符串操作数搬进槽', () => {
         expect(get.offset.type).toBe('value')
     })
 
-    it('优化后成员键变成读槽(value 形式)', () => {
-        const tool = opt_of(SRC)
+    it('优化后成员键与登记键折叠成同一个立即数', () => {
+        const tool = opt_of(SRC) as any
         const get = all_of(tool, OFFSET_GET)[0]
-        expect(get.offset.type).toBe('value')
+        //数字键会被常量传播折叠成立即数:读槽和登记两边折成同一个数才对得上
+        const set = all_of(tool, OFFSET_SET).find((s: OFFSET_SET) => s.target.data == get.data.data)
+        expect(set).toBeDefined()
+        expect(get.offset).toEqual(set!.offset)
     })
 
     it('引用成员之前会有一条 load 把池里的常量搬进槽', () => {

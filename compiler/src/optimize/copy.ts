@@ -60,7 +60,6 @@ const CPY_PUSH:slang_opt_visitor=(data:PUSH,tool,bid,index)=>{
 }
 const CPY_OFFSET_SET:slang_opt_visitor=(data:OFFSET_SET,tool,bid,index)=>{
     set_arg(data,'offset',copy(data.offset,tool),tool,bid,index)
-    set_arg(data,'value',copy(data.value,tool),tool,bid,index)
 }
 const CPY_OFFSET_GET:slang_opt_visitor=(data:OFFSET_GET,tool,bid,index)=>{
     set_arg(data,'data',copy(data.data,tool),tool,bid,index)

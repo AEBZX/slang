@@ -18,7 +18,8 @@ set(SLANG_VM_SOURCES lib/utils.cpp
         main.h
         lib/data.cpp
         lib/runtime.cpp
-        lib/instruction.cpp)
+        lib/instruction.cpp
+        lib/decode.cpp)
 
 #===== 单文件产物 =====
 #要求:编译出来就是一个 exe,不依赖同目录的 libstdc++/libgcc/libwinpthread 等 DLL

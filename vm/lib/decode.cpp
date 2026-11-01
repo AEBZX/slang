@@ -18,7 +18,7 @@ namespace
     }
 }
 bool sbin::decode(const std::string& src,std::unordered_map<int,std::string>& string_pool,
-    std::unordered_map<int,double>& number_pool,sbin::commands& command)
+    std::unordered_map<int,double>& number_pool,sbin::commands& command,int& max_id)
 {
     constexpr std::uint32_t block_begin=0xFFFFFFFFu;
     constexpr std::uint32_t block_end=0xFFFFFFFEu;
@@ -34,7 +34,11 @@ bool sbin::decode(const std::string& src,std::unordered_map<int,std::string>& st
         p+=tag.size();
         return true;
     };
-    if (!take("SLANG1.0.0")||!take("POOL_START"))
+    if (!take("SLANG1.0.0")||buf.size()-p<4)
+        return false;
+    max_id=static_cast<int>(be32(buf.data()+p));
+    p+=4;
+    if (!take("POOL_START"))
         return false;
     while (true)
     {

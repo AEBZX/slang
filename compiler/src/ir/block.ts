@@ -12,20 +12,20 @@ const I_Module:slang_ir_factory=(data:HModule,tool,call)=>{
         if(ls_arg!=null)tool.push(new OFFSET_SET(ls_arg,tool._pool(i['name']),arg))
     }
     if(high)tool.high=true
-    //找entry加入块0:只有真有 entry 才动块 0,免得把别的文件写好的 main 清掉
-    const get_entry=(module:HModule)=>{
-        for(const i of module.children){
-            if(i instanceof HVariable&&i.entry)return i
-            if(i instanceof HModule&&get_entry(i))return get_entry(i)
-        }
-    }
-    const entry=get_entry(data)
+    //找entry加入块0:只认直属子节点。递归找会把嵌套模块里的 entry 在每一层
+    const entry=data.children.find(i=>i instanceof HVariable&&i.entry)
     if(entry!=null){
         tool.entry=true
         tool.block_id=tool.create(0)
         call(entry)
         //entry 只对这一个函数有效,否则下一个文件里所有 lambda 都会挤进块 0
         tool.entry=false
+    }
+    //入口
+    if(high&&tool.ir.has(0)){
+        const head=tool.ir.get(tool.reg_block)
+        tool.ir.set(tool.reg_block,[])
+        tool.ir.set(0,[...head,...tool.ir.get(0)])
     }
 }
 const I_Variable:slang_ir_factory=(data:HVariable,tool,call)=>{

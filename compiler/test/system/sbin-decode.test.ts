@@ -62,7 +62,8 @@ describe('system/sbin 解码', () => {
             const pool_bytes = [...s.pool.values()]
                 .reduce((a, e) => a + 9 + (e.type == 1 ? 8 : Buffer.byteLength(e.value as string, 'utf-8')), 0)
             const code_bytes = [...s.blocks.values()].reduce((a, l) => a + 32 + l.length * 16, 0)
-            const fixed = 'SLANG1.0.0'.length + 'POOL_START'.length + 'POOL_END'.length + 'CODE_START'.length
+            //头部除了标签还有 4 字节 max_id
+            const fixed = 'SLANG1.0.0'.length + 4 + 'POOL_START'.length + 'POOL_END'.length + 'CODE_START'.length
             expect(bin.length, name).toBe(fixed + pool_bytes + code_bytes)
         }
     })
