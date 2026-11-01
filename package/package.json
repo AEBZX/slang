@@ -16,14 +16,13 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "10.1.4",
     "rolldown": "^1.2.5",
     "vitest": "^4.1.11"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.2.0",
-    "@types/nodemailer": "^8.0.1"
+    "@types/node": "^26.2.0"
   }
 }

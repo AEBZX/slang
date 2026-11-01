@@ -408,14 +408,16 @@ struct cmp_rhs
 {
     double num;
     int id;
+    //右操作数所在的槽;reg 形式是立即数,没有槽记 -1
+    int slot;
 };
 static cmp_rhs cmp_src(runtime::Runtime* rt,const int param,const int immediate)
 {
-    return {static_cast<double>(immediate),rt->father->pool.id_number(immediate)};
+    return {static_cast<double>(immediate),rt->father->pool.id_number(immediate),-1};
 }
 static cmp_rhs cmp_src(runtime::Runtime* rt,const int param,const double content)
 {
-    return {content,rt->father->reg[param].bind};
+    return {content,rt->father->reg[param].bind,param};
 }
 static int cmp_oper(runtime::Runtime* rt,const int param,const int raw)
 {
@@ -425,6 +427,34 @@ static int cmp_oper(runtime::Runtime* rt,const int param,const double content)
 {
     return static_cast<int>(content);
 }
+static bool is(runtime::Runtime* rt,const int left_slot,const int right_slot)
+{
+    runtime::Reg left=rt->father->reg[left_slot];
+    runtime::Reg right=rt->father->reg[right_slot];
+    //都是标量(没有偏移表)时只认 bind;容器要比内容
+    if (left.name_bind.empty()&&left.offset_bind.empty()
+        &&right.name_bind.empty()&&right.offset_bind.empty())
+        return left.bind==right.bind;
+    if (left.name_bind.size()!=right.name_bind.size())return false;
+    if (left.offset_bind.size()!=right.offset_bind.size())return false;
+    for (const auto& [name,l_id]:left.name_bind)
+    {
+        if (!right.name_bind.contains(name))return false;
+        if (!is(rt,l_id,right.name_bind[name]))return false;
+    }
+    for (const auto& [o_id,l_id]:left.offset_bind)
+    {
+        if (!right.offset_bind.contains(o_id))return false;
+        if (!is(rt,l_id,right.offset_bind[o_id]))return false;
+    }
+    return true;
+}
+//相等要连容器内容一起比,大小比较只取数值
+static bool cmp_equal(runtime::Runtime* rt,const int left_slot,const cmp_rhs& rhs)
+{
+    if (rhs.slot>=0)return is(rt,left_slot,rhs.slot);
+    return rt->father->reg[left_slot].bind==rhs.id;
+}
 static void cmp_impl(runtime::Runtime* rt,const int left_slot,const cmp_rhs& rhs,const int oper)
 {
     const double left=number_of(rt->father->reg[left_slot].bind,rt);
@@ -432,7 +462,7 @@ static void cmp_impl(runtime::Runtime* rt,const int left_slot,const cmp_rhs& rhs
     switch (oper)
     {
     case 0:
-        result=rt->father->reg[left_slot].bind==rhs.id;
+        result=cmp_equal(rt,left_slot,rhs);
         break;
     case 1:
         result=left>rhs.num;
@@ -441,7 +471,7 @@ static void cmp_impl(runtime::Runtime* rt,const int left_slot,const cmp_rhs& rhs
         result=left>=rhs.num;
         break;
     case 3:
-        result=rt->father->reg[left_slot].bind!=rhs.id;
+        result=!cmp_equal(rt,left_slot,rhs);
         break;
     case 4:
         result=left<rhs.num;

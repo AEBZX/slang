@@ -1,10 +1,11 @@
 import {EmailData, Result} from './model.ts'
-import Mail from 'nodemailer'
+import {Transporter} from 'nodemailer'
 import SMTPTransport from 'nodemailer/lib/smtp-transport'
 import crypto from 'crypto'
 import {writeFileSync,readFileSync} from 'fs'
-function email_send(EMailTool: Mail.Transporter<SMTPTransport.SentMessageInfo, SMTPTransport.Options>,
-                    from: string, to: string, subject: string, content: string,fallback:(success:boolean)=>void) {
+function email_send(EMailTool: Transporter<SMTPTransport.SentMessageInfo>,
+                    from: string, to: string, subject: string, content: string,
+                    fallback: (success: boolean) => void) {
     EMailTool.sendMail({
         from: from,
         to: to,
@@ -47,8 +48,9 @@ function result<T>(code:200|400|401|404|500|403,message:string='',data:T=null):R
 function sha256(str:string){
     return crypto.createHash('sha256').update(str).digest('hex')
 }
+//常数没有意义只是瞎打
 function random(){
-    return Math.random()+'';
+    return Math.floor(Math.random()*234512)+'';
 }
 function readConfig<T>(path:string){
     return JSON.parse(readFileSync(path,'utf-8')) as T

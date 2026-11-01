@@ -1,3 +1,5 @@
+import {Request,Response} from 'express'
+
 export type EmailData={
     host:string,
     port:string,
@@ -27,3 +29,4 @@ export type Data={
     license:string
 }
 export type DataConfig=Data[]
+export type route=(res:Response,req:Request)=>void

@@ -50,6 +50,7 @@ if(!fs.existsSync(cfg_dir()+'/data/config.json')){
     fs.writeFileSync(cfg_dir()+'/data/vm.json',JSON.stringify([],null,4))
     fs.writeFileSync(cfg_dir()+'/data/compiler.json',JSON.stringify([],null,4))
 }
+app.use('/',(res,req)=>{})
 app.use((err:any, req:any, res:any, next:any)=>{
     const code=err.status||err.statusCode||500
     res.status(code).send({code,message:err.message||'Internal error',data:null})

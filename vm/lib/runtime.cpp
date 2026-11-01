@@ -333,8 +333,6 @@ void runtime::Manage::start()
             ++inflight;
             data::scheduler().spawn([this, batch = std::move(batch)]
             {
-                //批内的任务顺序执行,批次之间在调度器上并行:
-                //冲突由指令自己的操作数占用表挡住(见 Runtime::step)
                 for (auto& t : batch)
                 {
                     Runtime* rt=nullptr;
