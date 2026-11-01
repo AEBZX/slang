@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 project(slang LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
@@ -10,6 +10,66 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
+
+#默认连测试一起构建;分发时 -DSLANG_BUILD_TESTS=OFF 就只产出 vm.exe(也不会去拉 Catch2)
+option(SLANG_BUILD_TESTS "构建测试(vm_test)" ON)
+
+set(SLANG_VM_SOURCES lib/utils.cpp
+        main.h
+        lib/data.cpp
+        lib/runtime.cpp
+        lib/instruction.cpp
+        lib/decode.cpp)
+
+#===== 单文件产物 =====
+#要求:编译出来就是一个 exe,不依赖同目录的 libstdc++/libgcc/libwinpthread 等 DLL
+function(slang_static_runtime target)
+    if(MINGW)
+        #-static 会把 libstdc++/libgcc/libwinpthread 全部链进 exe;
+        #静态 msvcrt 还需要这两个符号别名,少了链接期直接报未定义
+        target_link_options(${target} PRIVATE
+                -static
+                -static-libgcc
+                -static-libstdc++
+                -Wl,--defsym,__ms_vsnprintf=_vsnprintf
+                -Wl,--defsym,__intrinsic_setjmpex=_setjmpex)
+    elseif(MSVC)
+        #MSVC 用 /MT(静态 CRT),否则会依赖 vcruntime140.dll / msvcp140.dll
+        set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY
+                "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endfunction()
+
+#链接完立刻扫导入表:出现系统 DLL 之外的依赖就让构建失败,而不是等到分发时才发现
+function(slang_check_single_exe target)
+    if(MINGW)
+        find_program(SLANG_OBJDUMP objdump)
+        if(SLANG_OBJDUMP)
+            add_custom_command(TARGET ${target} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND}
+                    -DOBJDUMP=${SLANG_OBJDUMP}
+                    -DEXE=$<TARGET_FILE:${target}>
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_single_exe.cmake
+                    VERBATIM)
+        else()
+            message(WARNING "没找到 objdump,跳过单文件校验")
+        endif()
+    endif()
+endfunction()
+
+add_executable(vm main.cpp ${SLANG_VM_SOURCES}
+        lib/decode.cpp)
+#utils 的网络部分用了 winsock,缺这个库会在链接期报 __imp_WSAStartup 未定义
+if(WIN32)
+    target_link_libraries(vm PRIVATE ws2_32)
+endif()
+slang_static_runtime(vm)
+slang_check_single_exe(vm)
+
+if(NOT SLANG_BUILD_TESTS)
+    return()
+endif()
+
 find_package(Catch2 3 QUIET)
 if(NOT Catch2_FOUND)
     include(FetchContent)
@@ -20,127 +80,43 @@ if(NOT Catch2_FOUND)
     )
     FetchContent_MakeAvailable(Catch2)
 endif()
-
 enable_testing()
-set(SLANG_WEBVIEW2_FOUND FALSE)
-set(SLANG_GUI_LINK "")
-if(WIN32)
-    set(_wv2_root "$ENV{SLANG_WEBVIEW2_DIR}")
-    if(NOT _wv2_root)
-        file(GLOB _wv2_candidates
-            "$ENV{USERPROFILE}/.nuget/packages/microsoft.web.webview2/*/build/native")
-        list(SORT _wv2_candidates)
-        list(REVERSE _wv2_candidates)
-        list(GET _wv2_candidates 0 _wv2_root)
-    endif()
-    if(_wv2_root)
-        set(_wv2_inc "${_wv2_root}/include")
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set(_wv2_loader "${_wv2_root}/x64/WebView2Loader.dll")
-        else()
-            set(_wv2_loader "${_wv2_root}/x86/WebView2Loader.dll")
-        endif()
-        if(EXISTS "${_wv2_inc}/WebView2.h" AND EXISTS "${_wv2_loader}")
-            set(SLANG_WEBVIEW2_FOUND TRUE)
-            set(SLANG_WEBVIEW2_INCLUDE "${_wv2_inc}")
-            set(SLANG_WEBVIEW2_LOADER "${_wv2_loader}")
-            message(STATUS "WebView2 SDK found: ${_wv2_root}")
-        endif()
-    endif()
-elseif(UNIX AND NOT APPLE)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(WEBKIT2GTK IMPORTED_TARGET webkit2gtk-4.1)
-        if(NOT WEBKIT2GTK_FOUND)
-            pkg_check_modules(WEBKIT2GTK IMPORTED_TARGET webkit2gtk-4.0)
-        endif()
-        if(WEBKIT2GTK_FOUND)
-            set(SLANG_WEBVIEW2_FOUND TRUE)
-            set(SLANG_GUI_LINK PkgConfig::WEBKIT2GTK)
-            message(STATUS "WebKitGTK found: ${WEBKIT2GTK_VERSION}")
-        endif()
-    endif()
-elseif(APPLE)
-    enable_language(OBJCXX)   #gui.cpp 在 macOS 以 Objective-C++ 编译
-    find_library(COCOA_FW Cocoa)
-    find_library(WEBKIT_FW WebKit)
-    if(COCOA_FW AND WEBKIT_FW)
-        set(SLANG_WEBVIEW2_FOUND TRUE)
-        set(SLANG_GUI_LINK "${COCOA_FW};${WEBKIT_FW}")
-        message(STATUS "macOS Cocoa+WebKit frameworks found")
-    endif()
-endif()
-if(SLANG_WEBVIEW2_FOUND)
-    add_definitions(-DSLANG_WEBVIEW2)
-    if(WIN32)
-        include_directories(${SLANG_WEBVIEW2_INCLUDE})
-    endif()
-    if(APPLE)
-        #gui.cpp 内含 ObjC 代码,在 macOS 以 Objective-C++ 编译
-        set_source_files_properties(gui.cpp PROPERTIES LANGUAGE OBJCXX)
-    endif()
-else()
-    message(STATUS "GUI(oper='GUI') 依赖未找到:Windows 需 WebView2 SDK,Linux 需 libwebkit2gtk-4.1-dev,macOS 需系统框架")
-endif()
+include(Catch)
 
-set(SLANG_VM_SOURCES
-        utils.h
-        model.h
-        runtime/runtime.h
-        runtime/basic.cpp
-        runtime/math.cpp
-        runtime/io.cpp
-        parser.cpp
-        main.h
-        gui.h
-        gui.cpp
-)
-add_executable(vm main.cpp ${SLANG_VM_SOURCES})
-if(WIN32)
-    target_link_libraries(vm PRIVATE ws2_32 psapi)
+#测试:unit 放 unit/<功能集>-<功能>.test.cpp,integration 放 integration/<功能集>.test.cpp
+file(GLOB_RECURSE SLANG_VM_TEST_SOURCES CONFIGURE_DEPENDS
+        test/unit/*.test.cpp
+        test/integration/*.test.cpp
+        test/system/*.test.cpp)
+if(NOT SLANG_VM_TEST_SOURCES)
+    message(FATAL_ERROR "没有找到任何测试文件")
 endif()
-if(SLANG_GUI_LINK)
-    target_link_libraries(vm PRIVATE ${SLANG_GUI_LINK})
-endif()
-add_executable(vm_test
-        test/unit/utils.test.cpp
-        test/unit/model.test.cpp
-        test/unit/basic.test.cpp
-        test/unit/io.test.cpp
-        test/unit/gui.test.cpp
-        test/integration/parser.test.cpp
-        test/integration/thread.test.cpp
-        runtime/basic.cpp
-        runtime/math.cpp
-        runtime/io.cpp
-        parser.cpp
-        gui.cpp
-)
-target_include_directories(vm_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/runtime)
+add_executable(vm_test ${SLANG_VM_TEST_SOURCES} ${SLANG_VM_SOURCES})
 target_link_libraries(vm_test PRIVATE Catch2::Catch2WithMain)
 if(WIN32)
-    target_link_libraries(vm_test PRIVATE ws2_32 psapi)
+    target_link_libraries(vm_test PRIVATE ws2_32)
 endif()
-if(SLANG_GUI_LINK)
-    target_link_libraries(vm_test PRIVATE ${SLANG_GUI_LINK})
-endif()
-#WebView2Loader.dll 复制到可执行文件旁(运行时 LoadLibrary 按名加载)
-if(SLANG_WEBVIEW2_FOUND AND WIN32)
-    add_custom_command(TARGET vm POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${SLANG_WEBVIEW2_LOADER}" "$<TARGET_FILE_DIR:vm>")
-    add_custom_command(TARGET vm_test POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${SLANG_WEBVIEW2_LOADER}" "$<TARGET_FILE_DIR:vm_test>")
-endif()
-include(Catch)
+slang_static_runtime(vm_test)
+slang_check_single_exe(vm_test)
+
 #动了容易炸
-catch_discover_tests(vm_test)
-if(MINGW)
-    target_link_options(vm PRIVATE -static
-            -Wl,--defsym,__ms_vsnprintf=_vsnprintf
-            -Wl,--defsym,__intrinsic_setjmpex=_setjmpex)
-    target_link_options(vm_test PRIVATE -static
-            -Wl,--defsym,__ms_vsnprintf=_vsnprintf
-            -Wl,--defsym,__intrinsic_setjmpex=_setjmpex)
+#Windows 上 catch_discover_tests 会把中文用例名按 ACP 传给进程,过滤参数被转坏;
+#那里退化成"整体跑一次",Linux/macOS 仍然逐条注册。
+if(WIN32)
+    add_test(NAME vm_test COMMAND vm_test)
+else()
+    catch_discover_tests(vm_test)
 endif()
+
+#单文件验证:PATH 里只留 System32(去掉 MinGW 目录)后仍然能跑,
+#说明 exe 没有依赖工具链目录下的 libstdc++/libgcc/libwinpthread
+if(WIN32)
+    set(SLANG_SYSTEM_PATH "$ENV{SystemRoot}/System32;$ENV{SystemRoot}")
+else()
+    set(SLANG_SYSTEM_PATH "/usr/bin:/bin")
+endif()
+add_test(NAME vm_standalone
+        COMMAND ${CMAKE_COMMAND} -E env "PATH=${SLANG_SYSTEM_PATH}"
+        $<TARGET_FILE:vm_test> "[utils]")
+add_test(NAME vm_exe_standalone
+        COMMAND ${CMAKE_COMMAND} -E env "PATH=${SLANG_SYSTEM_PATH}" $<TARGET_FILE:vm>)

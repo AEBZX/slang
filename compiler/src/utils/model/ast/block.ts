@@ -1,0 +1,74 @@
+import {ASTTree} from '../../data'
+import {Expression, LambdaExpression} from './expr'
+import {Type} from './identifier'
+import {Command} from './command'
+export class Link extends ASTTree{
+    constructor(public module:string[],public as:string) {
+        super()
+    }
+}
+export class Modifier extends ASTTree{
+    constructor(public unstatic:boolean,public _async:boolean,public _private:boolean) {
+        super()
+    }
+}
+export class Block extends ASTTree{
+    constructor(public modifiers:Modifier,public name:string) {
+        super()
+    }
+}
+export class Module extends Block{
+    constructor(modifiers:Modifier,name:string,public children:Block[]) {
+        super(modifiers,name)
+    }
+}
+export class Class extends Block{
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public implement:Type,public children:Block[]) {
+        super(modifiers,name)
+    }
+}
+export class Interface extends Block{
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public implement:Type,public children:Block[]) {
+        super(modifiers,name)
+    }
+}
+export class Enum extends Block{
+    constructor(modifiers:Modifier,name:string,public children:string[]) {
+        super(modifiers,name)
+    }
+}
+export class Function extends Block{
+    public index:number=0
+    constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public params:Map<string,Type>,public return_type:Type,public commands:Command) {
+        super(modifiers,name)
+    }
+}
+export class Variable extends Block{
+    public oper:string=null
+    public cast:string=null
+    constructor(modifiers:Modifier,name:string,public t:Type,public value:Expression) {
+        super(modifiers,name)
+    }
+}
+export class File extends ASTTree{
+    constructor(public links:Link[],public children:Block[]) {
+        super()
+    }
+}
+export class Operation extends Block{
+    public index=0
+    constructor(public oper:string,public command:LambdaExpression,public local:string[]=[]) {
+        super(null,null)
+    }
+}
+export class Cast extends Block{
+    public id=0
+    constructor(public t:Type,public command:LambdaExpression,public local:string[]=[]) {
+        super(null,null)
+    }
+}
+export class Value extends Block{
+    constructor(public value:Type,public children:Block[]) {
+        super(null,null)
+    }
+}

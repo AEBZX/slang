@@ -1,0 +1,54 @@
+﻿//内置
+import generate from './generate'
+import lexer from './lexer'
+import parser from './parser'
+import check from './check'
+import desugar from './desugar'
+import hir from './hir'
+import ir from './ir'
+import optimize from './optimize'
+import PeepholeTool from './utils/lib/tool'
+import Generate from './utils/lib/generate'
+const toolToRound=new Map<string,number>([
+    ['lexer',0],
+    ['parser',1],
+    ['check',2],
+    ['desugar',3],
+    ['hir',4],
+    ['ir',5],
+    ['optimize',6],
+    ['generate',7]
+])
+type plugin=(tool:PeepholeTool[])=>PeepholeTool[]
+class Runner{
+    tool:PeepholeTool[]=[]
+    plu:plugin[]=[]
+    register(tool:PeepholeTool){
+        this.tool[toolToRound.get(tool.name)]=tool
+        return this
+    }
+    plugin(...pl:plugin[]){
+        this.plu.push(...pl)
+        return this
+    }
+    run(code:string[]){
+        let ret:any=code
+        for(const i of this.plu) this.tool=i(this.tool)
+        for(const t of this.tool){
+            const out=t.run(ret)
+            if(t.name!='check'){
+                ret=out
+                continue
+            }
+            const scope:any=out
+            const errs:string[]=Array.isArray(scope?.error)?scope.error:((scope?.global?.error)??[])
+            if(errs.length>0)
+                throw new Error(`check 报错:\n${errs.join('\n')}`)
+        }
+        return ret
+    }
+}
+export default function(code:string[],plugin:plugin[]=[]){
+    return new Runner().register(lexer).register(parser).register(check).register(desugar).register(hir).register(ir)
+        .register(optimize).register(generate).plugin(...plugin).run(code)
+}

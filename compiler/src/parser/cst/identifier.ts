@@ -1,0 +1,34 @@
+﻿import {TokenType} from '../../utils'
+import {$} from '../../utils/lib/parser'
+const NumberType=$.s('NumberType',$.d('number'))
+const BooleanType=$.s('BooleanType',$.d('boolean'))
+const StringType=$.s('StringType',$.d('string'))
+const VoidType=$.s('VoidType',$.d('void'))
+const LambdaType=$.s('LambdaType',
+    $.c($.r('GenericList')),
+    $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,$.d(':'),$.r('Type')),','),')'),
+    $.d('=>'),$.r('Type'))
+const GenericType=$.s('GenericType',$.d('@'),TokenType.Identifier)
+const BasicType=$.o('BasicType',$.r('NumberType'),$.r('LambdaType'),
+    $.r('BooleanType'),$.r('StringType'),$.r('VoidType'),$.t('(',$.r('Type'),')'),
+    $.r('GenericType'),
+    $.s('ClassType',TokenType.Identifier,
+        $.l('ClassTypeData',$.s('ClassTypeItem',$.d('.'),TokenType.Identifier)),
+        $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.g('>'))))
+const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
+    $.o('TypePostfix',
+        $.s('MapPostfix',$.d('{'),$.d('}')),
+        $.s('ArrayPostfix',$.d('['),$.d(']')),
+        $.s('PointPostfix',$.d('*'))
+    )
+))
+export default [
+    NumberType,
+    LambdaType,
+    BooleanType,
+    StringType,
+    BasicType,
+    VoidType,
+    Type,
+    GenericType
+]

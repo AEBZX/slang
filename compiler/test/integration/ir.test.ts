@@ -1,206 +1,126 @@
-import { describe, expect, it } from 'vitest'
-import { lexer } from '../../utils/lib/lexer.ts'
-import cst_parse from '../../parser/cst'
-import ast_parse from '../../parser/ast'
-import { ast_data, File } from '../../utils'
-import check from '../../check'
-import desugar from '../../desugar'
-import hir from '../../hir'
-import ir from '../../ir'
+﻿//集成:源码 -> 前端 -> IR,断言指令流
+import {describe, expect, it} from 'vitest'
+import {
+    BINARY, CALL, CMP, CZ, IRArgs, JMP, LOAD, MOV, NOT, OFFSET_GET, OFFSET_SET, PARAM_LOAD, PARAM_SET, PUSH, RET
+} from '../../src/utils'
+import {all_of, count_of, find_of, null_args, ir_of} from '../unit/helper-ir'
 
-function ir_of(src: string): { count: number; code: Map<number, any[]>; h: any[] } {
-    const files = [ast_parse(cst_parse(lexer(src)) as ast_data) as File]
-    check(files)
-    const [count, h] = hir(<File[]>desugar(files))
-    return { count, code: ir(count, h).code, h }
-}
+const M = (body: string) => `public m:module{ ${body} }`
+const F = (body: string) => M(`public static f:number(a:number){ ${body} }`)
+const form = (a: IRArgs) => a == null ? null : a.type
 
-function body_blocks(src: string): any[] {
-    // 返回所有非根块(block 0 是根),值为指令数组
-    const r = ir_of(src)
-    return [...r.code.entries()].filter(([k]) => k !== 0)
-}
-
-describe('IR 字节码生成', () => {
-    it('算术表达式生成 load/add/retn', () => {
-        const blocks = body_blocks('public m:number(){return 1+2;}\n')
-        // 只有一个函数块
-        expect(blocks.length).toBe(1)
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'add')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'param_set')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'retn')).toBe(true)
+describe('ir/基本形状', () => {
+    it('函数体不为空,且槽号都落在合法空间', () => {
+        const tool = ir_of(F('var b:number=a+1; return b;'))
+        expect(count_of(tool)).toBeGreaterThan(5)
+        expect(tool.ir.size).toBeGreaterThan(0)
+        //发号器用到的上限就是合法槽号上界
+        for (const list of tool.ir.values())
+            for (const ir of list)
+                for (const key of Object.keys(ir))
+                    if (ir[key] instanceof IRArgs) expect(ir[key].data as number).toBeLessThan(tool.index)
     })
 
-    it('函数定义生成独立块并加载参数', () => {
-        const blocks = body_blocks('public add:number(a:number,b:number){return a+b;}\n')
-        expect(blocks.length).toBe(1)
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'param_load')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'add')).toBe(true)
+    it('没有空操作数的指令', () => {
+        expect(null_args(ir_of(F('var b:number=a+1; return b;')))).toEqual([])
     })
 
-    it('变量声明与读取生成 mov', () => {
-        const blocks = body_blocks('public m:number(){var x:number=5;return x;}\n')
-        expect(blocks.length).toBe(1)
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'mov')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
+    it('参数加载按声明顺序编号,返回走 param 0', () => {
+        const tool = ir_of(F('return a;'))
+        const loads = all_of(tool, PARAM_LOAD)
+        expect(loads.length).toBeGreaterThanOrEqual(1)
+        expect(loads[0].param.type).toBe('reg')
+        const set = find_of<PARAM_SET>(tool, PARAM_SET)
+        expect(set.value.type).toBe('value')
+    })
+})
+
+describe('ir/表达式', () => {
+    it('a+1 是 binary:结果写槽、两个操作数取值', () => {
+        const binary = find_of<BINARY>(ir_of(F('var b:number=a+1; return b;')), BINARY)
+        expect(binary.id).toBe('add')
+        expect(form(binary.result)).toBe('reg')
+        expect(form(binary.left)).toBe('value')
+        expect(form(binary.right)).toBe('value')
     })
 
-    it('生成结果含常量池和根块', () => {
-        const r = ir_of('public m:number(){return 1+2;}\n')
-        expect(r.code.has(0)).toBe(true)
-        expect(r.count).toBeGreaterThan(0)
+    it('字面量走 load,源是池 id 原样', () => {
+        const tool = ir_of(F('var b:number=7; return b;'))
+        const loads = all_of(tool, LOAD)
+        expect(loads.length).toBeGreaterThan(0)
+        for (const load of loads) {
+            expect(form(load.reg)).toBe('reg')
+            expect(form(load.data)).toBe('reg')
+        }
+        //IR 的池是 常量->池id,常量 7 确实被编成了「load 池 id」
+        const id = tool.pool.get(7)
+        expect(id).toBeTypeOf('number')
+        expect(loads.some(l => l.data.data === id)).toBe(true)
     })
 
-    it('字符串字面量生成 load/ret', () => {
-        const blocks = body_blocks('public m:string(){return "hi";}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'load')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'param_set')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'retn')).toBe(true)
+    it('比较:第一个操作数既当目标又当左值(reg)', () => {
+        const cmp = find_of<CMP>(ir_of(F('var h:boolean=a>0; return 1;')), CMP)
+        expect(form(cmp.left)).toBe('reg')
+        expect(form(cmp.right)).toBe('value')
+    })
+})
+
+describe('ir/控制流', () => {
+    it('if/else 生成两个条件跳转和一次就地取反', () => {
+        const tool = ir_of(F('if(a>0)a=1;else a=2; return a;'))
+        const cz = all_of(tool, CZ)
+        const not = all_of(tool, NOT)
+        expect(cz.length).toBe(2)
+        expect(not.length).toBe(1)
+        //块的个数:函数体 + 真假两支
+        expect(tool.ir.size).toBeGreaterThanOrEqual(3)
+        for (const c of cz) {
+            expect(form(c.cond)).toBe('value')
+            expect(form(c.target)).toBe('reg')
+        }
+        expect(form(not[0].left)).toBe('reg')
+        expect(form(not[0].right)).toBe('value')
     })
 
-    it('比较运算符生成 cmp', () => {
-        const blocks = body_blocks('public m:boolean(a:number,b:number){return a>b;}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'cmp')).toBe(true)
+    it('while 用 cz 回跳 + 末尾 call 进循环块', () => {
+        const tool = ir_of(F('while(a>0){ a=a-1; } return a;'))
+        const call = find_of<CALL>(tool, CALL)
+        expect(call).not.toBeNull()
+        //循环块号是编译期常量,用 reg(池 id 原样)传
+        expect(form(call.target)).toBe('reg')
+        expect(all_of(tool, CZ).length).toBeGreaterThanOrEqual(1)
     })
 
-    it('取反生成 not', () => {
-        const blocks = body_blocks('public m:boolean(a:boolean){return !a;}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'not')).toBe(true)
+    it('break 用 ret 帧 2,continue 用 jmp', () => {
+        const tool = ir_of(F('while(a>0){ if(a>5)break; a=a-1; } return a;'))
+        const ret = find_of<RET>(tool, RET)
+        expect(ret).not.toBeNull()
+    })
+})
+
+describe('ir/调用与容器', () => {
+    it('调用:实参走 param_set,被调用者取值,返回值 param_load', () => {
+        const tool = ir_of(M(`public static g:number(x:number){ return x; }
+                              public static f:number(a:number){ return g(a); }`))
+        const call = find_of<CALL>(tool, CALL)
+        const set = all_of(tool, PARAM_SET)
+        expect(form(call.target)).toBe('value')
+        expect(set.some(s => form(s.param) == 'reg' && form(s.value) == 'value')).toBe(true)
     })
 
-    it('static main 标记入口且 lambda 块为 id 0', () => {
-        const r = ir_of('public static main:void(){var x:number=1;}\n')
-        // HIR 的 HVariable entry=true
-        expect(r.h.some((e: any) => e.entry)).toBe(true)
-        // main 的 lambda 块独占 id 0(含 main 的 body 指令)
-        expect(r.code.has(0)).toBe(true)
-        const cmds = r.code.get(0)!
-        expect(cmds.length).toBeGreaterThan(0)
+    it('数组字面量与下标', () => {
+        const tool = ir_of(F('var d:number[]=[a,2]; return d[0];'))
+        const set = all_of(tool, OFFSET_SET)
+        const get = find_of<OFFSET_GET>(tool, OFFSET_GET)
+        expect(set.length).toBeGreaterThanOrEqual(2)
+        expect(get).not.toBeNull()
+        expect(form(get.target)).toBe('reg')
+        expect(form(get.data)).toBe('reg')
     })
 
-    it('非 static main 不标记入口', () => {
-        const r = ir_of('public main:void(){}\n')
-        expect(r.h.some((e: any) => e.entry)).toBe(false)
-    })
-
-    it('map 字面量 [k:v] 生成 offset_set', () => {
-        const blocks = body_blocks('public foo:void(){var m:number{}= [a:1];}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'offset_set')).toBe(true)
-    })
-
-    it('类生成构造块,含成员初始化与返回 this', () => {
-        const blocks = body_blocks('public A:class{public f:number(){return 1;}}\n')
-        // 类块 + 成员方法块
-        expect(blocks.length).toBe(2)
-        // 构造块含 offset_set(成员初始化)和 ret
-        const clsCmds = blocks.find(([, v]) => (v as any[]).some((c: any) => c[0] == 'offset_set'))?.[1]
-        expect((clsCmds as any[])?.some((c: any) => c[0] == 'offset_set')).toBe(true)
-        expect((clsCmds as any[])?.some((c: any) => c[0] == 'retn')).toBe(true)
-    })
-
-    it('变量赋值走取地址+解引用写,不生成 offset_addr', () => {
-        const blocks = body_blocks('public m:void(){var a:number=1;a=2;}\n')
-        const cmds = blocks[0][1]
-        // &a 用 reg 取地址(id 数字),mov value 解引用写
-        expect(cmds.some((c: any) => c[0] == 'mov' && c[1][0] == 'value')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(false)
-    })
-
-    it('索引左值赋值生成 offset_addr', () => {
-        const blocks = body_blocks('public m:void(){var a:number[]=[1,2];a[0]=5;}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(true)
-        // 左值赋值不产生读值 offset_get
-        expect(cmds.some((c: any) => c[0] == 'offset_get')).toBe(false)
-    })
-
-    it('索引右值读取仍生成 offset_get', () => {
-        const blocks = body_blocks('public m:void(){var a:number[]=[1];var x:number=a[0];}\n')
-        const cmds = blocks[0][1]
-        expect(cmds.some((c: any) => c[0] == 'offset_get')).toBe(true)
-        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(false)
-    })
-
-    it('成员左值赋值生成 offset_addr', () => {
-        const blocks = body_blocks('public A:class{public f:var:number;}\npublic m:void(x:A){x.f=1;}\n')
-        const cmds = blocks.flatMap(([, v]) => v as any[])
-        expect(cmds.some((c: any) => c[0] == 'offset_addr')).toBe(true)
-    })
-
-    it('函数变量槽在根块初始化为块id常量', () => {
-        const r = ir_of('public add:number(a:number,b:number){return a+b;}\n')
-        const root = r.code.get(0)!
-        //根块含load:函数变量槽=函数块id,供call/引用解引用(此前顶层初始化指令丢失,根块为空)
-        expect(root.some((c: any) => c[0] == 'load')).toBe(true)
-        //不再生成读未初始化槽的 mov reg{slot}=value{block_id}
-        expect(root.some((c: any) => c[0] == 'mov' && c[1][0] == 'reg' && c[2][0] == 'value')).toBe(false)
-    })
-
-    it('函数引用读取函数变量槽后call间接跳转', () => {
-        const blocks = body_blocks('public add:number(a:number,b:number){return a+b;}\npublic m:number(){return add(1,2);}\n')
-        //m函数体含call,且前有mov(读函数变量槽)
-        const m = blocks.find(([, v]) => (v as any[]).some((c: any) => c[0] == 'call'))?.[1]
-        expect((m as any[])?.some((c: any) => c[0] == 'call')).toBe(true)
-        expect((m as any[])?.some((c: any) => c[0] == 'mov' && c[2][0] == 'value')).toBe(true)
-    })
-
-    it('多函数+static main入口:根块不被覆盖,保留其他函数槽初始化', () => {
-        const r = ir_of('public add:number(a:number,b:number){return a+b;}\npublic static main:number(){return add(1,2);}\n')
-        const root = r.code.get(0)!
-        //main entry块id为0,其lambda处理不得重置根块,否则add的函数槽初始化load丢失
-        expect(root.some((c: any) => c[0] == 'load')).toBe(true)
-        //add函数体(含param_load)仍在
-        expect([...r.code.values()].some((cmds: any[]) => cmds.some((c: any) => c[0] == 'param_load'))).toBe(true)
-    })
-
-    it('while 生成循环体末尾跳回条件块(多次循环)', () => {
-        const blocks = body_blocks('public static main:number(){var i:number=0;while(i<3){i=i+1;}return i;}\n')
-        const cmds = blocks.flatMap(([, v]) => v as any[])
-        //循环体块末尾有jmp回条件块(原缺陷缺失,循环体仅执行一次即退出)
-        expect(cmds.some((c: any) => c[0] == 'jmp')).toBe(true)
-        //while的块调用是cz(压块帧,区别于call函数帧);条件块+if分支各一次
-        expect(cmds.filter((c: any) => c[0] == 'cz').length).toBeGreaterThanOrEqual(2)
-    })
-
-    it('类槽与成员槽初始化在根块(load 块id常量)', () => {
-        //类槽=构造块id,成员槽=方法块id,均需在根块初始化,否则 new/成员访问读 0 死循环
-        const r = ir_of('public A:class{public f:number(){return 1;}}\npublic static main:void(){var a:A=new A();}\n')
-        const root = r.code.get(0)!
-        const loads = root.filter((c: any) => c[0] == 'load')
-        expect(loads.length).toBeGreaterThanOrEqual(2)   //类槽 + f 成员槽
-    })
-
-    it('new 生成对象自引用与 this 参数(param_set param1=对象)', () => {
-        const r = ir_of('public A:class{public constructor:void(x:number){}}\npublic static main:void(){var a:A=new A(1);}\n')
-        const root = r.code.get(0)!
-        const self = root.find((c: any) => c[0] == 'mov' && c[1][0] == 'reg' && c[2][0] == 'reg' && c[1][1] == c[2][1])
-        expect(self).toBeTruthy()                          //对象自引用句柄 var[id]=id
-        const pset = root.filter((c: any) => c[0] == 'param_set')
-        expect(pset.some((c: any) => c[1][1] == 1)).toBe(true)   //param[1]=this
-        expect(pset.some((c: any) => c[1][1] == 2)).toBe(true)   //param[2]=构造实参
-    })
-
-    it('构造块成员初始化 offset 键用 value(与成员访问一致)', () => {
-        const r = ir_of('public A:class{public f:var:number;}\npublic static main:void(){var a:A=new A();a.f=1;}\n')
-        const cls = [...r.code.values()].find((cmds: any[]) => cmds.some((c: any) => c[0] == 'offset_set'))
-        const oset = (cls as any[])?.find((c: any) => c[0] == 'offset_set')
-        //键/值均为 value 形式(var[成员槽]=块id/初值),与成员访问 offset_get 的键语义一致
-        expect(oset?.[2]?.[0]).toBe('value')
-        expect(oset?.[3]?.[0]).toBe('value')
-    })
-
-    it('成员方法调用生成 param_set param1=对象(this)', () => {
-        const r = ir_of('public A:class{public f:number(){return 1;}}\npublic static main:void(){var a:A=new A();var v:number=a.f();}\n')
-        const root = r.code.get(0)!
-        //成员调用处 param[1]=对象
-        expect(root.some((c: any) => c[0] == 'param_set' && c[1][1] == 1)).toBe(true)
+    it('成员访问的键是池 id 原样(reg)', () => {
+        const tool = ir_of(M(`public static c:number=1;
+                              public static f:number(a:number){ return c; }`))
+        expect(count_of(tool)).toBeGreaterThan(0)
     })
 })

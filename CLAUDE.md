@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 > 你作为一个测试员进行参与,生成测试,也会生成部分代码
-
+> 禁止停止,任何问题不可以通过输出->下一步要干什么什么来停止,通过对话框工具来询问,而不是停止
 ## 项目画像
 - 项目名:slang
 - 定位:一个跨平台编程语言
@@ -42,31 +42,10 @@ slang->
                     optimize.ts
                  index.ts:库入口
              optimize->优化器
-                     constant.ts:常量折叠,常量传播
-                     cp.ts:赋值传播
-                     peephole.ts:窥孔优化
-                     dce.ts:DCE优化
-                     cfg.ts:块优化
-                     kill.ts:死变量消除
-                     index.ts:优化以及bin生成
              check->语法检查
-                  censor.ts:检查
-                  symbol.ts:符号表构建
-                  type.ts:类型标注
-                  index.ts:入口
-             cli->脚手架入口
-                command.ts:命令入口
-                cli.ts:入口
              desugar->语法糖转换
-                  command.ts:命令语法糖转换
-                  expr.ts:表达式语法糖转换
-                  block.ts:块语法糖转换
-                  index.ts:入口
-             ir->vm字节码生成
-                 command.ts:命令字节码生成
-                 expr.ts:表达式字节码生成
-                 block.ts:块字节码生成
-                 index.ts:入口
+             ir->ir生成
+             generate.ts:生成字节码
              parser->解析器:tokens[]->ast
                    cst-> tokens[]->ast_data
                       command.ts:命令解析
@@ -90,42 +69,12 @@ slang->
          main.h:封装接口
          main.cpp:主函数入口
          test->同compiler
-         model.h:模型
-         utils.h:标准跨平台操作库
-         init.cpp:读取sbin文件初始化
-         gui.h,gui.cpp:GUI实现
-         runtime->虚拟机运行时
-                runtime.h:虚拟机运行时定义
-                io.cpp:IO命令处理
-                math.cpp:数学命令处理
-                basic.cpp:基础命令处理
-     package->包管理器服务器
-              server.ts:入口
-              model.ts:模型类
-              api.ts:接口API
-              impl->实现
-                    data.ts:存储信息处理
-                    verify.ts:安全校验
-                    net.ts:上传下载等处理
-                    user.ts:用户处理
-                    index.ts:入口
-     std->标准库
-          file.sl:文件操作
-          math.sl:数学操作
-          system.sl:系统操作
-          io.sl:IO操作
-          index.sl:入口
-          type.sl:类型操作
-     cli->工具链
-          command.ts:命令实现
-          entry.ts:入口文件
-          model.ts:模型定义
-          utils->工具
-                 ajax.ts:ajax实现
-                 net.ts:与SPM交互实现
-                 utils.ts:基础工具实现
-                 index.ts:入口
-            
+         lib->虚拟机运行时
+                runtime.h:虚拟机运行时
+                utils.cpp:IO命令处理
+                instruction.cpp:命令处理
+                decode.cpp:解码
+                data.cpp:数据结构
 ~~~
 ## 编码规范
 - 变量命名约定:变量采用下划线命名法,如identifier_type_parser

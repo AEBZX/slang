@@ -7,7 +7,7 @@ import { tmpdir } from 'os'
 import * as path from 'path'
 import * as process from 'process'
 import type { Server } from 'http'
-import {Result} from "../model.ts";
+import {Result} from "../src/model.ts";
 
 let server: Server
 let base = ''
@@ -43,7 +43,7 @@ beforeAll(async () => {
     writeFileSync(path.join(dir, 'data/module.json'), '[]')
     writeFileSync(path.join(dir, 'data/vm.json'), '[]')
     writeFileSync(path.join(dir, 'data/compiler.json'), '[]')
-    const mod = await import('../server.ts')
+    const mod = await import('../src/server.ts')
     server = mod.app.listen(0, '127.0.0.1')
     await new Promise<void>(resolve => server.once('listening', resolve))
     const addr = server.address() as { port: number }

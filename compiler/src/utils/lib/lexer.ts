@@ -1,0 +1,247 @@
+﻿import {
+    identifier_continue_white_list,
+    identifier_start_white_list,
+    number_radix,
+    pre_token,
+    radix_map,
+    string_start_end,
+    token,
+    TokenParam,
+    TokenType
+} from '../data'
+import PeepholeTool from './tool'
+
+class CharStream{
+    public index:number
+    public code:string[]
+    public line:number
+    constructor(code:string){
+        this.index = 0
+        this.line = 1
+        this.code = code.split('')
+    }
+    public next():string{
+        return this.code[this.index++]
+    }
+    public peek():string{
+        return this.code[this.index+1]
+    }
+    public now():string{
+        return this.code[this.index]
+    }
+}
+//指数部分:1e3 / 1.5e-2 / 2E+5。后面不是数字就不吃 e,避免和标识符混淆
+let exp_match:(stream:CharStream,ret:string)=>string=(stream,ret)=>{
+    //前面没有数字就没有指数可言
+    if(ret=='')return ret
+    const c=stream.now()
+    if(c!='e'&&c!='E')return ret
+    const next=stream.code[stream.index+1]
+    const sign=next=='+'||next=='-'
+    const first=sign?stream.code[stream.index+2]:next
+    if(!(first>='0'&&first<='9'))return ret
+    ret+=stream.next()
+    if(sign)ret+=stream.next()
+    while(stream.now()>='0'&&stream.now()<='9')
+        ret+=stream.next()
+    return ret
+}
+let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
+    //数字不带符号:负数由前缀 - 表达式表达,词法级 '+'/'-' 一律是运算符
+    if(stream.now()=='0'){
+        stream.next()
+        if(number_radix.includes(stream.now())){
+            let radix=stream.next()
+            let ret=''
+            //本来就是0
+            if(!(radix_map[radix].includes(stream.now()))){
+                stream.index--
+                return [true,'0',TokenType.Number]
+            }
+            while(radix_map[radix].includes(stream.now()))
+                ret+=stream.next()
+            return [true,'0'+radix+ret,TokenType.Number]
+        }
+        //0.5:'.'后是数字则作小数
+        if(stream.now()=='.'&&stream.code[stream.index+1]>='0'&&stream.code[stream.index+1]<='9'){
+            let ret='0'
+            ret+=stream.next()
+            while(stream.now()>='0'&&stream.now()<='9'){
+                ret+=stream.next()
+            }
+            return [true,exp_match(stream,ret),TokenType.Number]
+        }
+        return [true,'0',TokenType.Number]
+    }
+    let ret=''
+    while(stream.now()>='0'&&stream.now()<='9'){
+        ret+=stream.next()
+    }
+    //小数:'.'后必须是数字,避免与成员访问a.b混淆
+    if(stream.now()=='.'&&stream.code[stream.index+1]>='0'&&stream.code[stream.index+1]<='9'){
+        ret+=stream.next()
+        while(stream.now()>='0'&&stream.now()<='9'){
+            ret+=stream.next()
+        }
+    }
+    //数字本身没匹配上就什么都别消耗:否则 exp_match 会把 e+1 这种吃掉
+    if(ret=='')return [false,'',TokenType.Number]
+    return [true,exp_match(stream,ret),TokenType.Number]
+}
+let string_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
+    let start=stream.now()
+    if(!string_start_end.includes(start))
+        return [false,'',TokenType.String]
+    let ret=''
+    stream.next()
+    while(true){
+        if(stream.now()==undefined)
+            return [true,ret,TokenType.String]
+        if(stream.now()==start){
+            stream.next()
+            break
+        }
+        if(stream.now()=='\\'){
+            stream.next()
+            let esc=stream.now()
+            if(esc==undefined)return [true,ret,TokenType.String]
+            //转义序列要连反斜杠一起交给 JSON 解析,否则 \n 只会得到字母 n;
+            //JSON 不认识的转义(如 \q)保留原字符
+            try{
+                ret+=JSON.parse(`"\\${esc}"`)
+            }catch (e){
+                ret+=esc
+            }
+            stream.next()
+            continue
+        }
+        ret+=stream.next()
+    }
+    return [true,ret,TokenType.String]
+}
+let identifier_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
+    let ret=''
+    if(!identifier_start_white_list.includes(stream.now()))
+        return [false,'',TokenType.Identifier]
+    ret+=stream.next()
+    while(identifier_continue_white_list.includes(stream.now()))
+        ret+=stream.next()
+    return [ret != '',ret,TokenType.Identifier]
+}
+let comment_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
+    if(stream.now()=='/'){
+        stream.next()
+        if(stream.now()=='/'){
+            let start=stream.index-1
+            while(stream.now()!=undefined && stream.now()!='\n'){
+                stream.next()
+            }
+            let value=stream.code.slice(start,stream.index).join('')
+            return [true,value,TokenType.Comment]
+        }
+        if(stream.now()=='*'){
+            let start=stream.index-1
+            stream.next()
+            while(stream.now()!=undefined && !(stream.now()=='*' && stream.peek()=='/')){
+                if(stream.now()=='\n')
+                    stream.line++
+                stream.next()
+            }
+            if(stream.now()!=undefined){
+                stream.next()
+                stream.next()
+            }
+            let value=stream.code.slice(start,stream.index).join('')
+            return [true,value,TokenType.Comment]
+        }
+        //非注释:回退已消费的 '/',交还其他 token 匹配(除法运算符)
+        //此前不回退 → '4/2' 的 '/' 被吞 → token 流缺 Divide → 整个文件解析失败
+        //(除法因此从未可用;% * + - 不走注释检查不受影响)
+        stream.index--
+    }
+    return [false,'',TokenType.Comment]
+}
+function match(input:TokenParam|string):(stream:CharStream)=>pre_token{
+    if(typeof input != 'string'){
+        if(input == TokenParam.Number)
+            return number_match
+        if(input == TokenParam.String)
+            return string_match
+        if(input == TokenParam.Identifier)
+            return identifier_match
+    }else{
+        return (stream:CharStream)=>{
+            let index=stream.index
+            for(let i=0;i<input.length;i++){
+                if(stream.now()!=input[i]) {
+                    stream.index=index
+                    return [false, '',TokenType.Keyword]
+                }
+                stream.next()
+            }
+            //词类关键字(以字母/下划线结尾)要求词边界,避免 'for' 吃掉 'foreach' 的前缀
+            let last=input[input.length-1]
+            if(/[a-zA-Z_]/.test(last)&&identifier_continue_white_list.includes(stream.now())){
+                stream.index=index
+                return [false, '',TokenType.Keyword]
+            }
+            return [true,input,TokenType.Keyword]
+        }
+    }
+}
+export function lexer(code:string,tokens:(TokenParam|string)[]):token[]{
+    let ret:token[]=[]
+    code=code.replace(/\r\n/g,'\n')
+    let stream=new CharStream(code)
+    let list:((stream:CharStream)=>pre_token)[]=[]
+    tokens.forEach((item)=>{
+            list.push(match(item))
+        })
+    let _match=()=>{
+        let result:pre_token=comment_match(stream)
+        if(result[0]==true)
+            return result
+        for(let i of list){
+            result=i(stream)
+            if(result[0]==true)
+                return result
+        }
+        return [false,'',TokenType.Identifier]
+    }
+    while(stream.now()!=undefined){
+        if(stream.now()=='\n') {
+            stream.next()
+            stream.line++
+            continue
+        }
+        if(stream.now()==' ') {
+            stream.next()
+            continue
+        }
+        //token 的起点列号:从当前位置往回找本行开头
+        const start=stream.index
+        let [flag,value,type]=_match()
+        if(flag){
+            const line_start=code.lastIndexOf('\n',start-1)+1
+            const column=start-line_start+1
+            ret.push({type:<TokenType>type,value:<string>value,
+                line:code.split('\n')[stream.line-1]+' at line:'+stream.line+':'+column})
+        }
+        else
+            stream.next()
+    }
+    return ret
+}
+export default class Lexer extends PeepholeTool{
+    keyword:(TokenParam|string)[]=[]
+    constructor(){
+        super('lexer')
+    }
+    use(data:(TokenParam|string)[]){
+        this.keyword.push(...data)
+        return this
+    }
+    run(code:string[]){
+        return code.map((item) => lexer(item, this.keyword))
+    }
+}
