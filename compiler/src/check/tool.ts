@@ -1,4 +1,4 @@
-﻿import {
+import {
     ClassType,
     GenericType,
     AddExpression,
@@ -187,6 +187,9 @@ export class Scope extends PeepholeScope{
         //记在 global 上的话调用方读 scope.error 永远是空的
         this.root().error.push(msg)
     }
+}
+export const set_first=(scope:Scope,name:string,ast:ASTTree)=>{
+    if(scope.global.get(name)==null)scope.global.set(name,ast)
 }
 function m_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
     const exist=scope.global.get(name)

@@ -65,7 +65,6 @@ export function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:n
     const first=data&&data.children?data.children.get(key) as ast_data:null
     if(first==null)
         return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
-    //ImplementsName / ModuleName 都还套了一层,真正取到的是它们包着的类型节点
     if(first.type=='ImplementsName'||first.type=='ModuleName')
         return {is:true,data:tree(to_ast_data(first,0))}
     if(first.type=='Type'||first.type=='BasicType')
