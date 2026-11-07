@@ -1,33 +1,37 @@
-﻿import {TokenType,operations} from '../../utils'
+﻿import {operations, TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
-const GenericList=$.s('GenericList',$.d('<'),
-    $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),',')
-    ,$.g('>'))
+const GenericList=$.s('GenericList',
+    $.d('<'),
+    $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),','),
+    $.d('>'))
 const ModuleName=$.s('ModuleName',$.r('Type'))
 const ImplementsName=$.s('ImplementsName',$.r('BasicType'))
-const link=$.s('link',$.d('link'),$.r('ModuleName'),$.d('as'),TokenType.Identifier,$.d(';'))
+const link=$.s('link',
+    $.d('link'),
+    $.r('ModuleName'),$.d('as'),TokenType.Identifier,
+    $.d(';'))
 const Modifier=$.l('Modifiers',$.o('Modifier',
     'public','private','unstatic','static','async','sync'
 ))
 const _module=$.s('Module',$.d('module'),$.t('{',$.r('blocks'),'}'))
-const _class=$.s('Class',$.d('class'),$.c($.r('GenericList'))
-    ,$.c($.d('implements'),$.r('ImplementsName')),
+const _class=$.s('Class',$.d('class'),$.c($.r('GenericList')),
+    $.c($.d('implements'),$.r('ImplementsName')),
     $.t('{',$.r('blocks'),'}'))
-const _interface=$.s('Interface',$.d('interface'),$.c($.r('GenericList'))
-    ,$.c($.d('implements'),$.r('ImplementsName')),
+const _interface=$.s('Interface',
+    $.d('interface'),$.c($.r('GenericList')),
+    $.c($.d('implements'),$.r('ImplementsName')),
     $.t('{',$.r('blocks'),'}'))
-const _enum=$.s('Enum',$.d('enum'),$.d('{'),$.w('EnumList',TokenType.Identifier,','),'}')
+const _enum=$.s('Enum',$.d('enum'),
+    $.d('{'),
+    $.w('EnumList',TokenType.Identifier,','),
+    $.d('}'))
 const _function=$.s('Function',$.c($.r('GenericList')),
     $.r('Type'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.o('Implement',$.r('Commands'),';'))
 const _operation=$.s('Operation',$.d('operation'),
-    $.o('symbol',
-        '+','-','*','/','%','&','|','&&','||','^','>>','<<','!','>','<','>=','<=','!=','==','=','~',':','new',
-        '++','--',
-        $.s('BIDX',$.d('['),$.d(']')),
-        $.s('CALL',$.d('('),$.d(')'))
-    ),$.r('LambdaExpression'))
+    $.o('symbol',...operations),
+    $.r('LambdaExpression'))
 const _cast=$.s('Cast',$.d('cast'),$.r('Type'),$.r('LambdaExpression'))
 const _var=$.s('Variable',$.r('Type'),$.c($.d('='),$.r('Expression')),';')
 const block=$.s('Block',$.r('Modifiers'),TokenType.Identifier,':',
@@ -35,8 +39,12 @@ const block=$.s('Block',$.r('Modifiers'),TokenType.Identifier,':',
         ,$.r('Enum'),$.r('Function'),$.r('Variable')))
 const blocks=$.l('blocks',$.r('Block'))
 const value=$.s('Value',$.d('value'),$.r('BasicType'),$.t('{',$.l('vblocks',$.o('ValueData',$.r('Operation'),$.r('Cast'))),'}'))
-const file=$.s('File',$.l('Links',$.r('link')),$.l('file',$.o('FileData',
-    $.r('Block'),$.r('Value'))))
+const file=$.s('File',
+    $.l('Links',$.r('link')),
+    $.l('file',
+        $.o('FileData',$.r('Block'),$.r('Value'))
+    )
+)
 export default [
     ModuleName,
     ImplementsName,

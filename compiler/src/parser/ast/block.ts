@@ -15,8 +15,7 @@ import {parseGeneric, parseImplement, to_ast_data, to_string, tree_ast} from "./
 const G_Link:slang_ast_generate=(data,tree)=>{
     let local:string[]=[]
     let name=data.children.get(0) as ast_data
-    //须递归收集而非只取直接 child
-    let collect=(n:ast_data)=>{
+    const collect=(n:ast_data)=>{
         for(const v of n.children.values())
             if(typeof v=='string')local.push(v)
             else if(typeof v=='object')collect(v)
@@ -58,13 +57,12 @@ const G_Enum:slang_ast_generate=(data,tree)=>{
     return new Enum(null,null,children)
 }
 const G_Function:slang_ast_generate=(data,tree)=>{
-    let params=new KeyMap<string,Type>()
+    let params=new Map<string,Type>()
     const generic=parseGeneric(data,tree)
     const off=generic.is?1:0
     const ParamIdentifier=to_ast_data(data,1+off)
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
-            //ParamData 的槽位:0=名称,1=':' 字面量占槽,2=类型
             params.set(to_string(v,0),
                        tree_ast(v,2,tree))
     const _implement=typeof data.children.get(2+off)=='object'
@@ -72,7 +70,6 @@ const G_Function:slang_ast_generate=(data,tree)=>{
                        _implement?tree_ast(data,2+off,tree):null)
 }
 const G_Variable:slang_ast_generate=(data,tree)=>{
-    //child 1:有初值时是表达式节点,无初值时是 CST 里裸字符串 ';' 的节点,不能当表达式转换
     const init=to_ast_data(data,1)
     return new Variable(null,null,tree_ast(data,0,tree),typeof init=='object'?tree_ast(init,0,tree):null)
 }

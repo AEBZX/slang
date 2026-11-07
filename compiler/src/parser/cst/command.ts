@@ -23,13 +23,14 @@ const Assign=$.o('Assign',
     $.r('AndAssign'),
     $.r('OrAssign'),
     $.r('XorAssign'),
-$.r('LogicAndAssign'),
-$.r('LogicOrAssign'),
+    $.r('LogicAndAssign'),
+    $.r('LogicOrAssign'),
     $.r('ShlAssign'),
     $.r('ShrAssign'),
 )
-const VarDecl=$.s('VarDecl',$.d('var'),$.r('Identifier'),$.d(':'),$.r('Type')
-    ,$.c($.d('='),$.r('Expression')),$.d(';'))
+const VarDecl=$.s('VarDecl',
+    $.d('var'),$.r('Identifier'),$.d(':'),$.r('Type'),
+    $.c($.d('='),$.r('Expression')),$.d(';'))
 const ExprCommand=$.s('ExprCommand',$.r('Expression'),$.d(';'))
 const Await=$.s('Await',$.d('await'),$.r('Commands'))
 const Return=$.s('Return',$.d('return'),$.c($.r('Expression')),$.d(';'))
@@ -50,26 +51,44 @@ const BasicCommand=$.o('BasicCommand',
     $.r('Throw'),
     $.r('VM'),
     $.r('Assign')
-    )
+)
 const Condition=$.s('Condition',$.t('(',$.r('Expression'),')'))
-const IfStatement=$.s('IfStatement',$.d('if'),$.r('Condition'),$.r('Commands'),
+const IfStatement=$.s('IfStatement',
+    $.d('if'),$.r('Condition'),
+    $.r('Commands'),
     $.c($.d('else'),$.r('Commands')))
 const WhileStatement=$.s('WhileStatement',$.d('while'),$.r('Condition'),$.r('Commands'))
-const DoWhileStatement=$.s('DoWhileStatement',$.d('do'),$.r('Commands'),$.d('while'),$.r('Condition'),$.d(';'))
-const ForStatement=$.s('ForStatement',$.d('for'),$.d('('),
-    $.l('Init',$.r('VarDecl')),$.c($.r('Expression')),$.d(';'),$.l('Step',$.r('BasicCommand')),
-    $.d(')'),$.r('Commands'))
-const ForeachStatement=$.s('ForeachStatement',$.d('foreach'),$.d('('),
-    $.r('Identifier'),$.d(':'),$.r('Expression'),$.d(')'),$.r('Commands')
+const DoWhileStatement=$.s('DoWhileStatement',
+    $.d('do'),
+    $.r('Commands'),
+    $.d('while'),
+    $.r('Condition'),
+    $.d(';'))
+const ForStatement=$.s('ForStatement',
+    $.d('for'),
+    $.d('('),
+    $.l('Init',$.r('VarDecl')),
+    $.c($.r('Expression')),
+    $.d(';'),
+    $.l('Step',$.r('BasicCommand')),
+    $.d(')'),
+    $.r('Commands'))
+const ForeachStatement=$.s('ForeachStatement',
+    $.d('foreach'),
+    $.d('('),
+    $.r('Identifier'),$.d(':'),$.r('Expression'),
+    $.d(')'),
+    $.r('Commands')
 )
-const SwitchStatement=$.s('SwitchStatement',$.d('switch'),$.r('Condition'),$.d('{'),
+const SwitchStatement=$.s('SwitchStatement',
+    $.d('switch'),$.r('Condition'),
+    $.d('{'),
     $.l('CaseList',$.s('Case',
         $.d('case'),$.r('Expression'),$.d('=>'),$.r('Commands')
     )),
     $.c($.d('default'),$.d('=>'),$.r('Commands')),
     $.d('}')
 )
-//catch 可以省(只要写了 finally)
 const CatchData=$.s('CatchData',$.d('catch'),$.d('('),TokenType.Identifier,$.d(':'),$.r('Type'),$.d(')'),$.r('Commands'))
 const FinallyData=$.s('FinallyData',$.d('finally'),$.r('Commands'))
 const TryStatement=$.s('TryStatement',$.d('try'),$.r('Commands'),

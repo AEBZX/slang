@@ -1,21 +1,46 @@
 ﻿import {
     AddExpression,
+    AddressPrefix,
+    AndExpression,
     ArgumentsPostfix,
     ArrayExpression,
     ast_data,
-    slang_ast_generate, BitNotPrefix, AndExpression, OrExpression, XorExpression,
-    BooleanLiteral, DecrementPostfix, DecrementPrefix, DivExpression, EqualExpression, Expression,
-    GreaterEqualExpression,
-    IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, InequalExpression, KeyMap, LessEqualExpression,
-    LogicAndExpression, LogicOrExpression, MapExpression, MemberPostfix,
-    AddressPrefix, MinusPrefix, ModExpression, MulExpression, NewPrefix, NotPrefix,
+    BitNotPrefix,
+    BooleanLiteral,
+    Command,
+    DecrementPostfix,
+    DecrementPrefix,
+    EqualExpression,
+    Expression,
+    IdentifierExpr,
+    IncrementPostfix,
+    IncrementPrefix,
+    IndexPostfix,
+    KeyMap,
+    LambdaExpression,
+    LogicAndExpression,
+    LogicOrExpression,
+    MapExpression,
+    MemberPostfix,
+    MinusPrefix,
+    MulExpression,
+    NewPrefix,
+    NotPrefix,
     NullLiteral,
-    NumberLiteral, PostfixExpression, PrefixExpression, ReferencePrefix,
-    ShlExpression, ShrExpression,
-    StringLiteral, SubExpression, TernaryExpression, Type, GreaterExpression, LambdaExpression, LessExpression,
-    TypePrefix, Command
+    NumberLiteral,
+    OrExpression,
+    PostfixExpression,
+    PrefixExpression,
+    ReferencePrefix,
+    slang_ast_generate,
+    StringLiteral,
+    TernaryExpression,
+    Type,
+    TypePrefix,
+    XorExpression
 } from '../../utils'
-import {BinaryMap, to_ast_data, to_string, tree_ast,parseGeneric} from './tool'
+import {BinaryMap, parseGeneric, to_ast_data, to_string, tree_ast} from './tool'
+
 const G_NumberLiteral:slang_ast_generate=(data,tree)=>{
     return new NumberLiteral(to_string(data,0))
 }
@@ -47,7 +72,7 @@ const G_MapExpression:slang_ast_generate=(data,tree)=>{
 const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
     const d=parseGeneric(data,tree)
     const ParamIdentifier=to_ast_data(data,d.is?1:0)
-    let param=new KeyMap<string,Type>
+    let param=new Map<string,Type>
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
             param.set(to_string(v,0),
@@ -78,9 +103,7 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
                 let param:Expression[]=[]
                 let type:Type[]=[]
                 let args=0
-                const first=to_ast_data(v,0)
-                //泛型实参外面还套着一层没有名字的 choose 节点,往下找 GenericData
-                let generic:ast_data=first
+                let generic:ast_data=to_ast_data(v, 0)
                 while(generic!=null&&generic.type!='GenericData'){
                     const kids=Array.from(generic.children.values()).filter(i=>typeof i=='object') as ast_data[]
                     generic=kids.find(i=>i.type=='GenericData')??null
@@ -99,7 +122,6 @@ const G_PostfixExpression:slang_ast_generate=(data,tree)=>{
                 break
             }
         }
-        //这里生成的中间节点不会经过 generate,得自己带上行号:check 报错时要读 ast.line
         if(primary.line==null)primary.line=v.line
     }
     return primary
@@ -138,7 +160,6 @@ const G_PrefixExpression:slang_ast_generate=(data,tree)=>{
                 primary=new NewPrefix(primary)
                 break
         }
-        //同上:前缀节点也要自己带行号
         if(primary.line==null)primary.line=v.line
     }
     return primary

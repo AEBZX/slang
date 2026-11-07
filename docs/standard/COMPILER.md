@@ -54,4 +54,33 @@ ret = pipeline[optimize].run(ret)
 ret = pipeline[generate].run(ret)
 return ret
 ```
-# 
+# 语法
+## 块语法
+
+- 修饰符   
+修饰符由如下定义保证:
+```bnf
+$modifier := ('public'|'private'|'static'|'unstatic'|'async'|'sync')*
+```
+特殊性质:
+1. (public,private),(static|unstatic),(async|sync)互斥,同时出现时UB
+2. 同时出现相同标识符,如public public时UB
+3. private的块只能在当前块内访问
+4. unstatic的块,当且仅当在Class/Interface中
+- 块定义   
+一个块应该如下定义:
+```bnf
+$block := $modifier name:=($class|$interface|$enum|$value|$function|$)
+```
+其中,$_identifier由具体块,如Class,Module定义为准   
+特殊性质:
+1. 同一个作用域内,不得出现多个name一致的块
+
+- Class   
+$class如下定义:
+```bnf
+$class := class<$generic_list> implements $path{
+    ($block)*
+}
+```
+特殊性质
