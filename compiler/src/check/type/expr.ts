@@ -3,7 +3,7 @@ import {
     ArgumentsPostfix, ArrayExpression,
     ArrayType,
     BinaryExpression, BitNotPrefix, Block, BlockType, BooleanLiteral,
-    BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix, Enum, EnumType, IdentifierExpr,
+    BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix, Enum, EnumType, Function, IdentifierExpr,
     IncrementPostfix, IncrementPrefix, IndexPostfix, Interface, LambdaExpression,
     LambdaType, Literal, MapExpression, MapType, MemberPostfix, MinusPrefix, Module, NewPrefix, NotPrefix, NullLiteral,
     NumberLiteral,
@@ -384,6 +384,10 @@ export default new Map<any,slang_check_visitor>([
     [ArgumentsPostfix,Label_ArgumentsPostfix],
     [IndexPostfix,Label_IndexPostfix],
     [MemberPostfix,Label_MemberPostfix],
+    [IncrementPostfix,Label_IncrementOrDecrementPostfixOrPrefix],
+    [DecrementPostfix,Label_IncrementOrDecrementPostfixOrPrefix],
+    [IncrementPrefix,Label_IncrementOrDecrementPostfixOrPrefix],
+    [DecrementPrefix,Label_IncrementOrDecrementPostfixOrPrefix],
     [TernaryExpression,Label_TernaryExpression],
     [BinaryExpression,Label_BinaryExpression]
 ])

@@ -3,7 +3,7 @@ import {
     BIT_NOT,
     CALL,
     CMP, ControlStream, ControlStreamCond,
-    CZ, DELETE, GC, IN, IRArgs,
+    CZ, DELETE, GC, IN, INT, INT_GET, INT_REGISTER, IRArgs,
     IRTree,
     JMP,
     JZ,
@@ -50,7 +50,10 @@ const CommandOffset=new Map<any,number>([
     [GC,32],
     [DELETE,33],
     [PARAM_SET,34],
-    [PARAM_LOAD,35]
+    [PARAM_LOAD,35],
+    [INT_REGISTER,36],
+    [INT,37],
+    [INT_GET,38]
 ])
 const BinaryOffset=new Map<string,number>([
     ['add',0],
@@ -69,8 +72,6 @@ function offest(v1:IRArgs,v2:IRArgs,v3:IRArgs){
     return (v1.type=='value'?4:0)+(v2.type=='value'?2:0)+(v3.type=='value'?1:0)
 }
 function ins_id(data:IRTree,v1:IRArgs,v2:IRArgs,v3:IRArgs){
-    //先按具体类精确匹配:OFFSET_ADDR 继承 OFFSET_GET、OFFSET_STR_* 继承 OFFSET_*,
-    //照 instanceof 的顺序扫会被认成父类的操作码
     let ins_offset:number=null
     for(const [key,value] of CommandOffset)
         if(data.constructor===key)ins_offset=value
@@ -82,7 +83,6 @@ function ins_id(data:IRTree,v1:IRArgs,v2:IRArgs,v3:IRArgs){
     return (ins_offset+type_offset)*8+v_offset
 }
 function fill(data:IRTree,v1:IRArgs=null,v2:IRArgs=null,v3:IRArgs=null){
-    //只有一两个操作数的指令(load/ret/push/pop/gc…)缺的按 reg 0 补,类型也要参与操作码计算
     v1=v1??IRArgs.reg(0)
     v2=v2??IRArgs.reg(0)
     v3=v3??IRArgs.reg(0)
@@ -112,6 +112,9 @@ const G_GC:slang_generate_visitor=(data:GC)=>fill(data)
 const G_DELETE:slang_generate_visitor=(data:DELETE)=>fill(data,data.data)
 const G_PARAM_SET:slang_generate_visitor=(data:PARAM_SET)=>fill(data,data.param,data.value)
 const G_PARAM_LOAD:slang_generate_visitor=(data:PARAM_LOAD)=>fill(data,data.data,data.param)
+const G_INT_REGISTER:slang_generate_visitor=(data:INT_REGISTER)=>fill(data,data.block)
+const G_INT:slang_generate_visitor=(data:INT)=>fill(data,data.data)
+const G_INT_GET:slang_generate_visitor=(data:INT_GET)=>fill(data,data.left)
 export default new Generate().use(new Map<any,slang_generate_visitor>([
     [LOAD,G_LOAD],
     [MOV,G_MOV],
@@ -130,7 +133,6 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
     [POP,G_POP],
     [OFFSET_SET,G_OFFSET_SET],
     [OFFSET_GET,G_OFFSET_GET],
-    //OFFSET_ADDR 与 OFFSET_STR_* 的操作数形状与父类一致,复用同一套
     [OFFSET_ADDR,G_OFFSET_GET],
     [OFFSET_STR_SET,G_OFFSET_SET],
     [OFFSET_STR_GET,G_OFFSET_GET],
@@ -140,7 +142,10 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
     [GC,G_GC],
     [DELETE,G_DELETE],
     [PARAM_SET,G_PARAM_SET],
-    [PARAM_LOAD,G_PARAM_LOAD]
+    [PARAM_LOAD,G_PARAM_LOAD],
+    [INT_REGISTER,G_INT_REGISTER],
+    [INT,G_INT],
+    [INT_GET,G_INT_GET]
 ])).use((tool:OPTTool,call)=>{
     let head:Buffer[]=[]
     head.push(Buffer.from('SLANG','utf-8'),Buffer.from('1.0.0','utf-8'))

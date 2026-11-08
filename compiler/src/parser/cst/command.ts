@@ -41,6 +41,8 @@ const VM=$.s('VM',$.d('vm')
     ,$.d('('),TokenType.String
     ,$.l('VMParam',$.s('VMParamData',$.d(','),$.r('Expression')))
     ,$.d(')'),$.d(';'))
+const Label=$.s('Label',$.r('Identifier'),$.d(':'))
+const Goto=$.s('Goto',$.d('goto'),$.r('Identifier'),$.d(';'))
 const BasicCommand=$.o('BasicCommand',
     $.r('VarDecl'),
     $.r('ExprCommand'),
@@ -50,7 +52,9 @@ const BasicCommand=$.o('BasicCommand',
     $.r('Continue'),
     $.r('Throw'),
     $.r('VM'),
-    $.r('Assign')
+    $.r('Assign'),
+    $.r('Label'),
+    $.r('Goto')
 )
 const Condition=$.s('Condition',$.t('(',$.r('Expression'),')'))
 const IfStatement=$.s('IfStatement',
@@ -127,6 +131,8 @@ export default [
     Continue,
     Throw,
     VM,
+    Label,
+    Goto,
     BasicCommand,
     ForeachStatement,
     IfStatement,

@@ -7,6 +7,7 @@ export class HScope extends PeepholeScope{
     index:number
     link:Map<number,number>
     link_target:Map<string,string>//link别名目标路径
+    label:Map<string,number>
     entry:boolean
     path:string
     path_(name:string){
@@ -20,11 +21,17 @@ export class HScope extends PeepholeScope{
         this.link=new Map()
         this.link_target=new Map()
         this.entry=false
-        //根作用域 parent 为 null,不能直接解引用
+        this.label=new Map()
         this.path=this.parent!=null?this.parent.path:''
     }
     lnk(id:number,data:number){
         this.link.set(id,data)
+    }
+    //标签和函数名一样按作用域查找:内层覆盖外层,找不到再向 parent 找
+    get_label(name:string):number{
+        if(this.label.has(name))return this.label.get(name)
+        if(this.parent!=null)return this.parent.get_label(name)
+        return null
     }
     lnk_get(id:number):number{
         if(this.link.has(id))
@@ -44,6 +51,9 @@ export class HScope extends PeepholeScope{
             return this.symbol.get(name)
         if(this.parent!=null)
             return this.parent.get(name)
+        //全名(模块成员/函数)登记在根作用域的 global 表里
+        if(this.global!=null&&this.global!==this&&this.global.symbol.has(name))
+            return this.global.symbol.get(name)
         const id=this.id()
         this.set(name,id)
         return id

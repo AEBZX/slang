@@ -1,4 +1,4 @@
-﻿import {TokenType} from '../../utils'
+import {TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const NumberLiteral=$.s('NumberLiteral',TokenType.Number)
 const StringLiteral=$.s('StringLiteral',TokenType.String)
@@ -39,19 +39,20 @@ const PostfixExpression=$.s('PostfixExpression',
             $.s('MemberPostfix',$.d('.'),TokenType.Identifier),
             $.s('IndexPostfix',$.d('['),$.r('Expression'),$.d(']')),
             $.s('ArgumentsPostfix',
-                $.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.d('>')),
+                $.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.g()),
                 $.d('('),
                 $.w('Args',$.r('Expression'),','),
                 $.d(')'))
         )
     )
 )
-const PrefixExpression=$.s('PrefixExpression',
+const PrefixExpression=$.o('PrefixExpression',
     $.l('PrefixList',
         $.o('PrefixData',
             $.s('IncrementPrefix',$.d('++')),
             $.s('DecrementPrefix',$.d('--')),
             $.s('NotPrefix',$.d('!')),
+            $.s('BitNotPrefix',$.d('~')),
             $.s('MinusPrefix',$.d('-')),
             $.s('ReferencePrefix',$.d('*')),
             $.s('AddressPrefix',$.d('&')),

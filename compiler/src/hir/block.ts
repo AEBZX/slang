@@ -13,8 +13,10 @@ const H_Module:slang_hir_visitor=(node:Module,scope,call)=>{
     const old=scope.path
     node.name=scope.path_(node.name)
     scope.set(node.name,id)
+    //全名同时登记到根作用域:函数/成员访问按点路径查,子作用域退出后不能丢
+    scope.global.set(node.name,id)
     scope=scope.enter()
-    let children=node.children.map(call)
+    let children=node.children.map(i=>call(i))
     scope=scope.leave()
     scope.path=old
     return new HModule(id,children)
@@ -24,6 +26,7 @@ const H_Variable:slang_hir_visitor=(node:Variable,scope,call)=>{
     const old=scope.path
     node.name=scope.path_(node.name)
     scope.set(node.name,id)
+    scope.global.set(node.name,id)
     const ret=new HVariable(id,call(node.value),node.name.split('.').pop()!.split('@')[0]=='main',!node.modifiers.unstatic)
     scope.path=old
     return ret
@@ -33,8 +36,9 @@ const H_Class:slang_hir_visitor=(node:Class,scope,call)=>{
     const old=scope.path
     node.name=scope.path_(node.name)
     scope.set(node.name,id)
+    scope.global.set(node.name,id)
     scope=scope.enter()
-    let children=node.children.map(call)
+    let children=node.children.map(i=>call(i))
     scope=scope.leave()
     scope.path=old
     return new HModule(id,children)

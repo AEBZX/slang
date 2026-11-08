@@ -1,4 +1,4 @@
-﻿//集成:源码 -> 前端 -> IR,断言指令流
+//集成:源码 -> 前端 -> IR,断言指令流
 import {describe, expect, it} from 'vitest'
 import {
     BINARY, CALL, CMP, CZ, IRArgs, JMP, LOAD, MOV, NOT, OFFSET_GET, OFFSET_SET, PARAM_LOAD, PARAM_SET, PUSH, RET
@@ -82,12 +82,12 @@ describe('ir/控制流', () => {
         expect(form(not[0].right)).toBe('value')
     })
 
-    it('while 用 cz 回跳 + 末尾 call 进循环块', () => {
+    it('while 用 cz 判条件 + jmp 回跳循环头', () => {
         const tool = ir_of(F('while(a>0){ a=a-1; } return a;'))
-        const call = find_of<CALL>(tool, CALL)
-        expect(call).not.toBeNull()
+        const jmp = find_of<JMP>(tool, JMP)
+        expect(jmp).not.toBeNull()
         //循环块号是编译期常量,用 reg(池 id 原样)传
-        expect(form(call.target)).toBe('reg')
+        expect(form(jmp.target)).toBe('reg')
         expect(all_of(tool, CZ).length).toBeGreaterThanOrEqual(1)
     })
 

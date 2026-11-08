@@ -122,6 +122,8 @@ export function type_str(t: any): string {
             return type_str(t.t) + '{}'
         case 'PointType':
             return type_str(t.t) + '*'
+        case 'ReferenceType':
+            return type_str(t.t)
         case 'ClassType':
             return (t.local ? t.local.join('.') : '?') +
                 (t.generic && t.generic.length ? '<' + t.generic.map(type_str).join(',') + '>' : '')
@@ -272,6 +274,10 @@ export function render(n: any): string {
         case 'IfStatement':
             return 'if(' + expr_str(n.condition) + ')' + render(n.commands) +
                 (n.else_ == null ? '' : 'else ' + render(n.else_))
+        case 'LabelCommand':
+            return 'label ' + n.name + ':'
+        case 'GotoCommand':
+            return 'goto ' + n.name + ';'
         case 'WhileStatement':
             return 'while(' + expr_str(n.condition) + ')' + render(n.commands)
         case 'DoWhileStatement':
@@ -285,9 +291,11 @@ export function render(n: any): string {
             return 'switch(' + expr_str(n.condition) + '){' +
                 n.case_list.map((i: any) => 'case ' + expr_str(i.condition) + '=>' + render(i.commands)).join('') +
                 (n.default_ == null ? '' : 'default=>' + render(n.default_)) + '}'
-        case 'TryStatement':
+        case 'TryStatement': {
+            const fin = n.finally_ == null ? '' : render(n.finally_)
             return 'try{' + render(n.commands) + '}catch(' + n.catch_.iden + ':' + type_str(n.catch_.type) + '){' +
-                render(n.catch_.command) + '}' + (n.finally_ == null ? '' : 'finally{' + render(n.finally_) + '}')
+                render(n.catch_.command) + '}' + (fin === '' ? '' : 'finally{' + fin + '}')
+        }
         case 'Link':
             return 'link ' + n.module.join('.') + ' as ' + n.as
         case 'Module':
@@ -343,6 +351,14 @@ export function render(n: any): string {
         case 'HIfStatement':
             return 'if(' + render(n.condition) + ')' + render(n.commands) +
                 (n.else_ == null ? '' : 'else ' + render(n.else_))
+        case 'HLabel':
+            return 'label ' + n.name + ':'
+        case 'HGoto':
+            return 'goto ' + n.label + ';'
+        case 'HTryStatement':
+            return 'try{' + render(n.try_) + '}catch(#' + n.iden + '){' + render(n.catch_) + '}finally{' + render(n.finally_) + '}'
+        case 'HThrow':
+            return 'throw ' + render(n.data) + ';'
         case 'HWhileStatement':
             return 'while(' + render(n.condition) + ')' + render(n.commands)
         case 'HAwait':

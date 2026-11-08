@@ -1,19 +1,20 @@
-﻿import {
+import {
     HArrayExpr, HMapExpr,
     CALL, CZ,
     HAssign, HAwait,
-    HBreak, HContinue,
     HExprCommand,
     HIdentifierExpr, HIfStatement,
     HIndexExpr, HListCommand,
     HMemberExpr,
-    HReferenceExpr, HReturn, HVM, HWhileStatement,
+    HReferenceExpr, HReturn, HVM,
     IRArgs, JMP, JZ, ListCommand,
     MOV, NOT,
     OFFSET_SET,
-    OFFSET_STR_SET, PARAM_SET, RET, THREAD, TZ, VM
+    OFFSET_STR_SET, PARAM_SET, RET, THREAD, TZ, VM, HTryStatement, INT_GET, HThrow, INT, LabelCommand, HLabel,
+    GotoCommand, HGoto
 } from '../utils'
 import {container_of, fast_call, read, slang_ir_factory, VMMap} from './tool'
+import {slang_check_visitor} from "../check/tool";
 const I_Assign:slang_ir_factory=(data:HAssign,tool,call)=>{
     if(data.data instanceof HIdentifierExpr&&(data.value instanceof HArrayExpr||data.value instanceof HMapExpr)){
         tool.ls_arg=IRArgs.reg(data.data.name)
@@ -53,7 +54,6 @@ const I_Await:slang_ir_factory=(data:HAwait,tool,call)=>{
 const I_ListCommand:slang_ir_factory=(data:HListCommand,tool,call)=>{
     data.commands.forEach(call)
 }
-//表达式语句:把表达式自己的指令发出来就行(结果没人用)
 const I_ExprCommand:slang_ir_factory=(data:HExprCommand,tool,call)=>{
     call(data.data)
 }
@@ -64,7 +64,6 @@ const I_Return:slang_ir_factory=(data:HReturn,tool,call)=>{
 }
 const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
     const id=tool.block_id
-    //条件要留在槽里:一次判真跳,一次就地取反再判
     const condition=IRArgs.reg(tool.id())
     const condition_value=fast_call(condition,data.condition,tool,call)
     const true_id=tool.create()
@@ -78,30 +77,7 @@ const I_If:slang_ir_factory=(data:HIfStatement,tool,call)=>{
     tool.push(new NOT(condition,read(condition)))
     tool.push(new CZ(IRArgs.reg(false_id),IRArgs.reg(0),read(condition)))
 }
-const I_While:slang_ir_factory=(data:HWhileStatement,tool,call)=>{
-    const id=tool.block_id
-    const loop_id=tool.create()
-    const body_id=tool.create()
-    //条件放块首,每轮回到这里重新求值,循环体不会在条件为假后再跑一次
-    tool.block_id=loop_id
-    tool.loop_id.push(loop_id)
-    const condition_arg=fast_call(IRArgs.reg(tool.id()),data.condition,tool,call)
-    tool.push(new CZ(IRArgs.reg(body_id),IRArgs.reg(0),condition_arg))
-    tool.block_id=body_id
-    call(data.commands)
-    tool.push(new JMP(IRArgs.reg(loop_id),IRArgs.reg(0)))
-    tool.loop_id.pop()
-    tool.block_id=id
-    tool.push(new CALL(IRArgs.reg(loop_id),IRArgs.reg(2)))
-}
-const I_Break:slang_ir_factory=(data:HBreak,tool,call)=>{
-    tool.push(new RET(IRArgs.reg(2)))
-}
-const I_Continue:slang_ir_factory=(data:HContinue,tool,call)=>{
-    tool.push(new JMP(IRArgs.reg(tool.loop()),IRArgs.reg(0)))
-}
 const I_VM:slang_ir_factory=(data:HVM,tool,call)=>{
-    //内联指令的操作数先各自求值到一个槽,VMMap 再按该指令的语义决定哪个操作数取值、哪个取槽
     let param_list:IRArgs[]=[]
     for(const [index,param] of data.param.entries()){
         const arg=IRArgs.reg(tool.id())
@@ -111,6 +87,39 @@ const I_VM:slang_ir_factory=(data:HVM,tool,call)=>{
     }
     tool.push(VMMap.get(data.data)(...param_list))
 }
+const I_Try:slang_ir_factory=(data:HTryStatement,tool,call)=>{
+    const now=tool.block_id
+    const try_block_id=tool.create()
+    const catch_block_id=tool.create()
+    const finally_block_id=tool.create()
+    tool.push(new CALL(IRArgs.reg(try_block_id),IRArgs.reg(0)))
+    tool.block_id=try_block_id
+    call(data.try_)
+    tool.push(new CALL(IRArgs.reg(finally_block_id),IRArgs.reg(0)))
+    tool.block_id=catch_block_id
+    tool.push(new INT_GET(IRArgs.reg(data.iden)))
+    call(data.catch_)
+    tool.push(new CALL(IRArgs.reg(finally_block_id),IRArgs.reg(0)))
+    tool.block_id=finally_block_id
+    call(data.finally_)
+    tool.block_id=now
+}
+const I_Throw:slang_ir_factory=(data:HThrow,tool,call)=>{
+    const arg=IRArgs.reg(tool.id())
+    tool.ls_arg=arg
+    call(data.data)
+    tool.push(new INT(arg))
+}
+const I_LabelCommand:slang_ir_factory=(data:HLabel,tool,call)=>{
+    //最后标签要jmp,且后续生成代码所在的块
+    const label=tool.create(tool.label_id(data.name))
+    tool.push(new JMP(IRArgs.reg(label),IRArgs.reg(0)))
+    //之后代码全会生成在label里
+    tool.block_id=label
+}
+const I_GotoCommand:slang_ir_factory=(data:HGoto,tool,call)=>{
+    tool.push(new JMP(IRArgs.reg(tool.label_id(data.label)),IRArgs.reg(0)))
+}
 export default new Map<any,slang_ir_factory>([
     [HAssign,I_Assign],
     [HAwait,I_Await],
@@ -118,8 +127,9 @@ export default new Map<any,slang_ir_factory>([
     [HExprCommand,I_ExprCommand],
     [HReturn,I_Return],
     [HIfStatement,I_If],
-    [HWhileStatement,I_While],
-    [HBreak,I_Break],
-    [HContinue,I_Continue],
     [HVM,I_VM],
+    [HTryStatement,I_Try],
+    [HThrow,I_Throw],
+    [HLabel,I_LabelCommand],
+    [HGoto,I_GotoCommand]
 ])

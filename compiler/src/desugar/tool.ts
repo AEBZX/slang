@@ -1,4 +1,4 @@
-﻿import {
+import {
     NotPrefix,
     LogicAndExpression,
     GreaterEqualExpression,
@@ -16,6 +16,26 @@
 } from '../utils'
 
 export type slang_desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
+
+export type loop_labels={break:string,continue:string}
+//每个 File 开始时重置:同一进程里重复编译同一程序必须得到同样的标签
+export let loop_context={id:0,stack:[] as loop_labels[]}
+export function reset_loops(){
+    loop_context.id=0
+    loop_context.stack=[]
+}
+export function push_loop():loop_labels{
+    const labels={break:`break@${loop_context.id}`,continue:`while@${loop_context.id}`}
+    loop_context.id++
+    loop_context.stack.push(labels)
+    return labels
+}
+export function pop_loop(){
+    loop_context.stack.pop()
+}
+export function current_loop():loop_labels{
+    return loop_context.stack[loop_context.stack.length-1]
+}
 export const LiteralToConst=new Map<any,string>([
     [NumberType,'number'],
     [StringType,'string'],

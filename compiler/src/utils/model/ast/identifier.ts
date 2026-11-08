@@ -40,3 +40,4 @@ export class FixType extends Type{
 export class ArrayType extends FixType{}
 export class MapType extends FixType{}
 export class PointType extends FixType{}
+export class ReferenceType extends FixType{}

@@ -1,9 +1,9 @@
-﻿import {operations, TokenType} from '../../utils'
+import {operations, TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const GenericList=$.s('GenericList',
     $.d('<'),
     $.w('GenericData',$.s('Generic',TokenType.Identifier,$.c($.d('implements'),$.r('Type'))),','),
-    $.d('>'))
+    $.g())
 const ModuleName=$.s('ModuleName',$.r('Type'))
 const ImplementsName=$.s('ImplementsName',$.r('BasicType'))
 const link=$.s('link',
@@ -29,8 +29,11 @@ const _function=$.s('Function',$.c($.r('GenericList')),
     $.r('Type'),
     $.t('(',$.w('ParamIdentifier',$.s('ParamData',TokenType.Identifier,':',$.r('Type')),','),')'),
     $.o('Implement',$.r('Commands'),';'))
+const BIDX=$.s('BIDX',$.d('['),$.d(']'))
+const CALL=$.s('CALL',$.d('('),$.d(')'))
 const _operation=$.s('Operation',$.d('operation'),
-    $.o('symbol',...operations),
+    //[] 与 () 是双 token 运算符,不能直接和单 token 一起按字符串匹配
+    $.o('symbol',BIDX,CALL,...operations.filter(i=>i!='[]'&&i!='()')),
     $.r('LambdaExpression'))
 const _cast=$.s('Cast',$.d('cast'),$.r('Type'),$.r('LambdaExpression'))
 const _var=$.s('Variable',$.r('Type'),$.c($.d('='),$.r('Expression')),';')

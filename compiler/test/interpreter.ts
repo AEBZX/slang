@@ -1,4 +1,4 @@
-﻿//精简 IR 解释器:只是为了验证"优化前后语义一致",不是完整的 VM
+//精简 IR 解释器:只是为了验证"优化前后语义一致",不是完整的 VM
 //语义按作者约定:右值 reg=立即数、左值 reg=槽号、value=读槽、load 的源是池 id
 import {
     BINARY, BIT_NOT, CMP, IRArgs, IRTree, LOAD, MOV, NOT,
@@ -55,6 +55,13 @@ function reg_blocks(flow: Map<number, any[]>, entry: number): number[] {
 export function body_block(tool: any, which = -1): number {
     const flow: Map<number, any[]> = tool.command ?? tool.ir
     const entries = [...flow.entries()]
+    //控制流降级后函数体不再以 RET 结尾(RET 在 break 标签块里),
+    //以 PARAM_LOAD 开头的块才是函数入口
+    const param = entries
+        .filter(([, list]) => list.some((i: any) => i.constructor.name == 'PARAM_LOAD'))
+        .map(([bid]) => bid)
+        .sort((a, b) => a - b)
+    if (param.length > 0) return param[which < 0 ? param.length - 1 : which]
     const fn = function_blocks(tool)
     if (fn.length > 0) return fn[which < 0 ? fn.length - 1 : which]
     return entries.reduce((a, b) => b[1].length > a[1].length ? b : a)[0]

@@ -5,14 +5,22 @@ import {
     Continue,
     DoWhileStatement, ExprCommand, FixType,
     ForeachStatement,
-    ForStatement, IfStatement,
+    ForStatement, GotoCommand, IfStatement, LabelCommand,
     ListCommand,
     Return, SwitchStatement, Throw, TryStatement, Type, VarDecl, VM, VoidType,
     WhileStatement
 } from '../../utils'
 import {slang_check_visitor} from '../tool'
 const Check_ListCommand:slang_check_visitor=(ast:ListCommand,scope,call)=>{
-    for(const i of ast.commands)call(i,0)
+    scope=scope.enter()
+    //先登记本层标签:goto 可以前向引用;标签按作用域,内层同名不算重复
+    for(const i of ast.commands)
+        if(i instanceof LabelCommand){
+            if(scope.label.has(i.name))scope.thr(`标签${i.name}已存在,在行${i.line.join('\n')}`)
+            else scope.label.add(i.name)
+        }
+    for(const i of ast.commands)call(i,0,scope)
+    scope=scope.leave()
 }
 const Check_Loop:slang_check_visitor=(ast:WhileStatement|DoWhileStatement|ForeachStatement|ForStatement,scope,call)=>{
     const old=scope.loop
@@ -86,6 +94,13 @@ const Check_Return:slang_check_visitor=(ast:Return,scope,call)=>{
 const Check_VM:slang_check_visitor=(ast:VM,scope,call)=>{
     for(const i of ast.param)call(i,0)
 }
+const Check_Label:slang_check_visitor=(ast:LabelCommand,scope,call)=>{
+    //重复/预登记在 ListCommand 里统一做,这里只保证本层有登记
+    if(!scope.label.has(ast.name))scope.label.add(ast.name)
+}
+const Check_Goto:slang_check_visitor=(ast:GotoCommand,scope,call)=>{
+    if(!scope.has_label(ast.name))scope.thr(`标签${ast.name}不存在,在行${ast.line.join('\n')}`)
+}
 export default new Map<any,slang_check_visitor>([
     [ListCommand,Check_ListCommand],
     [WhileStatement,Check_Loop],
@@ -103,5 +118,7 @@ export default new Map<any,slang_check_visitor>([
     [VarDecl,Check_VarDecl],
     [SwitchStatement,Check_SwitchStatement],
     [Return,Check_Return],
-    [VM,Check_VM]
+    [VM,Check_VM],
+    [LabelCommand,Check_Label],
+    [GotoCommand,Check_Goto]
 ])

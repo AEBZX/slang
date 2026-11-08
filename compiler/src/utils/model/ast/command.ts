@@ -15,7 +15,6 @@ export class AAssign extends Assign{
         super(data,value,'=')
     }
 }
-//&&= / ||=:按 a = a && b 处理(短路语义在脱糖里展开成三目)
 export class LogicAndAssign extends Assign{
     constructor(data:Expression,value:Expression) {
         super(data,value,'&&=')
@@ -100,6 +99,16 @@ export class Return extends BasicCommand{
 }
 export class Break extends BasicCommand{}
 export class Continue extends BasicCommand{}
+export class LabelCommand extends Command{
+    constructor(public name:string) {
+        super()
+    }
+}
+export class GotoCommand extends Command{
+    constructor(public name:string) {
+        super()
+    }
+}
 export class Throw extends BasicCommand{
     constructor(public data:Expression) {
         super()

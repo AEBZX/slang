@@ -1,4 +1,4 @@
-﻿//集成:各类语句从源码到字节码,并核对生成出来的结构
+//集成:各类语句从源码到字节码,并核对生成出来的结构
 import {describe, expect, it} from 'vitest'
 import {exec} from '../interpreter'
 import {BINARY, CALL, CMP, CZ, JMP, OFFSET_ADDR, OFFSET_GET, RET, THREAD} from '../../src/utils'
@@ -39,12 +39,10 @@ describe('集成/语句·生成的结构', () => {
         expect(all_of(tool, OFFSET_GET).length).toBeGreaterThan(0)
     })
 
-    it('while 用 CALL 进循环块、CZ 进循环体', () => {
+    it('while 降级成 label + CZ + JMP', () => {
         const tool = structural(M('while(a>0){ a=a-1; } return a;'))
-        const calls = all_of(tool, CALL)
-        expect(calls.length).toBeGreaterThan(0)
-        expect(calls.some((c: CALL) => c.frame.data == 2)).toBe(true)
         expect(all_of(tool, CZ).length).toBeGreaterThanOrEqual(1)
+        expect(all_of(tool, JMP).length).toBeGreaterThanOrEqual(1)
     })
 
     it('do-while 至少生成一个条件跳转', () => {
@@ -55,12 +53,12 @@ describe('集成/语句·生成的结构', () => {
     it('for 会展开成「初始化 + 条件 + 循环体 + 步进」', () => {
         const tool = structural(M('for(var i:number=0;i<3;i++;){ a=a+1; } return a;'))
         expect(all_of(tool, CZ).length).toBeGreaterThanOrEqual(1)
-        expect(all_of(tool, CALL).some((c: CALL) => c.frame.data == 2)).toBe(true)
+        expect(all_of(tool, JMP).length).toBeGreaterThanOrEqual(1)
     })
 
-    it('break 生成函数帧为 2 的 RET', () => {
+    it('break 跳到最后一次循环的 break 标签', () => {
         const tool = structural(M('while(a>0){ if(a>2)break; a=a-1; } return a;'))
-        expect(all_of(tool, RET).some((r: RET) => r.frame.data == 2)).toBe(true)
+        expect(all_of(tool, JMP).length).toBeGreaterThanOrEqual(2)
     })
 
     it('continue 生成 JMP', () => {
@@ -99,10 +97,9 @@ describe('集成/语句·生成的结构', () => {
                 && i.right.type == 'reg' && i.right.data == value)
             .map((i: any) => i.left.data))
 
-    it('try/catch 会把 throw 标志置 0', () => {
+    it('try/catch 生成 try/finally 两个调用块', () => {
         const tool = structural(M('try{ a=1; }catch(e:number){ a=2; } return a;'))
-        expect(flag_slots(tool, 0).size).toBeGreaterThan(0)
-        expect(all_of(tool, CALL).length).toBeGreaterThan(0)
+        expect(all_of(tool, CALL).length).toBeGreaterThanOrEqual(2)
     })
 
     it('带 finally 时多一次调用', () => {
@@ -173,6 +170,17 @@ describe('集成/语句·语义(解释执行)', () => {
     //while 的条件在块首:条件为假的那一轮循环体不能再跑
     it('while 条件为假后不再多跑一次', () => {
         expect(run(M('var s:number=0; var k:number=0; while(k<3){ s=s+k; k=k+1; } return s;'), 0).ret).toBe(3)
+    })
+
+    it('嵌套循环:break 只跳出内层', () => {
+        const src = M('var s:number=0; var i:number=0; while(i<2){ var j:number=0; while(j<3){ if(j==1)break; s=s+1; j=j+1; } i=i+1; } return s;')
+        expect(run(src, 0).ret).toBe(2)
+    })
+
+    it('嵌套循环:continue 只回到内层循环头', () => {
+        const src = M('var s:number=0; var i:number=0; while(i<2){ var j:number=0; while(j<3){ j=j+1; if(j==1)continue; s=s+1; } i=i+1; } return s;')
+        //每轮内层:j=1 跳过,j=2、3 各加一次 → 外层两轮共 4
+        expect(run(src, 0).ret).toBe(4)
     })
 
     it('do-while 先跑一次,条件为假即停', () => {

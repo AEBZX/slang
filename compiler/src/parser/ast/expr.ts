@@ -1,4 +1,4 @@
-﻿import {
+import {
     AddExpression,
     AddressPrefix,
     AndExpression,
@@ -72,7 +72,7 @@ const G_MapExpression:slang_ast_generate=(data,tree)=>{
 const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
     const d=parseGeneric(data,tree)
     const ParamIdentifier=to_ast_data(data,d.is?1:0)
-    let param=new Map<string,Type>
+    let param=new KeyMap<string,Type>
     for(const v of ParamIdentifier.children.values())
         if(typeof v=='object')
             param.set(to_string(v,0),

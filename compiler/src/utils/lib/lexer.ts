@@ -10,7 +10,6 @@
     TokenType
 } from '../data'
 import PeepholeTool from './tool'
-
 class CharStream{
     public index:number
     public code:string[]

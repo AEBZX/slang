@@ -1,7 +1,7 @@
 import {ASTTree, HIRTree} from '../data'
 import {File} from '../model/ast'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree, process} from './tool'
-export type hir_visitor = (node:PeepholeTree, scope:PeepholeScope, call:(node:PeepholeTree)=>PeepholeTree)=>PeepholeTree
+export type hir_visitor = (node:PeepholeTree, scope:PeepholeScope, call:(node:PeepholeTree, scope?:PeepholeScope)=>PeepholeTree)=>PeepholeTree
 export default class HIR extends PeepholeTool{
     ref:Map<any,hir_visitor>=new Map()
     _default:hir_visitor=null
@@ -22,15 +22,15 @@ export default class HIR extends PeepholeTool{
         return this
     }
     run(node:PeepholeTree[]){
-        let scope=this.create(node)
-        let g=(node:PeepholeTree)=>{
+        const root=this.create(node)
+        const g=(node:PeepholeTree,scope:PeepholeScope):PeepholeTree=>{
             for(let [k,v] of this.ref)
                 if(node instanceof k)
-                    return v(node,scope,g)
+                    return v(node,scope,(child,next)=>g(child,next instanceof PeepholeScope?next:scope))
             if(this._default!=null)
-                return this._default(node,scope,g)
+                return this._default(node,scope,(child,next)=>g(child,next instanceof PeepholeScope?next:scope))
             return node
         }
-        return [scope,node.map(g)]
+        return [root,node.map(n=>g(n,root))]
     }
 }

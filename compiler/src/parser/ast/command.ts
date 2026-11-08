@@ -1,4 +1,4 @@
-﻿import {
+import {
     BooleanLiteral, VoidType, AAssign,
     AddAssign, AndAssign, ast_data, Await, Break, Case, Command, Continue,
     DivAssign, DoWhileStatement, ExprCommand,
@@ -6,7 +6,8 @@
     ModAssign,
     MulAssign, OrAssign, Return, ShlAssign, ShrAssign,
     slang_ast_generate,
-    SubAssign, SwitchStatement, Throw, TryStatement, Type, VarDecl, VM, WhileStatement, XorAssign
+    SubAssign, SwitchStatement, Throw, TryStatement, Type, VarDecl, VM, WhileStatement, XorAssign, LabelCommand,
+    GotoCommand
 } from '../../utils'
 import {AssignMap, to_ast_data, to_string, tree_ast} from "./tool";
 
@@ -38,6 +39,8 @@ const G_VM:slang_ast_generate=(data,tree)=> {
         param.push(tree_ast<Expression>(v as ast_data,0,tree))
     return new VM(str,param)
 }
+const G_Label:slang_ast_generate=(data,tree)=>new LabelCommand(to_string(to_ast_data(data,0),0))
+const G_Goto:slang_ast_generate=(data, tree)=>new GotoCommand(to_string(to_ast_data(data,0),0))
 const G_Condition:slang_ast_generate=(data,tree)=>tree(data.children.get(0) as ast_data)
 const G_IfStatement:slang_ast_generate=(data,tree)=>new IfStatement(
     tree_ast(data,0,tree),
@@ -137,6 +140,8 @@ export default new Map([
     ['ExprCommand',G_ExprCommand],
     ['Throw',G_Throw],
     ['VM',G_VM],
+    ['Label',G_Label],
+    ['Goto',G_Goto],
     ['IfStatement',G_IfStatement],
     ['WhileStatement',G_WhileStatement],
     ['DoWhileStatement',G_DoWhileStatement],

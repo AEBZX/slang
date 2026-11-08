@@ -49,7 +49,7 @@ import {
     VarDecl,
     Variable,
     VoidType,
-    XorExpression
+    XorExpression, ReferenceType
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 
@@ -63,6 +63,7 @@ export class Scope extends PeepholeScope{
     operation:Map<Type,Operation[]>
     cast:Map<Type,Cast[]>
     overload:Map<string,Function[]>
+    label:Set<string>
     operation_cast_oper:Type
     error:string[]
     loop:boolean
@@ -93,11 +94,11 @@ export class Scope extends PeepholeScope{
         this.cast=new Map()
         this.overload=new Map()
         this.operation_cast_oper=null
+        this.label=new Set()
     }
     set_overload(name:string,fn:Function){
         let list=this.overload.get(name)
         if(!list){list=[];this.overload.set(name,list)}
-        //若同一函数重复入组(symbol._name 与 _static 都收集)则跳过
         if(list.includes(fn))return
         fn.index=list.length
         list.push(fn)
@@ -182,9 +183,13 @@ export class Scope extends PeepholeScope{
         if(key!=null)this.cast.get(key).push(cast)
         else this.cast.set(type,[cast])
     }
+    //标签按作用域查找:内层同名标签覆盖外层
+    has_label(name:string):boolean{
+        if(this.label.has(name))return true
+        if(this.parent!=null)return this.parent.has_label(name)
+        return false
+    }
     thr(msg:string){
-        //错误统一记在最外层作用域上:Check.run 返回的就是它,
-        //记在 global 上的话调用方读 scope.error 永远是空的
         this.root().error.push(msg)
     }
 }
@@ -193,16 +198,12 @@ export const set_first=(scope:Scope,name:string,ast:ASTTree)=>{
 }
 function m_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
     const exist=scope.global.get(name)
-    //未定义或就是自身:不算冲突
     if(exist==null||exist==ast)return false
-    //函数重载允许同名
     return !(func && exist instanceof Function)
 }
 function c_name(name:string,scope:Scope,ast:ASTTree=null,func=false){
     const exist=scope.data.get(name)
-    //未定义或就是自身:不算冲突
     if(exist==null||exist==ast)return false
-    //函数重载允许同名
     return !(func && exist instanceof Function)
 }
 export function name(name:string,scope:Scope,ast:ASTTree=null,func=false){
@@ -238,17 +239,12 @@ export function param_is(iden:Type[],param:Map<string,Type>,scope:Scope){
     }
     return true
 }
-//泛型声明里写的是裸名字(<T>),会被解析成 ClassType(['T']);@T 才是 GenericType。
-//两种都要当成"占位符"
 export function generic_placeholder(decl:Type,name:string){
-    //无约束占位:null / GenericType(@T) / VoidType(<T> 没写 implements)
     if(decl==null||decl instanceof GenericType||decl instanceof VoidType)return true
-    //泛型声明写裸名字时会解析成 ClassType(['T'])
-    if(decl instanceof ClassType&&decl.generic.length==0&&decl.local.length==1&&decl.local[0]==name)return true
-    return false
+    return decl instanceof ClassType && decl.generic.length == 0 && decl.local.length == 1 && decl.local[0] == name
+
 }
 export function generic_is(iden:Type[],param:Map<string,Type>,scope:Scope){
-    //没写显式泛型实参:交给实参推断,不在这里拒绝
     if(iden.length==0)return true
     if(iden.length!=param.size)return false
     const list=Array.from(param.entries())
@@ -257,7 +253,6 @@ export function generic_is(iden:Type[],param:Map<string,Type>,scope:Scope){
         const actual=real_type(iden[i],scope)
         if(generic_placeholder(decl,name)){
             const bound=scope.get_generic(name)
-            //已经绑过就要和这次一致,否则 <string> 配 number 实参会被放过
             if(bound==null)scope.set_generic(name,actual)
             else if(!type_is(real_type(bound,scope),actual,scope))return false
             continue
@@ -270,9 +265,7 @@ export function fill_modifier(data:Block){
     let def=null
     for(const [k,v] of Default_Modifier)
         if(data instanceof k){def=v;break}
-    //未显式指定的字段(null)用默认值补齐,否则 null 会被当成 false(例如 public 方法被当成 static)
     if(def==null)return data.modifiers
-    //缺省也要给新实例:返回共享单例的话,调用方对 modifiers 的写操作会污染所有同类块
     if(data.modifiers==null)return new Modifier(def.unstatic,def._async,def._private)
     return new Modifier(
         data.modifiers.unstatic==null?def.unstatic:data.modifiers.unstatic,
@@ -282,11 +275,9 @@ export function fill_modifier(data:Block){
 }
 export function type_same(a:Type,b:Type):boolean{
     if(a==null||b==null)return a==b
-    //运算符查找端把操作数包成 PointType,声明侧是裸类型:单侧盒子先解包再比
     if(a instanceof PointType&&!(b instanceof PointType))return type_same(a.t,b)
     if(b instanceof PointType&&!(a instanceof PointType))return type_same(a,b.t)
     if(a.constructor!=b.constructor){
-        //枚举作类型标注:书写名是 ClassType,值侧是 EnumType,点分后缀一致即同一
         if(a instanceof EnumType&&b instanceof ClassType){
             const la=(a as EnumType).local.join('.'),lb=(b as ClassType).local.join('.')
             return la==lb||lb.endsWith('.'+la)||la.endsWith('.'+lb)
@@ -309,11 +300,13 @@ export function type_same(a:Type,b:Type):boolean{
     return false
 }
 export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
-    //null 入参无从合并
     if(_type1==null||_type2==null)return new VoidType()
-    let type1=real_type(_type1,scope)
-    let type2=real_type(_type2,scope)
-    //未解析的泛型(real_type 返回 undefined)
+    const type1=real_type(_type1,scope)
+    const type2=real_type(_type2,scope)
+    if(type1 instanceof ReferenceType&&type2 instanceof ReferenceType)
+        return new ReferenceType(type_merge(type1.t,type2.t,scope))
+    if(type1 instanceof ReferenceType)return new ReferenceType(type_merge(type1.t,_type2,scope))
+    if(type2 instanceof ReferenceType)return new ReferenceType(type_merge(_type1,type2.t,scope))
     if(type1==null){
         scope.thr(`generic type ${_type1 instanceof GenericType?_type1.generic:'unknown'} not found`)
         return new VoidType()
@@ -329,9 +322,7 @@ export function type_merge(_type1:Type,_type2:Type,scope:Scope):Type{
         if(type1 instanceof ClassType&&type2 instanceof ClassType){
             let name1=type1.local.join('.')
             let name2=type2.local.join('.')
-            //同名即同一类型:书写名(裸名)与全名点分后缀一致也算
             if(name1==name2||name2.endsWith('.'+name1)||name1.endsWith('.'+name2))return type1
-            //实现链:type2 的实现链中含 type1 则 type2 是 type1 的子类型,取 type1
             let chain=scope.root().chain
             let _t1=scope.get(name1)
             let _t2=scope.get(name2)
@@ -406,7 +397,6 @@ export function type_is(type1:Type,type2:Type,scope:Scope){
     //type2(实际值)能否赋给 type1(目标)
     return type_(type2,type1,scope)
 }
-//子类型判断:type 兼容 target(同构或实现链上 type 是 target 的子类)
 function type_sub(type:Type,target:Type,scope:Scope):boolean{
     if(type==null||target==null)return false
     //只能互相是子类型
@@ -420,9 +410,7 @@ function type_sub(type:Type,target:Type,scope:Scope):boolean{
     //或者合并了正常
     return !(type_merge(type,target,scope) instanceof VoidType)
 }
-//签名最符合决策(函数重载/operation 共用):param_sets 是各候选的形参类型表
 export function pick_best(scope:Scope,param_sets:Type[][],arg_types:Type[]):number{
-    //先过滤:参数个数一致且每参都能被实参喂入(形参兼容实参)
     let fit:number[]=[]
     for(let k=0;k<param_sets.length;k++){
         let ps=param_sets[k]
@@ -504,8 +492,6 @@ export function cast_best(result:Type,_cast:Type,scope:Scope):{id:string,type:Ty
         type:real_type(ret.type,scope)
     }
 }
-//类型检查:a 是实际/来源类型,b 是期望/目标类型
-//空容器字面量(元素是 Void)在赋值时当通配
 export function void_like(type:Type):boolean{
     if(type==null)return true
     if(type instanceof VoidType)return true
@@ -521,17 +507,13 @@ export function type_(a:Type,b:Type,scope:Scope){
     const rb=real_type(b,scope)
     if(ra==rb)return true
     if(ra==null||rb==null)return false
-    //Void(无值/未解析)只与 Void 兼容
     if(ra instanceof VoidType||rb instanceof VoidType)
         return ra instanceof VoidType&&rb instanceof VoidType
-    //同型直接通过(结构相等,不要求同一实例),剩下的才看 cast 表
     if(type_same(ra,rb))return true
-    //容器:元素类型也要能赋(元素是 Void 的空字面量放行)
     if(ra instanceof ArrayType&&rb instanceof ArrayType)
         return void_like(ra.t)||type_(ra.t,rb.t,scope)
     if(ra instanceof MapType&&rb instanceof MapType)
         return void_like(ra.t)||type_(ra.t,rb.t,scope)
-    //空字面量是中性的:[] 既能当空数组也能当空 map(前者由上面的分支处理)
     if((ra instanceof ArrayType&&rb instanceof MapType)||(ra instanceof MapType&&rb instanceof ArrayType))
         return void_like(ra)
     if(!(type_merge(ra,rb,scope) instanceof VoidType))return true
@@ -548,7 +530,6 @@ export function real_type(type:Type,scope:Scope){
         type.t=real_type(type.t,scope)
         return type
     }
-    //保留 ClassType,只解析其泛型实参(不能替换成 Class 块);generic 缺省按空数组处理
     if(type instanceof ClassType){
         const gen=type.generic==null?[]:type.generic
         return new ClassType(type.local,gen.map(i=>real_type(i,scope)),type._this)
@@ -571,13 +552,10 @@ export function real_type(type:Type,scope:Scope){
     }
     return type
 }
-//按名解析符号:本地作用域优先,其次全局,最后按当前路径逐级往上补全
 export function resolve_named(scope:Scope,name:string):ASTTree{
     let data=scope.get(name)
     if(data==null&&scope.global)data=scope.global.get(name)
     if(data!=null)return data
-    //函数体/类体里的 path 已经带上函数名/类名,只拼当前这一级会得到 m.f.C 这种查不到的名字,
-    //所以顺着作用域链把每一级的 path 都试一遍
     for(let s:Scope=scope;s!=null;s=s.parent){
         if(s.path==''||scope.global==null)continue
         data=scope.global.get(s.path+'.'+name)
@@ -596,7 +574,6 @@ export function collect_chain(scope:Scope,block:Class|Interface,out:Set<Interfac
         collect_chain(scope,target,out,seen)
     }
 }
-//把 类/接口名 -> 实现接口集合 写入 root().chain(全名与裸名都注册)
 export function build_chain(scope:Scope,name:string,block:Class|Interface){
     const root=scope.root()
     const set=new Set<Interface>()

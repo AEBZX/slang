@@ -47,7 +47,7 @@ export class CMP extends IRTree{
     }
 }
 export class ControlStream extends IRTree{
-    //frame=0:块帧,frame=1:函数帧,frame=2:循环帧
+    //frame=0:块帧,frame=1:函数帧,frame=2:异常帧
     constructor(public target:IRArgs,public frame:IRArgs) {
         super()
     }
@@ -135,6 +135,21 @@ export class PARAM_SET extends IRTree{
 }
 export class PARAM_LOAD extends IRTree{
     constructor(public data:IRArgs,public param:IRArgs) {
+        super()
+    }
+}
+export class INT_REGISTER extends IRTree{
+    constructor(public block:IRArgs) {
+        super()
+    }
+}
+export class INT extends IRTree{
+    constructor(public data:IRArgs) {
+        super()
+    }
+}
+export class INT_GET extends IRTree{
+    constructor(public left:IRArgs) {
         super()
     }
 }

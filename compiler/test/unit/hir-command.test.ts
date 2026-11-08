@@ -58,9 +58,9 @@ describe('hir/命令·基本命令', () => {
         expect(cs[1].constructor.name).toBe('HReturn')
     })
 
-    it('break / continue', () => {
-        expect(hir_src(M('public static g:void(){ while(true){ break; } }'))).toContain('break;')
-        expect(hir_src(M('public static g:void(){ while(true){ continue; } }'))).toContain('continue;')
+    it('break / continue 降级成 goto', () => {
+        expect(hir_src(M('public static g:void(){ while(true){ break; } }'))).toMatch(/goto \d+;/)
+        expect(hir_src(M('public static g:void(){ while(true){ continue; } }'))).toMatch(/goto \d+;/)
     })
 
     it('vm 指令', () => {
@@ -83,8 +83,11 @@ describe('hir/命令·流程控制', () => {
             .toMatch(/if\(\(#[0-9]+>0\)\)#[0-9]+=1;else #[0-9]+=2;/)
     })
 
-    it('while', () => {
-        expect(hir_src(F('while(a>0){ a=a-1; } return a;'))).toMatch(/while\(\(#[0-9]+>0\)\)#[0-9]+=\(#[0-9]+-1\);/)
+    it('while 降级成 label + if + goto', () => {
+        const out = hir_src(F('while(a>0){ a=a-1; } return a;'))
+        expect(out).toMatch(/label \d+:/)
+        expect(out).toMatch(/if\(\(#[0-9]+>0\)\)#[0-9]+=\(#[0-9]+-1\);/)
+        expect(out).toMatch(/goto \d+;/)
     })
 
     it('条件不是 boolean 时脱糖会补 != null', () => {
@@ -102,10 +105,12 @@ describe('hir/命令·节点形状', () => {
         expect(flat_commands(hir_of(F('a=1; return a;')))[0].constructor.name).toBe('HAssign')
     })
 
-    it('if 是 HIfStatement,while 是 HWhileStatement', () => {
-        const cs = flat_commands(hir_of(F('if(a>0){a=1;} while(a>0){a=2;} return a;')))
+    it('if 是 HIfStatement,while 降级成 HLabel + HGoto', () => {
+        const root = hir_of(F('if(a>0){a=1;} while(a>0){a=2;} return a;'))
+        const cs = flat_commands(root)
         expect(cs[0].constructor.name).toBe('HIfStatement')
-        expect(cs[1].constructor.name).toBe('HWhileStatement')
+        expect(cs[1].constructor.name).toBe('HLabel')
+        expect(deep_find(root, 'HGoto')).toBeTruthy()
     })
 
     it('vm 是 HVM', () => {
@@ -120,14 +125,57 @@ describe('hir/命令·节点形状', () => {
         expect(flat_commands(hir_of(M('public static g:void(){ 1+2; }')))[0].constructor.name).toBe('HExprCommand')
     })
 
-    it('break / continue 是 HBreak / HContinue', () => {
-        expect(deep_find(hir_of(M('public static g:void(){ while(true){ break; } }')), 'HBreak')).toBeTruthy()
-        expect(deep_find(hir_of(M('public static g:void(){ while(true){ continue; } }')), 'HContinue')).toBeTruthy()
+    it('break / continue 是 HGoto', () => {
+        expect(deep_find(hir_of(M('public static g:void(){ while(true){ break; } }')), 'HGoto')).toBeTruthy()
+        expect(deep_find(hir_of(M('public static g:void(){ while(true){ continue; } }')), 'HGoto')).toBeTruthy()
     })
 
     it('await 是 HAwait', () => {
         expect(deep_find(hir_of(M(`public static g:void(){}
                                    public static f:void(){ await g(); }`)), 'HAwait')).toBeTruthy()
+    })
+})
+
+describe('hir/命令·标签作用域', () => {
+    const collect = (v: any, cls: string, out: any[] = []) => {
+        if (v == null || typeof v != 'object') return out
+        if (v.constructor && v.constructor.name == cls) out.push(v)
+        for (const k of Object.keys(v)) collect(v[k], cls, out)
+        return out
+    }
+    const labels = (src: string) => {
+        const root = hir_of(src)
+        return {root, labels: collect(root, 'HLabel'), gotos: collect(root, 'HGoto')}
+    }
+
+    it('内层同名标签覆盖外层', () => {
+        const {labels: ls, gotos: gs} = labels(M(
+            'public static g:void(a:number){ L: a=1; if(a>0){ L: a=2; goto L; } goto L; }'))
+        expect(ls.length).toBe(2)
+        expect(gs.length).toBe(2)
+        const [outer, inner] = ls
+        const inner_goto = gs.find(g => g.label == inner.name)
+        const outer_goto = gs.find(g => g.label == outer.name)
+        expect(inner_goto).toBeTruthy()
+        expect(outer_goto).toBeTruthy()
+        expect(inner.name).not.toBe(outer.name)
+    })
+
+    it('goto 可以前向引用同一作用域的标签', () => {
+        const {labels: ls, gotos: gs} = labels(M('public static g:void(){ goto L; L: 1; }'))
+        expect(ls.length).toBe(1)
+        expect(gs.length).toBe(1)
+        expect(gs[0].label).toBe(ls[0].name)
+    })
+
+    it('goto 看不到子作用域里的标签', () => {
+        expect(() => hir_of(M('public static g:void(a:number){ if(a>0){ L: 1; } goto L; }')))
+            .toThrow(/未定义的标签|标签L不存在/)
+    })
+
+    it('同一作用域里标签不能重复', () => {
+        expect(() => hir_of(M('public static g:void(){ L: 1; L: 2; }')))
+            .toThrow(/标签重复|标签L已存在/)
     })
 })
 

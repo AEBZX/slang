@@ -35,6 +35,7 @@ class Runner{
         let ret:any=code
         for(const i of this.plu) this.tool=i(this.tool)
         for(const t of this.tool){
+            if(t==null)continue
             const out=t.run(ret)
             if(t.name!='check'){
                 ret=out

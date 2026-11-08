@@ -1,4 +1,4 @@
-﻿import {
+import {
     HArrayExpr, HMapExpr,
     BINARY, BIT_NOT,
     CALL,
@@ -103,6 +103,8 @@ export class IRTool extends PeepholeScope{
     ls_arg:IRArgs=null
     entry:boolean=false
     loop_id:number[]
+    //HIR 标签 id -> IR 块号:标签号是 HIR 自己分的,不能直接当块号用
+    label:Map<number,number>
     //当前所在函数的参数表(子块继承用)
     current_param:number[]=[]
     //是直接调用还取地址
@@ -153,12 +155,17 @@ export class IRTool extends PeepholeScope{
         this.arg_pool=new Map()
         this.param=new Map()
         this.loop_id=[]
+        this.label=new Map()
         //先开一个块
         this.block_id=this.create()
         this.reg_block=this.block_id
     }
     id(){
         return this.index++
+    }
+    label_id(id:number){
+        if(!this.label.has(id))this.label.set(id,this.id())
+        return this.label.get(id)
     }
 }
 export function container_of(expr:any,tool:IRTool,call:(data:any)=>void){

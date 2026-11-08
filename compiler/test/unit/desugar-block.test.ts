@@ -93,14 +93,14 @@ describe('desugar/块·Operation 与 Cast', () => {
         const out: any = desugar.run([oper()])[0]
         expect(out).toBeInstanceOf(Variable)
         expect(out.name).toBe('+@3')
-        expect(D(oper())).toBe('[static,sync,public]+@3:()=>null=(x:number,:?)=>number{return a;};')
+        expect(D(oper())).toBe('[static,sync,public]+@3:()=>null=(x:number,this:?)=>number{return a;};')
     })
 
     it('cast 和普通函数一样脱糖成 Variable,名字是「cast@序号」', () => {
         const out: any = desugar.run([cast()])[0]
         expect(out).toBeInstanceOf(Variable)
         expect(out.name).toBe('cast@7')
-        expect(D(cast())).toBe('[static,sync,public]cast@7:()=>null=(x:number,:?)=>number{return a;};')
+        expect(D(cast())).toBe('[static,sync,public]cast@7:()=>null=(x:number,this:?)=>number{return a;};')
     })
 
     it('operation 的 lambda 体会脱糖', () => {
@@ -132,16 +132,16 @@ describe('desugar/块·Function', () => {
     it('参数表末尾补一个隐式 this 槽', () => {
         const out = desugar.run([fn()])[0] as Variable
         const params = ((out.value as LambdaExpression).params)
-        expect(params.has('')).toBe(true)
-        expect(params.get('')).toBeInstanceOf(ClassType)
+        expect(params.has('this')).toBe(true)
+        expect(params.get('this')?.constructor.name).toBe('ReferenceType')
     })
 
     it('返回 void 时在函数体末尾补 return this', () => {
-        expect(D(fn())).toBe('[?,?,?]f@0:()=>null=(a:number,:?)=>void{b; return this;};')
+        expect(D(fn())).toBe('[?,?,?]f@0:()=>null=(a:number,this:?)=>void{b; return this;};')
     })
 
     it('返回非 void 时不补 return this', () => {
-        expect(D(fn(new NumberType()))).toBe('[?,?,?]f@0:()=>null=(a:number,:?)=>number{b;};')
+        expect(D(fn(new NumberType()))).toBe('[?,?,?]f@0:()=>null=(a:number,this:?)=>number{b;};')
     })
 
     it('声明的类型是占位用的空 lambda 类型,真正的类型在值上', () => {
@@ -185,13 +185,13 @@ describe('desugar/块·Class 与实例成员', () => {
     it('静态成员不加 this', () => {
         const c = new Class(mod(), 'C', new Map(), null, [
             new Function(mod(), 'f', new Map(), new Map(), new NumberType(), new ExprCommand(id('b')))])
-        expect(D(c)).toBe('[?,?,?]C:class{[?,?,?]f@0:()=>null=(:?)=>number{b;};}')
+        expect(D(c)).toBe('[?,?,?]C:class{[?,?,?]f@0:()=>null=(this:?)=>number{b;};}')
     })
 
     it('实例方法给 lambda 补 this 参数', () => {
         const c = new Class(mod(), 'C', new Map(), null, [
             new Function(inst(), 'f', new Map(), new Map(), new NumberType(), new ExprCommand(id('b')))])
-        expect(D(c)).toBe('[?,?,?]C:class{[unstatic,?,?]f@0:()=>null=(:?,this:?)=>number{b;};}')
+        expect(D(c)).toBe('[?,?,?]C:class{[unstatic,?,?]f@0:()=>null=(this:?)=>number{b;};}')
     })
 
     it('实例变量作为 lambda 初值时也补 this 参数', () => {

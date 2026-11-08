@@ -7,7 +7,7 @@ import {
     NumberType,
     StringType,
     Type,
-    VoidType, GenericType, ArrayType, MapType, PointType
+    VoidType, GenericType, ArrayType, MapType, PointType, ReferenceType
 } from '../../utils'
 import {parseGeneric, to_ast_data, to_string, tree_ast} from "./tool";
 const G_NumberType:slang_ast_generate=(data,tree)=>new NumberType()
@@ -55,6 +55,9 @@ const G_FixType:slang_ast_generate=(data,tree)=>{
                     break
                 case 'PointPostfix':
                     basic=new PointType(basic)
+                    break
+                case 'ReferencePostfix':
+                    basic=new ReferenceType(basic)
                     break
             }
     return basic

@@ -17,6 +17,8 @@ const I_Module:slang_ir_factory=(data:HModule,tool,call)=>{
     if(entry!=null){
         tool.entry=true
         tool.block_id=tool.create(0)
+        //entry 会编译第二遍:标签重新分块,避免 I_Label 复用旧块把第一遍清空
+        tool.label.clear()
         call(entry)
         //entry 只对这一个函数有效,否则下一个文件里所有 lambda 都会挤进块 0
         tool.entry=false

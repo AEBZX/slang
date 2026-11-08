@@ -15,10 +15,11 @@ import {
     Operation,
     Variable,
     Function, LambdaExpression, NullLiteral, Value, NumberType, StringType, BooleanType, ListCommand, Return,
-    IdentifierExpr, VoidType, Interface
+    IdentifierExpr, VoidType, Interface, ReferenceType
 } from '../utils'
-import {desugar_cast, desugar_oper, slang_desugar_visitor} from './tool'
+import {desugar_cast, desugar_oper, reset_loops, slang_desugar_visitor} from './tool'
 const D_File:slang_desugar_visitor=(node:File,call)=>{
+    reset_loops()
     node.children=node.children.map(call) as Block[]
     return node
 }
@@ -50,8 +51,7 @@ const D_Cast:slang_desugar_visitor=(node:Cast,call)=>{
 const D_Function:slang_desugar_visitor=(node:Function,call)=>{
     node.commands=call(node.commands)
     node.name=node.name+(node.index==null?'':'@'+node.index)
-    //对于static等啥用没有,只有对实例方法有用,所以都加不影响
-    node.params.set('',new ClassType(null,null))
+    node.params.set('this',new ReferenceType(new ClassType(null,null)))
     if(node.return_type instanceof VoidType)
         node.commands=new ListCommand([node.commands,new Return(new IdentifierExpr('this'))])
     return new Variable(node.modifiers,node.name,new LambdaType(null,null,null),new LambdaExpression(

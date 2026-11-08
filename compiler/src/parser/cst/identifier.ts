@@ -1,4 +1,4 @@
-﻿import {TokenType} from '../../utils'
+import {TokenType} from '../../utils'
 import {$} from '../../utils/lib/parser'
 const NumberType=$.s('NumberType',$.d('number'))
 const BooleanType=$.s('BooleanType',$.d('boolean'))
@@ -22,12 +22,13 @@ const BasicType=$.o('BasicType',
     $.s('ClassType',
         TokenType.Identifier,
         $.l('ClassTypeData',$.s('ClassTypeItem',$.d('.'),TokenType.Identifier)),
-        $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.d('>'))))
+        $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.g())))
 const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
     $.o('TypePostfix',
         $.s('MapPostfix',$.d('{'),$.d('}')),
         $.s('ArrayPostfix',$.d('['),$.d(']')),
-        $.s('PointPostfix',$.d('*'))
+        $.s('PointPostfix',$.d('*')),
+        $.s('ReferencePostfix',$.d('&'))
     )
 ))
 export default [

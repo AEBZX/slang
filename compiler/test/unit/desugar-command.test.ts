@@ -1,4 +1,4 @@
-﻿import {describe, expect, it} from 'vitest'
+import {describe, expect, it} from 'vitest'
 import desugar from '../../src/desugar'
 import {render} from './helper'
 import {
@@ -38,7 +38,9 @@ import {
 } from '../../src/utils'
 
 //脱糖一个节点并渲染。try 的 catch/finally/throw 名字带自己的序号,统一归一化掉
-const D = (n: any) => render(desugar.run([n])[0]).replace(/(catch|finally|throw)@\d+/g, '$1@N')
+const D = (n: any) => render(desugar.run([n])[0])
+    .replace(/(catch|finally|throw)@\d+/g, '$1@N')
+    .replace(/(while|break)@\d+/g, '$1@N')
 const id = (s: string) => new IdentifierExpr(s)
 const num = (s: string) => new NumberLiteral(s)
 const list = (...c: any[]) => new ListCommand(c)
@@ -103,26 +105,28 @@ describe('desugar/命令·var 声明', () => {
 })
 
 describe('desugar/命令·throw', () => {
-    it('throw 脱糖成调用 catch + 置位 throw 标志', () => {
-        expect(D(list(new Throw(id('e'))))).toBe('(catch(e)); throw=true;')
+    it('throw 保留节点,由 HIR 的 try 机制处理', () => {
+        expect(D(list(new Throw(id('e'))))).toBe('throw e;')
     })
 
     it('throw 的实参先脱糖', () => {
         const e = new AddExpression(id('a'), id('b'))
         ;(e as any).oper = 'o@0'
-        expect(D(list(new Throw(e)))).toBe('(catch((o@0((&a),(&b))))); throw=true;')
+        expect(D(list(new Throw(e)))).toBe('throw (o@0((&a),(&b)));')
     })
 })
 
 describe('desugar/命令·条件', () => {
     it('条件不是 boolean 时补 != null', () => {
         expect(D(new IfStatement(cond(), new ExprCommand(id('a')), null))).toBe('if((c!=null))a;')
-        expect(D(new WhileStatement(cond(), new ExprCommand(id('a'))))).toBe('while((c!=null))a;')
+        expect(D(new WhileStatement(cond(), new ExprCommand(id('a')))))
+            .toBe('label while@N: if((c!=null))a; goto while@N;else goto break@N; label break@N:')
     })
 
     it('条件已经是 boolean 时不动', () => {
         expect(D(new IfStatement(cond(true), new ExprCommand(id('a')), null))).toBe('if(c)a;')
-        expect(D(new WhileStatement(cond(true), new ExprCommand(id('a'))))).toBe('while(c)a;')
+        expect(D(new WhileStatement(cond(true), new ExprCommand(id('a')))))
+            .toBe('label while@N: if(c)a; goto while@N;else goto break@N; label break@N:')
     })
 
     it('if-else 两个分支都会脱糖', () => {
@@ -132,8 +136,9 @@ describe('desugar/命令·条件', () => {
 })
 
 describe('desugar/命令·循环', () => {
-    it('do-while 展开成「先做一遍 + while」', () => {
-        expect(D(new DoWhileStatement(new ExprCommand(id('a')), cond(true)))).toBe('a; while(c)a;')
+    it('do-while 先做一遍,再按条件回到循环头', () => {
+        expect(D(new DoWhileStatement(new ExprCommand(id('a')), cond(true))))
+            .toBe('label while@N: a; if(c)goto while@N;else goto break@N; label break@N:')
     })
 
     it('for 展开成「初始化 + while(条件){体;步进}」', () => {
@@ -142,17 +147,17 @@ describe('desugar/命令·循环', () => {
             cond(true),
             [new ExprCommand(new IncrementPostfix(id('i')))],
             new ExprCommand(id('body')))))
-            .toBe('i=0; while(c)body; (i++);')
+            .toBe('i=0; label while@N: if(c)body; (i++); goto while@N;else goto break@N; label break@N:')
     })
 
     it('for 的初始化与步进都可以为空', () => {
         expect(D(new ForStatement([], cond(true), [], new ExprCommand(id('body')))))
-            .toBe('while(c)body;')
+            .toBe('label while@N: if(c)body; goto while@N;else goto break@N; label break@N:')
     })
 
     it('foreach 展开成带下标的 for', () => {
         expect(D(new ForeachStatement('c', id('s'), new ExprCommand(id('body')))))
-            .toBe('for=0; c=null; while(((s[for])!=null))c=(s[for]); body; (for++);')
+            .toBe('for=0; c=null; label while@N: if(((s[for])!=null))c=(s[for]); body; (for++); goto while@N;else goto break@N; label break@N:')
     })
 
     //循环条件本身已经是布尔,不该再包一层 != null(以前包了两层,条件恒真,循环永不结束)
@@ -194,37 +199,38 @@ describe('desugar/命令·循环', () => {
 })
 
 describe('desugar/命令·try', () => {
-    it('try 脱糖成 throw 标志 + catch/finally 两个 lambda + try 体', () => {
+    it('try 保留节点,只脱糖三个子块', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
             new ExprCommand(id('c')))))
-            .toBe('throw@N=false; catch@N=(e:string)=>void{b; (finally@N());}; finally@N=()=>void{c;}; a; (finally@N());')
+            .toBe('try{a;}catch(e:string){b;}finally{c;}')
     })
 
-    it('没有 finally 时 finally lambda 体为空', () => {
+    it('没有 finally 时保留为无 finally 的 try', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
             null)))
-            .toBe('throw@N=false; catch@N=(e:string)=>void{b; (finally@N());}; finally@N=()=>void{}; a; (finally@N());')
+            .toBe('try{a;}catch(e:string){b;}')
     })
 
-    it('try 体里 throw 之后的语句会被包进 if(throw),避免执行两遍', () => {
+    it('try 体里的 throw 保持为 throw,不再展开标志', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a')), new Throw(id('x')), new ExprCommand(id('b'))),
             {iden: 'e', type: new StringType(), command: new ExprCommand(id('h'))},
             null)))
-            .toBe('throw@N=false; catch@N=(e:string)=>void{h; (finally@N());}; finally@N=()=>void{}; ' +
-                'a; (catch@N(x)); throw@N=true; if(throw@N)throw@N=false; b;else  (finally@N());')
+            .toBe('try{a; throw x; b;}catch(e:string){h;}')
     })
 
-    it('try 体里没有 throw 时不插入 if(throw)', () => {
-        const out = D(new TryStatement(
-            list(new ExprCommand(id('a')), new ExprCommand(id('b'))),
-            {iden: 'e', type: new StringType(), command: new ExprCommand(id('h'))},
-            null))
-        expect(out).not.toContain('if(throw)')
+    it('catch/finally 体内的命令也会脱糖', () => {
+        const e = new AddExpression(id('a'), id('b'))
+        ;(e as any).oper = 'o@0'
+        expect(D(new TryStatement(
+            list(new ExprCommand(id('a'))),
+            {iden: 'e', type: new StringType(), command: new ExprCommand(e)},
+            null)))
+            .toBe('try{a;}catch(e:string){(o@0((&a),(&b)));}')
     })
 })
 
