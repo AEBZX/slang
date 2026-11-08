@@ -39,28 +39,39 @@ const PostfixExpression=$.s('PostfixExpression',
             $.s('MemberPostfix',$.d('.'),TokenType.Identifier),
             $.s('IndexPostfix',$.d('['),$.r('Expression'),$.d(']')),
             $.s('ArgumentsPostfix',
-                $.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.g()),
+                $.c($.d('<'),$.w('GenericData',$.r('Type'),','),$.d('>')),
                 $.d('('),
                 $.w('Args',$.r('Expression'),','),
                 $.d(')'))
         )
     )
 )
+const PrefixData=$.o('PrefixData',
+    $.s('IncrementPrefix',$.d('++')),
+    $.s('DecrementPrefix',$.d('--')),
+    $.s('NotPrefix',$.d('!')),
+    $.s('BitNotPrefix',$.d('~')),
+    $.s('MinusPrefix',$.d('-')),
+    $.s('ReferencePrefix',$.d('*')),
+    $.s('AddressPrefix',$.d('&')),
+    $.s('NewPrefix',$.d('new'))
+)
+const PrefixDataWithCast=$.o('PrefixData',
+    $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')')),
+    $.s('IncrementPrefix',$.d('++')),
+    $.s('DecrementPrefix',$.d('--')),
+    $.s('NotPrefix',$.d('!')),
+    $.s('BitNotPrefix',$.d('~')),
+    $.s('MinusPrefix',$.d('-')),
+    $.s('ReferencePrefix',$.d('*')),
+    $.s('AddressPrefix',$.d('&')),
+    $.s('NewPrefix',$.d('new'))
+)
+//括号在 (类型)表达式 和普通括号里有歧义,只能分三条备选
 const PrefixExpression=$.o('PrefixExpression',
-    $.l('PrefixList',
-        $.o('PrefixData',
-            $.s('IncrementPrefix',$.d('++')),
-            $.s('DecrementPrefix',$.d('--')),
-            $.s('NotPrefix',$.d('!')),
-            $.s('BitNotPrefix',$.d('~')),
-            $.s('MinusPrefix',$.d('-')),
-            $.s('ReferencePrefix',$.d('*')),
-            $.s('AddressPrefix',$.d('&')),
-            $.s('NewPrefix',$.d('new')),
-            $.s('TypePrefix',$.d('('),$.r('Type'),$.d(')'))
-        )
-    ),
-    $.r('PrefixExpression')
+    $.s('PrefixExpression',$.l('PrefixList',$.s('TypePrefix',$.d('('),$.r('Type'),$.d(')'))),$.r('PostfixExpression')),
+    $.s('PrefixExpression',$.l('PrefixList',PrefixData),$.r('PostfixExpression')),
+    $.s('PrefixExpression',$.l('PrefixList',PrefixDataWithCast),$.r('PostfixExpression'))
 )
 const MulExpression=$.s('MulExpression',
     $.r('PrefixExpression'),$.l('OperList',

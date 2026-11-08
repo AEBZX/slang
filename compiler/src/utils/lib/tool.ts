@@ -11,10 +11,10 @@ export default class PeepholeTool{
 export class PeepholeScope{
     constructor(public parent:PeepholeScope,public global:PeepholeScope){
     }
-    enter():PeepholeScope{
+    enter(){
         return new PeepholeScope(this,this.global)
     }
-    leave():PeepholeScope{
+    leave(){
         return this.parent
     }
 }

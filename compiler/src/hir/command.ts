@@ -1,4 +1,4 @@
-import {slang_hir_visitor} from './tool'
+import {get_label, pop_labels, push_labels, set_label, slang_hir_visitor} from './tool'
 import {
     Assign, Await,
     Break,
@@ -19,14 +19,14 @@ const H_Assign:slang_hir_visitor=(node:Assign,scope,call)=>
 const H_ExprCommand:slang_hir_visitor=(node:ExprCommand,scope,call)=>
     new HExprCommand(call(node.data))
 const H_Label:slang_hir_visitor=(node:LabelCommand,scope,call)=>{
-    //列表作用域会先预登记本层标签(支持 goto 前向引用),这里复用那个号
-    const id=scope.label.has(node.name)?scope.label.get(node.name):scope.id()
-    scope.label.set(node.name,id)
-    return new HLabel(id)
+    const id=get_label(node.name)
+    const label=id==null?scope.id():id
+    set_label(node.name,label)
+    return new HLabel(label)
 }
 const H_Goto:slang_hir_visitor=(node:GotoCommand,scope,call)=>{
-    //只沿作用域链向上找:内层标签遮蔽外层,不能看到子作用域里的标签
-    const id=scope.get_label(node.name)
+    //只沿标签栈向上找:内层标签遮蔽外层
+    const id=get_label(node.name)
     if(id==null)throw new Error(`未定义的标签:${node.name}`)
     return new HGoto(id)
 }
@@ -40,13 +40,15 @@ const H_Await:slang_hir_visitor=(node:Await,scope,call)=>
     new HAwait(call(node.command))
 const H_ListCommand:slang_hir_visitor=(node:ListCommand,scope,call)=>{
     scope=scope.enter()
-    //先登记本层标签,goto 才能前向引用;内层同名标签覆盖外层
+    const labels=new Map<string,number>()
     for(const c of node.commands)
         if(c instanceof LabelCommand){
-            if(scope.label.has(c.name))throw new Error(`标签重复定义:${c.name}`)
-            scope.label.set(c.name,scope.id())
+            if(labels.has(c.name))throw new Error(`标签重复定义:${c.name}`)
+            labels.set(c.name,scope.id())
         }
-    const commands=node.commands.map(i=>call(i))
+    push_labels(labels)
+    const commands=node.commands.map(i=>call(i,scope))
+    pop_labels()
     scope=scope.leave()
     return new HListCommand(commands)
 }

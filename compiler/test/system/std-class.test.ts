@@ -97,9 +97,9 @@ describe('system/std+类·能编译并解码', () => {
             public get:@T(){ return this.v; }
         }`
         expect(errs([STD_SOURCE, `public m:module{ ${cls}
-            public static f:number(a:number){ var c:C<number>=new C<number>(); c.v=a; return 1; } }`])).toEqual([])
+            public static f:number(a:number){ var c:C<number> = new C<number>(); c.v=a; return 1; } }`])).toEqual([])
         expect(errs([STD_SOURCE, `public m:module{ ${cls}
-            public static f:number(a:number){ var c:C<number>=new C(); c.v=a; return 1; } }`])).toEqual([])
+            public static f:number(a:number){ var c:C<number> = new C(); c.v=a; return 1; } }`])).toEqual([])
     }, 30000)
 
     it('泛型类不带泛型实参会报错', () => {

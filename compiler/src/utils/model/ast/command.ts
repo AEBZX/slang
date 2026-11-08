@@ -156,7 +156,6 @@ export class SwitchStatement extends BlockCommand{
     }
 }
 export class TryStatement extends BlockCommand{
-    //没写 catch 时由文法补一个空的,这个标记用来区分"作者真的写了"和"补的"
     public no_catch:boolean=false
     constructor(public commands:Command,public catch_:{iden:string,type:Type,command:Command},public finally_:Command) {
         super()

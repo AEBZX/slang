@@ -22,7 +22,7 @@ const BasicType=$.o('BasicType',
     $.s('ClassType',
         TokenType.Identifier,
         $.l('ClassTypeData',$.s('ClassTypeItem',$.d('.'),TokenType.Identifier)),
-        $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.g())))
+        $.c($.d('<'),$.w('GenericType',$.r('Type'),','),$.d('>'))))
 const Type=$.s('Type',$.r('BasicType'),$.l('TypePostfixList',
     $.o('TypePostfix',
         $.s('MapPostfix',$.d('{'),$.d('}')),

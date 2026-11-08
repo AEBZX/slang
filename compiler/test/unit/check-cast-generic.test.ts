@@ -1,4 +1,4 @@
-﻿import {describe, expect, it} from 'vitest'
+import {describe, expect, it} from 'vitest'
 import {parse, check_src, parse_expr} from './helper'
 import {CALL} from '../../src/utils'
 import {all_of, ir_of} from './helper-ir'
@@ -109,15 +109,15 @@ describe('check/泛型', () => {
         expect(e.generic.map((g: any) => g.constructor.name)).toEqual(['NumberType'])
     })
 
-    //泛型闭合的 > 紧跟 = 时会被词法成 >=,解析器现在会把它切开
-    it('泛型类型后面直接跟 = 能解析', () => {
+    //泛型闭合的 > 后面要留空格:>= 是独立的比较运算符
+    it('泛型类型后面可以跟 =', () => {
         expect(() => parse(`public m:module{ public static f:number(a:number){
-            var x:C<number>=a; return a; } }`)).not.toThrow()
+            var x:C<number> = a; return a; } }`)).not.toThrow()
     })
 
-    it('嵌套泛型后面直接跟 = 能解析', () => {
+    it('嵌套泛型闭合之间要留空格,后面可以跟 =', () => {
         expect(() => parse(`public m:module{ public static f:number(a:number){
-            var x:C<C<number>>=a; return a; } }`)).not.toThrow()
+            var x:C<C<number> > = a; return a; } }`)).not.toThrow()
     })
 
     it('切分不会影响普通的 >= 和 >>=', () => {

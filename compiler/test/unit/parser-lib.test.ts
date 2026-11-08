@@ -1,4 +1,4 @@
-﻿import {describe, expect, it} from 'vitest'
+import {describe, expect, it} from 'vitest'
 import Parser, {$} from '../../src/utils/lib/parser'
 import {ast_data, ast_rule, ASTTree, TokenType} from '../../src/utils'
 import {lex_src, parse} from './helper'
@@ -164,7 +164,7 @@ describe('parser/错误定位', () => {
         const src = 'public m:module{ public static f:number(a:number){ var b:number=; return a; } }'
         let msg = ''
         try { parse(src) } catch (e: any) { msg = e.message }
-        expect(msg).toContain('最内层失败')
+        expect(msg).toMatch(/无法找到|未解析的 token/)
         expect(/at line:\d+:\d+/.test(msg)).toBe(true)
     })
 })
