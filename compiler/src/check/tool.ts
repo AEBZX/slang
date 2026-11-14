@@ -1,9 +1,24 @@
-import {ASTTree, Block, Cast, ClassType, Function, Interface, Module, Operation, Type, Variable} from '../utils'
+import {
+    ArrayType,
+    ASTTree,
+    Block,
+    Cast, Class,
+    ClassType,
+    Function, GenericType,
+    Interface, LambdaType, LiteralType,
+    Module,
+    Operation, PointType,
+    ReferenceType,
+    Type,
+    Variable, VoidType
+} from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 import {assertType} from 'vitest'
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
+    //继承链,key implements value
+    implement:Map<string[],Type[]>
     //符号表
     symbol:Map<string,ASTTree>
     generic:Map<string,Type>
@@ -22,6 +37,7 @@ export class Scope extends PeepholeScope{
         this.overload=new Map()
         this.operation=new Map()
         this.cast=new Map()
+        this.implement=new Map()
         this.cast_oper_type=null
         this.error=[]
     }
@@ -102,8 +118,6 @@ function module_merge(a:Module,b:Module){
 export function symbol_iden(ast:Block[],scope:Scope,path:string=''){
     if(ast==null)return
     for(const item of ast){
-        //operation,cast这种在全局注册的无名氏忽略
-        if(item instanceof Operation||item instanceof Cast)continue
         //重名
         if(scope.symbol.get(path+item.name)!=null){
             //不报错:函数重名(overload),模块重名(合并)
@@ -152,4 +166,60 @@ export function symbol_do_generic(ast:ASTTree,generic:Map<string,Type>,scope:Sco
     //注册泛型
     for(const [name,type] of generic)
         scope.set_generic(name,type)
+}
+//两者是同一类型,是则返回最小超类型,否则返回VoidType
+export function type_is(a:Type,b:Type,scope:Scope){
+    if(a instanceof ReferenceType)return type_is(a.t,b,scope)
+    if(b instanceof ReferenceType)return type_is(a,b.t,scope)
+    if(a instanceof GenericType)return type_is(scope.get_generic(a.generic),b,scope)
+    if(b instanceof GenericType)return type_is(a,scope.get_generic(b.generic),scope)
+    //其中一个是Null返回另一个
+    if(a instanceof VoidType)return b
+    if(b instanceof VoidType)return a
+    //情况1,都是Literal
+    if(a instanceof LiteralType&&b instanceof LiteralType){
+        if(a==b)return a
+        return new VoidType()
+    }
+    //情况2,array
+    if(a instanceof ArrayType&&b instanceof ArrayType)
+        return type_is(a.t,b.t,scope)
+    //情况3,point
+    if(a instanceof PointType&&b instanceof PointType)
+        return type_is(a.t,b.t,scope)
+    //情况4,lambda
+    if(a instanceof LambdaType&&b instanceof LambdaType){
+        //参数数量不一致
+        if(a.params.size!=b.params.size)return new VoidType()
+        //泛型数量不一致
+        if(a.generic.size!=b.generic.size)return new VoidType()
+        let ret:LambdaType=new LambdaType(new Map(),new Map(),new VoidType())
+        ret.returnType=type_is(a.returnType,b.returnType,scope)
+        const param_a=Array.from(a.params.values())
+        const param_b=Array.from(b.params.values())
+        const generic_a=Array.from(a.generic.values())
+        const generic_b=Array.from(b.generic.values())
+        for(let i=0;i<param_a.length;i++)
+            ret.params.set(Array.from(a.params.keys())[i],type_is(param_a[i],param_b[i],scope))
+        for(let i=0;i<generic_a.length;i++)
+            ret.generic.set(Array.from(a.generic.keys())[i],type_is(generic_a[i],generic_b[i],scope))
+        return ret
+    }
+    //情况5,ClassType,查继承链
+    if(a instanceof ClassType&&b instanceof ClassType){
+        //a和b是一个Class/Interface,取generic最小超类型
+        if(a.local==b.local){
+            let ret:ClassType=new ClassType(a.local)
+            for(let i=0;i<a.generic.length;i++)
+                ret.generic.push(type_is(a.generic[i],b.generic[i],scope))
+            return ret
+        }
+        //a implement b,当成b求
+        const implement=scope.implement.get(a.local)
+        for(const i of implement){
+            if((i as ClassType).local==b.local)return type_is(b,i,scope)
+            if(scope.implement.get(b.local).includes(i))return i
+        }
+    }
+    return new VoidType()
 }

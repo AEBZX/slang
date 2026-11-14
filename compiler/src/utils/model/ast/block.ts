@@ -13,6 +13,7 @@ export class Modifier extends ASTTree{
     }
 }
 export class Block extends ASTTree{
+    global_local:string[]
     constructor(public modifiers:Modifier,public name:string) {
         super()
     }

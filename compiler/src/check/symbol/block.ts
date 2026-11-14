@@ -13,19 +13,20 @@ import {
     Cast, BlockType
 } from '../../utils'
 const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
+    scope.global.path=''
     scope = scope.enter()
     for (const link of ast.links) {
         if (!scope.global.get(link.module.join('.')))
             scope.thr('link的模块不存在', link)
         scope.set(link.as, scope.global.get(link.module.join('.')))
     }
-    scope.set('up',new BlockType([],true))
     symbol_iden(ast.children,scope)
     for(const item of ast.children)
         call(item,2)
     scope=scope.leave()
 }
 const Symbol_Module:slang_check_visitor=(ast:Module,scope,call)=>{
+    scope.global.path=scope.global.path+ast.name+'.'
     scope=scope.enter()
     scope.set('up',new BlockType([],true))
     symbol_iden(ast.children,scope)
@@ -42,6 +43,7 @@ const Symbol_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.leave()
 }
 const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
+    scope.global.path=scope.global.path+ast.name+'.'
     scope=scope.enter()
     symbol_iden(ast.children,scope)
     //检查implement
@@ -71,9 +73,11 @@ const Symbol_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     call(ast.value,2)
 }
 const Symbol_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
+    scope.global.operation_set(scope.cast_oper_type,ast)
     call(ast.command,2)
 }
 const Symbol_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
+    scope.global.cast_set(scope.cast_oper_type,ast)
     call(ast.t,2)
     call(ast.command,2)
 }
