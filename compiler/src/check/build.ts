@@ -3,6 +3,8 @@ import {slang_check_visitor} from './tool'
 const Build_File:slang_check_visitor=(ast:File,scope,call)=>{
     for(const module of ast.children)
         call(module,1)
+    //下一轮检查
+    call(ast,2)
 }
 const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     if(ast.modifiers._private)return

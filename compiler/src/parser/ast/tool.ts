@@ -64,12 +64,12 @@ function stamp(data:ast_data,node:ASTTree){
 export function parseImplement(data:ast_data,tree:(data:ast_data)=>ASTTree,key:number){
     const first=data&&data.children?data.children.get(key) as ast_data:null
     if(first==null)
-        return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
+        return {is:false,data:stamp(data,null)}
     if(first.type=='ImplementsName'||first.type=='ModuleName')
         return {is:true,data:tree(to_ast_data(first,0))}
     if(first.type=='Type'||first.type=='BasicType')
         return {is:true,data:tree(first)}
-    return {is:false,data:stamp(data,new ClassType(['std','ObjectInterface'],[]))}
+    return {is:false,data:stamp(data,null)}
 }
 export function parseGeneric(data:ast_data,tree:(data:ast_data)=>ASTTree){
     const generic=to_ast_data(data,0)

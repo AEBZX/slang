@@ -5,7 +5,7 @@ import {
     Break,
     Continue, DoWhileStatement,
     ExprCommand, ForeachStatement, ForStatement,
-    IfStatement, ListCommand,
+    IfStatement, ListCommand, ReferenceType,
     Return,
     SwitchStatement,
     Throw, TryStatement,
@@ -17,6 +17,8 @@ const Censor_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.value,0)
 }
 const Censor_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
+    if(ast.t instanceof ReferenceType&&ast.value==null)
+        scope.thr('引用类型必须初始化',ast)
     call(ast.t,0)
     call(ast.value,0)
 }

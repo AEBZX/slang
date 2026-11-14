@@ -35,8 +35,8 @@ const G_Value:slang_ast_generate=(data,tree)=>{
             .map(i=>tree(i as ast_data)) as Block[])
 }
 const G_Class:slang_ast_generate=(data,tree)=>{
-    let generic=parseGeneric(data,tree)
-    let implement=generic.is?parseImplement(data,tree,1):parseImplement(data,tree,0)
+    const generic=parseGeneric(data,tree)
+    const implement=generic.is?parseImplement(data,tree,1):parseImplement(data,tree,0)
     let children=[]
     for(const v of to_ast_data(data,generic.is&&implement.is?2:generic.is||implement.is?1:0).children.values())
         if(typeof v=='object')children.push(tree(v))
@@ -85,7 +85,6 @@ const G_Block:slang_ast_generate=(data,tree)=>{
         _Modifier.includes('private')?true:(_Modifier.includes('public')||_Modifier.includes('unprivate'))?false:null
     )
     ret.name=to_string(data,1)
-    if((ret instanceof Class||ret instanceof Interface)&&ret.name=='ObjectInterface')ret.implement=null
     return ret
 }
 const G_File:slang_ast_generate=(data,tree)=>{

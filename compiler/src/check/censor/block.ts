@@ -11,7 +11,7 @@ import {
     Value,
     Variable,
     Function,
-    Enum
+    Enum, ReferenceType
 } from '../../utils'
 const Censor_File:slang_check_visitor=(ast:File,scope,call)=>{
     //link别名相同
@@ -25,6 +25,8 @@ const Censor_File:slang_check_visitor=(ast:File,scope,call)=>{
             scope.thr('文件顶层只能是value/module',block)
         call(block,0)
     }
+    //下一轮检查
+    call(ast,0)
 }
 const Censor_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     //value修饰符强制public=true,static=true,sync=true
@@ -95,6 +97,8 @@ const Censor_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     call(ast.command,0)
 }
 const Censor_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
+    if(ast.t instanceof ReferenceType&&ast.value==null)
+        scope.thr('引用类型必须初始化',ast)
     call(ast.t,0)
     call(ast.value,0)
 }
