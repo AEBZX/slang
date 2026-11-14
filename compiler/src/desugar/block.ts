@@ -14,7 +14,7 @@ import {
     NumberLiteral,
     Operation,
     Variable,
-    Function, LambdaExpression, NullLiteral, Value, NumberType, StringType, BooleanType, ListCommand, Return,
+    Function, LambdaExpression, NullLiteral, Value, NumberType, CharType, BooleanType, ListCommand, Return,
     IdentifierExpr, VoidType, Interface, ReferenceType
 } from '../utils'
 import {desugar_cast, desugar_oper, reset_loops, slang_desugar_visitor} from './tool'
@@ -29,7 +29,7 @@ const D_Module:slang_desugar_visitor=(node:Module,call)=>{
 }
 const D_Value:slang_desugar_visitor=(node:Value,call)=>{
     const literal=node.value instanceof NumberType?'number':
-        node.value instanceof StringType?'string':
+        node.value instanceof CharType?'string':
             node.value instanceof BooleanType?'boolean':''
     return new Module(new Modifier(false,false,false),literal,node.children.map(call) as Block[])
 }

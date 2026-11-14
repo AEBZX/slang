@@ -4,7 +4,6 @@ export class BasicType extends Type{}
 export class LiteralType extends BasicType{}
 export class NumberType extends LiteralType{}
 export class BooleanType extends LiteralType{}
-export class StringType extends LiteralType{}
 export class VoidType extends BasicType{}
 export class GenericType extends BasicType{
     constructor(public generic:string){
@@ -38,6 +37,5 @@ export class FixType extends Type{
     }
 }
 export class ArrayType extends FixType{}
-export class MapType extends FixType{}
 export class PointType extends FixType{}
 export class ReferenceType extends FixType{}

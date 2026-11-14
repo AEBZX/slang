@@ -105,9 +105,9 @@ export function symbol_iden(ast:Block[],scope:Scope,path:string=''){
         //operation,cast这种在全局注册的无名氏忽略
         if(item instanceof Operation||item instanceof Cast)continue
         //重名
-        if(scope.get(path+item.name)!=null){
+        if(scope.symbol.get(path+item.name)!=null){
             //不报错:函数重名(overload),模块重名(合并)
-            const block=scope.get(path+item.name)
+            const block=scope.symbol.get(path+item.name)
             if(block instanceof Module&&item instanceof Module){
                 //处理一个public一个private
                 if(block.modifiers._private!=item.modifiers._private)

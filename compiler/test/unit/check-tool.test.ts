@@ -12,7 +12,7 @@ import {
     MapType,
     NumberType,
     PointType,
-    StringType,
+    CharType,
     VoidType
 } from '../../src/utils'
 
@@ -59,9 +59,9 @@ describe('check/tool·类型工具', () => {
 
     it('type_same:同构才算同类型', () => {
         expect(type_same(new NumberType(), new NumberType())).toBe(true)
-        expect(type_same(new NumberType(), new StringType())).toBe(false)
+        expect(type_same(new NumberType(), new CharType())).toBe(false)
         expect(type_same(new ArrayType(new NumberType()), new ArrayType(new NumberType()))).toBe(true)
-        expect(type_same(new ArrayType(new NumberType()), new ArrayType(new StringType()))).toBe(false)
+        expect(type_same(new ArrayType(new NumberType()), new ArrayType(new CharType()))).toBe(false)
         expect(type_same(new ClassType(['A']), new ClassType(['A']))).toBe(true)
         expect(type_same(new ClassType(['m', 'A']), new ClassType(['A']))).toBe(true)
         expect(type_same(new ClassType(['A']), new ClassType(['B']))).toBe(false)
@@ -85,7 +85,7 @@ describe('check/tool·类型工具', () => {
 
     it('type_merge:不同基本类型合不出结果', () => {
         const s = scope()
-        expect(type_merge(new NumberType(), new StringType(), s).constructor.name).toBe('VoidType')
+        expect(type_merge(new NumberType(), new CharType(), s).constructor.name).toBe('VoidType')
     })
 
     it('type_merge:同构的 FixType 合出同构结果', () => {
@@ -104,7 +104,7 @@ describe('check/tool·类型工具', () => {
     it('type_is / type_:Void 只与 Void 兼容', () => {
         const s = scope()
         expect(type_is(new NumberType(), new NumberType(), s)).toBe(true)
-        expect(type_is(new NumberType(), new StringType(), s)).toBe(false)
+        expect(type_is(new NumberType(), new CharType(), s)).toBe(false)
         expect(type_is(new VoidType(), new VoidType(), s)).toBe(true)
         expect(type_is(new VoidType(), new NumberType(), s)).toBe(false)
     })
@@ -112,13 +112,13 @@ describe('check/tool·类型工具', () => {
     it('param_is:形参个数与逐个可赋值', () => {
         const s = scope()
         expect(param_is([new NumberType()], new Map([['a', new NumberType()]]), s)).toBe(true)
-        expect(param_is([new StringType()], new Map([['a', new NumberType()]]), s)).toBe(false)
+        expect(param_is([new CharType()], new Map([['a', new NumberType()]]), s)).toBe(false)
         expect(param_is([], new Map([['a', new NumberType()]]), s)).toBe(false)
     })
 
     it('pick_best:数量不符返回 null,唯一可匹配返回 0', () => {
         const s = scope()
-        const sets = [[new NumberType()], [new StringType()]]
+        const sets = [[new NumberType()], [new CharType()]]
         expect(pick_best(s, sets, [new NumberType()])).toBe(0)
         expect(pick_best(s, sets, [new BooleanType()])).toBe(null)
     })

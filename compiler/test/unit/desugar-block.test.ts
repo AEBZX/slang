@@ -19,7 +19,7 @@ import {
     Module,
     NumberType,
     Return,
-    StringType,
+    CharType,
     Value,
     Variable,
     VoidType,
@@ -60,7 +60,7 @@ describe('desugar/块·Value 重载块', () => {
     })
 
     it('value string / value boolean', () => {
-        expect(D(new Value(new StringType(), []))).toBe('[static,sync,public]string:module{}')
+        expect(D(new Value(new CharType(), []))).toBe('[static,sync,public]string:module{}')
         expect(D(new Value(new BooleanType(), []))).toBe('[static,sync,public]boolean:module{}')
     })
 

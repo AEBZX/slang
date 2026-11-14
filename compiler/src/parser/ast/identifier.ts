@@ -5,13 +5,11 @@ import {
     ClassType, FixType, KeyMap,
     LambdaType,
     NumberType,
-    StringType,
     Type,
-    VoidType, GenericType, ArrayType, MapType, PointType, ReferenceType
+    VoidType, GenericType, ArrayType, PointType, ReferenceType
 } from '../../utils'
 import {parseGeneric, to_ast_data, to_string, tree_ast} from "./tool";
 const G_NumberType:slang_ast_generate=(data,tree)=>new NumberType()
-const G_StringType:slang_ast_generate=(data,tree)=>new StringType()
 const G_BooleanType:slang_ast_generate=(data,tree)=>new BooleanType()
 const G_VoidType:slang_ast_generate=(data,tree)=>new VoidType()
 const G_LambdaType:slang_ast_generate=(data,tree)=>{
@@ -50,9 +48,6 @@ const G_FixType:slang_ast_generate=(data,tree)=>{
                 case 'ArrayPostfix':
                     basic=new ArrayType(basic)
                     break
-                case 'MapPostfix':
-                    basic=new MapType(basic)
-                    break
                 case 'PointPostfix':
                     basic=new PointType(basic)
                     break
@@ -64,7 +59,6 @@ const G_FixType:slang_ast_generate=(data,tree)=>{
 }
 export default new Map([
     ['NumberType',G_NumberType],
-    ['StringType',G_StringType],
     ['BooleanType',G_BooleanType],
     ['VoidType',G_VoidType],
     ['LambdaType',G_LambdaType],

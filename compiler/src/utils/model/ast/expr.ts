@@ -25,11 +25,6 @@ export class ArrayExpression extends PrimaryExpression{
         super()
     }
 }
-export class MapExpression extends PrimaryExpression{
-    constructor(public elements:Map<string,Expression>) {
-        super()
-    }
-}
 export class LambdaExpression extends PrimaryExpression{
     constructor(public generic:Map<string,Type>,public params:Map<string,Type>,public ret:Type,public body:Command) {
         super()

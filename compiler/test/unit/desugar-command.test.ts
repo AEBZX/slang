@@ -26,7 +26,7 @@ import {
     OrAssign,
     ShlAssign,
     ShrAssign,
-    StringType,
+    CharType,
     SubAssign,
     SwitchStatement,
     Throw,
@@ -202,7 +202,7 @@ describe('desugar/命令·try', () => {
     it('try 保留节点,只脱糖三个子块', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a'))),
-            {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
+            {iden: 'e', type: new CharType(), command: new ExprCommand(id('b'))},
             new ExprCommand(id('c')))))
             .toBe('try{a;}catch(e:string){b;}finally{c;}')
     })
@@ -210,7 +210,7 @@ describe('desugar/命令·try', () => {
     it('没有 finally 时保留为无 finally 的 try', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a'))),
-            {iden: 'e', type: new StringType(), command: new ExprCommand(id('b'))},
+            {iden: 'e', type: new CharType(), command: new ExprCommand(id('b'))},
             null)))
             .toBe('try{a;}catch(e:string){b;}')
     })
@@ -218,7 +218,7 @@ describe('desugar/命令·try', () => {
     it('try 体里的 throw 保持为 throw,不再展开标志', () => {
         expect(D(new TryStatement(
             list(new ExprCommand(id('a')), new Throw(id('x')), new ExprCommand(id('b'))),
-            {iden: 'e', type: new StringType(), command: new ExprCommand(id('h'))},
+            {iden: 'e', type: new CharType(), command: new ExprCommand(id('h'))},
             null)))
             .toBe('try{a; throw x; b;}catch(e:string){h;}')
     })
@@ -228,7 +228,7 @@ describe('desugar/命令·try', () => {
         ;(e as any).oper = 'o@0'
         expect(D(new TryStatement(
             list(new ExprCommand(id('a'))),
-            {iden: 'e', type: new StringType(), command: new ExprCommand(e)},
+            {iden: 'e', type: new CharType(), command: new ExprCommand(e)},
             null)))
             .toBe('try{a;}catch(e:string){(o@0((&a),(&b)));}')
     })

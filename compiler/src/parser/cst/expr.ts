@@ -6,11 +6,6 @@ const BooleanLiteral=$.s('BooleanLiteral',$.o('Boolean','true','false'))
 const NullLiteral=$.s('NullLiteral',$.d('null'))
 const Identifier=$.s('Identifier',TokenType.Identifier)
 const ArrayExpression=$.o('ArrayExpression',$.t('[',$.w('ArrayExpression',$.r('Expression'),','),']'))
-const MapExpression=$.o('MapExpression',$.t('[',
-    $.w('MapExpression',
-        $.s('MapData',TokenType.Identifier,$.d(':'),$.r('Expression'))
-        ,',')
-    ,']'))
 const LambdaExpression=$.s('LambdaExpression',
     $.c($.r('GenericList')),
     $.t('(',
@@ -27,8 +22,7 @@ const PrimaryExpression=$.o('PrimaryExpression',
     $.r('Identifier'),
     $.r('LambdaExpression'),
     $.t('(',$.r('Expression'),')'),
-    $.r('ArrayExpression'),
-    $.r('MapExpression')
+    $.r('ArrayExpression')
 )
 const PostfixExpression=$.s('PostfixExpression',
     $.r('PrimaryExpression'),
@@ -169,7 +163,6 @@ export default [
     NullLiteral,
     Identifier,
     ArrayExpression,
-    MapExpression,
     LambdaExpression,
     PrimaryExpression,
     PostfixExpression,

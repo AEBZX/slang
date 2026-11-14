@@ -11,7 +11,7 @@ import {
     NumberType,
     PostfixExpression,
     PrefixExpression,
-    StringType, Throw, Type,
+    CharType, Throw, Type,
     LessExpression, LessEqualExpression, LogicOrExpression, BooleanLiteral
 } from '../utils'
 
@@ -38,7 +38,7 @@ export function current_loop():loop_labels{
 }
 export const LiteralToConst=new Map<any,string>([
     [NumberType,'number'],
-    [StringType,'string'],
+    [CharType,'string'],
     [BooleanType,'boolean']
 ])
 export function desugar_cast(cast:string,data:Expression){

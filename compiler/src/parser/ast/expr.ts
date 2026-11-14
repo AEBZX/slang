@@ -20,7 +20,6 @@ import {
     LambdaExpression,
     LogicAndExpression,
     LogicOrExpression,
-    MapExpression,
     MemberPostfix,
     MinusPrefix,
     MulExpression,
@@ -61,13 +60,6 @@ const G_ArrayExpression:slang_ast_generate=(data,tree)=>{
     for(const v of data.children.values())
         if(typeof v=='object')children.push(tree(v))
     return new ArrayExpression(children)
-}
-const G_MapExpression:slang_ast_generate=(data,tree)=>{
-    let children=new KeyMap<string,Expression>
-    for(const v of data.children.values())
-        if(typeof v=='object')
-            children.set(to_string(v,0),tree_ast(v,1,tree))
-    return new MapExpression(children)
 }
 const G_LambdaExpression:slang_ast_generate=(data,tree)=>{
     const d=parseGeneric(data,tree)
@@ -187,7 +179,6 @@ export default new Map([
     ['NullLiteral',G_NullLiteral],
     ['Identifier',G_Identifier],
     ['ArrayExpression',G_ArrayExpression],
-    ['MapExpression',G_MapExpression],
     ['PostfixExpression',G_PostfixExpression],
     ['PrefixExpression',G_PrefixExpression],
     ['AddExpression',G_BinaryExpression],

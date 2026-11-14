@@ -10,7 +10,7 @@ import {
     Variable,
     ClassType,
     Operation,
-    Cast
+    Cast, BlockType
 } from '../../utils'
 const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
     scope = scope.enter()
@@ -19,6 +19,7 @@ const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
             scope.thr('link的模块不存在', link)
         scope.set(link.as, scope.global.get(link.module.join('.')))
     }
+    scope.set('up',new BlockType([],true))
     symbol_iden(ast.children,scope)
     for(const item of ast.children)
         call(item,2)
@@ -26,6 +27,7 @@ const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
 }
 const Symbol_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope=scope.enter()
+    scope.set('up',new BlockType([],true))
     symbol_iden(ast.children,scope)
     for(const item of ast.children)
         call(item,2)
@@ -56,6 +58,8 @@ const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call
 const Symbol_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     scope=scope.enter()
     symbol_do_generic(ast,ast.generic,scope,call)
+    for(const type of ast.generic.values())
+        call(type,2)
     for(const [name,type] of ast.params)
         scope.set(name,type)
     call(ast.commands,2)
