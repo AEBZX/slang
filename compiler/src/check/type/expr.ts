@@ -16,7 +16,7 @@ import {
     BinaryExpression, BitNotPrefix, BlockType,
     BooleanLiteral, BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix,
     IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, LambdaExpression, LambdaType, MemberPostfix,
-    MinusPrefix,
+    MinusPrefix, NewPrefix,
     NotPrefix,
     NullLiteral,
     NumberLiteral,
@@ -263,6 +263,25 @@ const Type_Type:slang_check_visitor=(ast:TypePrefix,scope,call)=>{
     ast.type=ast.t
     if(fast_cast(scope,ast,ast.expr,ast.t))return
     scope.thr('你没有定义强转的类型的cast',ast)
+}
+const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
+    if(fast_operation(scope,ast,'new',new VoidType(),ast.expr))return
+    //首先必须是Arguments,里面必须是ClassType,然后自动加.constructor检查
+    if(!(ast.expr instanceof ArgumentsPostfix)){
+        scope.thr('new后面得跟调用',ast)
+        return
+    }
+    //不能直接调用不然会找不到函数
+    call(ast.expr.expr,3)
+    if(!(ast.expr.expr.type instanceof BlockType)){
+        scope.thr('new后面得跟类',ast)
+        return
+    }
+    if(!(scope.get(ast.expr.expr.type.local.join('.')) instanceof Class))
+        scope.thr('new后面得跟类',ast)
+    ast.type=new ClassType(ast.expr.expr.type.local,ast.expr.generic)
+    ast.expr.expr=new MemberPostfix(ast.expr.expr,'constructor')
+    call(ast.expr.expr,3)
 }
 const Type_Binary:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
     call(ast.left,3)

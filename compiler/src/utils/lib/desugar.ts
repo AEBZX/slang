@@ -16,7 +16,7 @@ export default class Desugar extends PeepholeTool{
         return this
     }
     run(node:PeepholeTree[]):PeepholeTree[]{
-        let generate=(node:PeepholeTree):PeepholeTree=>{
+        const generate=(node:PeepholeTree):PeepholeTree=>{
             for(let [k,v] of this.ref)
                 if(node instanceof k)
                     return v(node,generate)

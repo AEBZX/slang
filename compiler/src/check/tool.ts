@@ -387,7 +387,7 @@ export function fast_operation(scope:Scope,ast:Expression,op:string,ret:Type,...
     const operation=operation_get(scope,ast,op,ret,...param.map(v=>v instanceof Expression?v.type:v))
     if(operation!=null){
         ast.type=operation.type
-        ast.oper=operation.global_local.join('.')+'.'+operation.index
+        ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
         return true
     }
     return false
@@ -397,7 +397,7 @@ export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Typ
     const cast=cast_get(scope,ast,input.type,output)
     if(cast!=null){
         ast.type=cast.t
-        input.cast=cast.global_local.join('.')+'.'+cast.id
+        input.cast=cast.global_local.join('.')+'.cast@'+cast.id
         return true
     }
     return false
