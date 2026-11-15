@@ -13,7 +13,8 @@ import {
     ArgumentsPostfix,
     ArrayExpression,
     ArrayType,
-    BinaryExpression, BitNotPrefix, BlockType, BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix,
+    BinaryExpression, BitNotPrefix, BlockType,
+    BooleanLiteral, BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix,
     IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, LambdaExpression, LambdaType, MemberPostfix,
     MinusPrefix,
     NotPrefix,
@@ -32,6 +33,9 @@ const Type_Number:slang_check_visitor=(ast:NumberLiteral,scope,call)=>{
         return
     }
     ast.type=new NumberType()
+}
+const Type_Boolean:slang_check_visitor=(ast:BooleanLiteral,scope,call)=>{
+    ast.type=new BooleanType()
 }
 const Type_String:slang_check_visitor=(ast:StringLiteral,scope,call)=>{
     //如果只有一个元素当成char也就是一个number
@@ -296,3 +300,23 @@ const Type_Ternary:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
     //Ternary不做强转
     scope.thr('类型不匹配',ast)
 }
+export default new Map<any,slang_check_visitor>([
+    [ArrayExpression,Type_Array],
+    [LambdaExpression,Type_Lambda],
+    [NumberLiteral,Type_Number],
+    [StringLiteral,Type_String],
+    [BooleanLiteral,Type_Boolean],
+    [NullLiteral,Type_Null],
+    [IdentifierExpr,Type_Identifier],
+    [ArgumentsPostfix,Type_Arguments],
+    [IncrementPrefix,Type_PreInc_Dec],
+    [DecrementPrefix,Type_PreInc_Dec],
+    [NotPrefix,Type_Not],
+    [BitNotPrefix,Type_BitNot],
+    [MinusPrefix,Type_Minus],
+    [ReferencePrefix,Type_Reference],
+    [AddressPrefix,Type_Point],
+    [TypePrefix,Type_Type],
+    [BinaryExpression,Type_Binary],
+    [TernaryExpression,Type_Ternary],
+])

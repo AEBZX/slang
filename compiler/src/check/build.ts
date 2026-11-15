@@ -16,8 +16,6 @@ import {slang_check_visitor} from './tool'
 const Build_File:slang_check_visitor=(ast:File,scope,call)=>{
     for(const module of ast.children)
         call(module,1)
-    //下一轮检查
-    call(ast,2)
 }
 const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.global.set(scope.path+'.'+ast.name,ast)
@@ -70,3 +68,15 @@ const Build_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     scope.global.set(scope.path+'.'+ast.name,ast)
     ast.global_local=(scope.path+'.'+ast.name).split('.')
 }
+export default new Map<any,slang_check_visitor>([
+    [File,Build_File],
+    [Module,Build_Module],
+    [Value,Build_Value],
+    [Enum,Build_Enum],
+    [Class,Build_Class_Interface],
+    [Interface,Build_Class_Interface],
+    [Function,Build_Function],
+    [Operation,Build_Operation],
+    [Cast,Build_Cast],
+    [Variable,Build_Variable]
+])

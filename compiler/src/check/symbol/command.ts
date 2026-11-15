@@ -89,3 +89,21 @@ const Symbol_List:slang_check_visitor=(ast:ListCommand,scope,call)=>{
         call(item,2)
     scope=scope.leave()
 }
+export default new Map<any,slang_check_visitor>([
+    [Assign,Symbol_Assign],
+    [VarDecl,Symbol_VarDecl],
+    [Await,Symbol_Await],
+    [ExprCommand,Symbol_ExprCommand],
+    [Return,Symbol_Return],
+    [Throw,Symbol_Throw],
+    [VM,Symbol_VM],
+    [LabelCommand,Symbol_Label],
+    [GotoCommand,Symbol_Goto],
+    [IfStatement,Symbol_If],
+    [WhileStatement,Symbol_While_DoWhile],
+    [DoWhileStatement,Symbol_While_DoWhile],
+    [ForStatement,Symbol_For],
+    [SwitchStatement,Symbol_Switch],
+    [TryStatement,Symbol_Try],
+    [ListCommand,Symbol_List]
+])

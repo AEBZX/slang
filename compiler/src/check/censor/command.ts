@@ -81,3 +81,22 @@ const Censor_List:slang_check_visitor=(ast:ListCommand,scope,call)=>{
     for(const command of ast.commands)
         call(command,0)
 }
+export default new Map<any,slang_check_visitor>([
+    [Assign,Censor_Assign],
+    [VarDecl,Censor_VarDecl],
+    [Await,Censor_Await],
+    [ExprCommand,Censor_ExprCommand],
+    [Return,Censor_Return],
+    [Break,Censor_Break_Continue],
+    [Continue,Censor_Break_Continue],
+    [Throw,Censor_Throw],
+    [VM,Censor_VM],
+    [IfStatement,Censor_If],
+    [SwitchStatement,Censor_Switch],
+    [DoWhileStatement,Censor_While_DoWhile],
+    [WhileStatement,Censor_While_DoWhile],
+    [ForStatement,Censor_For],
+    [ForeachStatement,Censor_Foreach],
+    [TryStatement,Censor_Try],
+    [ListCommand,Censor_List]
+])

@@ -17,3 +17,9 @@ const Symbol_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
 const Symbol_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
     call(ast.t,2)
 }
+export default new Map<any,slang_check_visitor>([
+    [GenericType,Symbol_Generic],
+    [LambdaType,Symbol_Lambda],
+    [ClassType,Symbol_ClassType],
+    [FixType,Symbol_FixType]
+])

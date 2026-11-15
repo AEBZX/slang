@@ -20,3 +20,8 @@ const Censor_Class:slang_check_visitor=(ast:ClassType,scope,call)=>{
 const Censor_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
     call(ast.t,0)
 }
+export default new Map<any,slang_check_visitor>([
+    [LambdaType,Censor_Lambda],
+    [ClassType,Censor_Class],
+    [FixType,Censor_FixType]
+])

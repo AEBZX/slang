@@ -58,3 +58,16 @@ const Symbol_Ternary:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
     call(ast.trueExpr,2)
     call(ast.falseExpr,2)
 }
+export default new Map<any,slang_check_visitor>([
+    [IdentifierExpr,Symbol_Identifier],
+    [ArrayExpression,Symbol_Array],
+    [LambdaExpression,Symbol_Lambda],
+    [IncrementPostfix,Symbol_Inc_Dec],
+    [DecrementPostfix,Symbol_Inc_Dec],
+    [MemberPostfix,Symbol_Member],
+    [IndexPostfix,Symbol_Index],
+    [ArgumentsPostfix,Symbol_Arguments],
+    [PrefixExpression,Symbol_Prefix],
+    [BinaryExpression,Symbol_Binary],
+    [TernaryExpression,Symbol_Ternary],
+])

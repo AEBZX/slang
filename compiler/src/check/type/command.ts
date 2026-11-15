@@ -180,3 +180,20 @@ const Type_List:slang_check_visitor=(ast:ListCommand,scope,call)=>{
         call(item,3)
     scope=scope.leave()
 }
+export default new Map<any,slang_check_visitor>([
+    [Assign,Type_Assign],
+    [VarDecl,Type_VarDecl],
+    [Await,Type_Await],
+    [ExprCommand,Type_ExprCommand],
+    [Return,Type_Return],
+    [Throw,Type_Throw],
+    [VM,Type_VM],
+    [IfStatement,Type_If],
+    [WhileStatement,Type_While_DoWhile],
+    [DoWhileStatement,Type_While_DoWhile],
+    [ForStatement,Type_For],
+    [ForeachStatement,Type_Foreach],
+    [SwitchStatement,Type_Switch],
+    [TryStatement,Type_Try],
+    [ListCommand,Type_List]
+])

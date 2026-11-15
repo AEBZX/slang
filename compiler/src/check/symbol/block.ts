@@ -83,3 +83,14 @@ const Symbol_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     call(ast.t,2)
     call(ast.command,2)
 }
+export default new Map<any,slang_check_visitor>([
+    [File,Symbol_File],
+    [Module,Symbol_Module],
+    [Value,Symbol_Value],
+    [Class,Symbol_Class_Interface],
+    [Interface,Symbol_Class_Interface],
+    [Function,Symbol_Function],
+    [Variable,Symbol_Variable],
+    [Operation,Symbol_Operation],
+    [Cast,Symbol_Cast]
+])

@@ -25,8 +25,6 @@ const Censor_File:slang_check_visitor=(ast:File,scope,call)=>{
             scope.thr('文件顶层只能是value/module',block)
         call(block,0)
     }
-    //下一轮继续处理
-    call(ast,1)
 }
 const Censor_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     //value修饰符强制public=true,static=true,sync=true
@@ -109,3 +107,15 @@ const Censor_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     if(ast.command.params.size==0)
         scope.thr('operation不能重载滚木',ast)
 }
+export default new Map<any,slang_check_visitor>([
+    [File,Censor_File],
+    [Value,Censor_Value],
+    [Module,Censor_Module],
+    [Enum,Censor_Enum],
+    [Class,Censor_Class_Interface],
+    [Interface,Censor_Class_Interface],
+    [Function,Censor_Function],
+    [Cast,Censor_Cast],
+    [Variable,Censor_Variable],
+    [Operation,Censor_Operation]
+])

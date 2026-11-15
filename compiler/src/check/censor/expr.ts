@@ -5,16 +5,11 @@ import {
     DecrementPostfix,
     IncrementPostfix,
     IndexPostfix,
-    LambdaExpression,
-    MapExpression, MemberPostfix, PrefixExpression, TernaryExpression, TypePrefix
+    LambdaExpression, MemberPostfix, PrefixExpression, TernaryExpression, TypePrefix
 } from '../../utils'
 const Censor_Array:slang_check_visitor=(ast:ArrayExpression,scope,call)=>{
     for(const item of ast.elements)
         call(item,0)
-}
-const Censor_Map:slang_check_visitor=(ast:MapExpression,scope,call)=>{
-    for(const value of ast.elements.values())
-        call(value,0)
 }
 const Censor_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
     const param_data=Array.from(ast.params.keys())
@@ -58,3 +53,15 @@ const Censor_Ternary:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
     call(ast.trueExpr,0)
     call(ast.falseExpr,0)
 }
+export default new Map<any,slang_check_visitor>([
+    [ArrayExpression,Censor_Array],
+    [LambdaExpression,Censor_Lambda],
+    [IncrementPostfix,Censor_IncPostfix_DecPostfix_Member],
+    [DecrementPostfix,Censor_IncPostfix_DecPostfix_Member],
+    [MemberPostfix,Censor_IncPostfix_DecPostfix_Member],
+    [IndexPostfix,Censor_Index],
+    [ArgumentsPostfix,Censor_Argument],
+    [PrefixExpression,Censor_Prefix],
+    [BinaryExpression,Censor_Binary],
+    [TernaryExpression,Censor_Ternary]
+])
