@@ -156,7 +156,6 @@ export class SwitchStatement extends BlockCommand{
     }
 }
 export class TryStatement extends BlockCommand{
-    public no_catch:boolean=false
     constructor(public commands:Command,public catch_:{iden:string,type:Type,command:Command},public finally_:Command) {
         super()
     }

@@ -49,7 +49,9 @@ const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call
     //检查implement
     symbol_check_implement(ast,ast.implement,scope)
     symbol_do_generic(ast,ast.generic,scope,call)
-    call(ast.implement,2)
+    call(ast.implement,2);
+    //替换为绝对路径
+    (ast.implement as ClassType).local=(scope.get((ast.implement as ClassType).local.join('.')) as Class|Interface).global_local
     //注册this
     scope.set('this',new ClassType([ast.name],Array.from(ast.generic.values()),true))
     scope.cast_oper_type=new ClassType([ast.name],Array.from(ast.generic.values()))

@@ -57,6 +57,7 @@ const Type_Function:slang_check_visitor=(ast:Function,scope,call)=>{
         call(type,3)
     for(const type of ast.params.values())
         call(type,3)
+    scope.ret=ast.return_type
     call(ast.commands,3)
     call(ast.return_type,3)
     scope=scope.leave()

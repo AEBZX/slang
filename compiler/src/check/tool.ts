@@ -1,24 +1,27 @@
 import {
     ArrayType,
     ASTTree,
-    Block,
+    Block, BooleanType,
     Cast, Class,
-    ClassType,
-    Function, GenericType,
+    ClassType, Enum, EnumType, Expression, FixType,
+    Function, GenericType, IdentifierExpr,
     Interface, LambdaType, LiteralType,
     Module,
-    Operation, PointType,
+    Operation, PointType, ReferencePrefix,
     ReferenceType,
     Type,
     Variable, VoidType
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
 import {assertType} from 'vitest'
+import ast from '../parser/ast'
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
+    //标签表
+    label:string[]
     //继承链,key implements value
-    implement:Map<string[],Type[]>
+    implement:Map<string[],ClassType[]>
     //符号表
     symbol:Map<string,ASTTree>
     generic:Map<string,Type>
@@ -29,7 +32,10 @@ export class Scope extends PeepholeScope{
     cast_oper_type:Type
     error:string[]
     _loop:boolean=false
+    ret:Type=null
     path:string
+    private cast_index:number=0
+    private operation_index:number=0
     constructor(parent:Scope,global:Scope){
         super(parent,global)
         this.symbol=new Map()
@@ -40,6 +46,20 @@ export class Scope extends PeepholeScope{
         this.implement=new Map()
         this.cast_oper_type=null
         this.error=[]
+        this.label=[]
+    }
+    public label_set(name:string){
+        if(!this.label.includes(name))this.label.push(name)
+    }
+    public label_get(name:string):boolean{
+        return this.label.includes(name)||this.parent?.label_get(name)||this.global?.label_get(name)||false
+    }
+    public implement_set(local:string[],type:ClassType){
+        if(this.global!=null)this.global.implement_set(local,type)
+        if(this.implement.get(local)==null)this.implement.set(local,[])
+        this.implement.get(local).push(type)
+        if(this.implement.get(type.local)!=null)
+            this.implement.get(local).push(...this.implement.get(type.local))
     }
     public get_generic(name:string):Type{
         return this.generic.get(name)||this.parent?.get_generic(name)||this.global?.get_generic(name)||null
@@ -53,8 +73,8 @@ export class Scope extends PeepholeScope{
         ast.index=this.overload.get(name).length
         this.overload.get(name).push(ast)
     }
-    public overload_get(name:string,index:number=-1):Function{
-        return this.overload.get(name)[index]||this.parent?.overload_get(name,index)||this.global?.overload_get(name,index)||null
+    public overload_get(name:string):Function[]{
+        return this.overload.get(name)||this.parent?.overload_get(name)||this.global?.overload_get(name)||[]
     }
     public operation_set(type:Type,ast:Operation){
         if(this.global!=null){
@@ -63,7 +83,7 @@ export class Scope extends PeepholeScope{
         }
         if(!this.operation.has(type))this.operation.set(type,[ast])
         if(this.operation.get(type).includes(ast))return
-        ast.index=this.operation.get(type).length
+        ast.index=this.operation_index++
         this.operation.get(type).push(ast)
     }
     public operation_get(type:Type):Operation[] {
@@ -75,8 +95,9 @@ export class Scope extends PeepholeScope{
             this.global.cast_set(name,ast)
             return
         }
+        if(this.cast.has(name)&&this.cast.get(name).includes(ast))return
+        ast.id=this.cast_index++
         if(!this.cast.has(name))this.cast.set(name,[ast])
-        if(this.cast.get(name).includes(ast))return
         this.cast.get(name).push(ast)
     }
     public cast_get(name:Type){
@@ -169,6 +190,7 @@ export function symbol_do_generic(ast:ASTTree,generic:Map<string,Type>,scope:Sco
 }
 //两者是同一类型,是则返回最小超类型,否则返回VoidType
 export function type_is(a:Type,b:Type,scope:Scope){
+    if(a==b)return a
     if(a instanceof ReferenceType)return type_is(a.t,b,scope)
     if(b instanceof ReferenceType)return type_is(a,b.t,scope)
     if(a instanceof GenericType)return type_is(scope.get_generic(a.generic),b,scope)
@@ -215,11 +237,149 @@ export function type_is(a:Type,b:Type,scope:Scope){
             return ret
         }
         //a implement b,当成b求
-        const implement=scope.implement.get(a.local)
+        const implement=scope.global.implement.get(a.local)
         for(const i of implement){
             if((i as ClassType).local==b.local)return type_is(b,i,scope)
-            if(scope.implement.get(b.local).includes(i))return i
+            if(scope.global.implement.get(b.local).includes(i))return i
         }
     }
+    if(a instanceof EnumType&&b instanceof EnumType)
+        if(a.local==b.local)return a
     return new VoidType()
+}
+//具体性比较,如果a比b更具体返回true
+//要求两者length相同
+//也可以用于泛型相容性检查
+export function param_best(param1:Type[],param2:Type[],scope:Scope){
+    return param1.every((v,i)=>type_is(v,param2[i],scope)==param2[i])
+}
+export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...param:Type[]){
+    const oper_type=param[0]
+    let operations:Operation[]=[]
+    for(const [key,value] of scope.operation)
+        if(type_is(key,oper_type,scope)==key)operations.push(...value)
+    operations=operations.filter(v=>v.oper==oper)
+        .filter(v=>type_is(v.command.ret,ret,scope)==ret)
+        .filter(v=>v.command.params.size==param.length)
+        .filter(v=>{
+            for(let i=0;i<v.command.params.size;i++)
+                if(type_is(Array.from(v.command.params.values())[i],param[i],scope)!=param[i])return false
+            return true
+        })//存在一个不等于他的operation,参数比他更具体,pass
+        .filter(v=>{
+            for(const operation of operations){
+                if(v==operation)continue
+                if(param_best(Array.from(operation.command.params.values()),
+                              Array.from(v.command.params.values()),scope))
+                    return false
+            }
+            return true
+        })
+    if(operations.length==0)return null
+    if(operations.length!=1){
+        scope.thr(`${oper}中存在无法进行具体性决议的operation`,ast)
+        return null
+    }
+    return operations[0]
+}
+export function cast_get(scope:Scope,ast:ASTTree,input:Type,output:Type){
+    let casts:Cast[]=[]
+    for(const [key,value] of scope.cast)
+        if(type_is(key,output,scope)==key)
+            casts.push(...value)
+    casts=casts.filter(v=>{
+        //cast只有一个参数
+        const param=Array.from(v.command.params.values())[0]
+        return type_is(param, input, scope) == input
+    })
+        .filter(v=>{
+            for(const cast of casts){
+                if(cast==v)continue
+                if(param_best(Array.from(cast.command.params.values()),
+                              Array.from(v.command.params.values()),scope))
+                    return false
+            }
+        })
+    if(casts.length==0)return null
+    if(casts.length!=1){
+        scope.thr(`存在无法进行具体性决议的cast`,ast)
+        return null
+    }
+    return casts[0]
+}
+//逻辑上condition不是bool可以被转为condition!=null,但是一般会期望condition是bool,所以如果不是bool,尝试一次转换
+export function try_bool(scope:Scope,ast:Expression){
+    if(ast.type instanceof BooleanType)return
+    const cast=cast_get(scope,ast,ast.type,new BooleanType())
+    if(cast==null)return
+    ast.cast=cast.global_local.join('.')+'.'+cast.id
+    ast.type=new BooleanType()
+}
+//将左值类型转换为便于计算的纯右值类型
+export function to_right(type:Type){
+    if(type instanceof ReferenceType)return to_right(type.t)
+    return type
+}
+//如果是this,那么不受private限制
+export function block_get(_this:boolean,_static:boolean,path:string,name:string,generic:Type[],scope:Scope){
+    const block=scope.get(path) as Block
+    if(!(block instanceof Module||block instanceof Class||block instanceof Interface||block instanceof Enum))
+        return null
+    if(!_static&&(block instanceof Module||block instanceof Enum))
+        return null
+    if(block instanceof Enum) {
+        if(block.children.includes(name))
+            return new EnumType(block.global_local)
+        return null
+    }
+    const children=block.children
+        .filter(v=>_this||!v.modifiers._private)
+        .filter(v=>!_static||!v.modifiers.unstatic)
+        .filter(v=>v.name==name)
+    if(children.length==0)return null
+    if(children.length==1){
+        if(block instanceof Interface||block instanceof Class&&!_static){
+            //泛型注入
+            let index=0
+            let _generic:Map<string,Type>=new Map()
+            for(const key of block.generic.keys())
+                _generic.set(key,generic[index++])
+            return generic_type_real(children[0].type,_generic,scope)
+        }
+        return children[0].type
+    }
+    //此时100%是函数重载
+    return new LambdaType(new Map(),new Map(),new VoidType(),true,block.global_local.join('.')+'.'+name)
+}
+//得出实际类型
+export function generic_type_real(type:Type,generic:Map<string,Type>,scope:Scope){
+    if(type instanceof FixType){
+        type.t=generic_type_real(type.t,generic,scope)
+        return type
+    }
+    if(type instanceof GenericType){
+        if(!scope.get_generic(type.generic))return generic.get(type.generic)
+        return type
+    }
+    if(type instanceof ClassType){
+        type.generic=type.generic.map(v=>generic_type_real(v,generic,scope))
+        return type
+    }
+}
+//类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型,返回false(不匹配)或者true(匹配时)
+export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map<string,Type>,generic_real:Type[],
+                            ret:Type,scope:Scope){
+    if(param_iden.length!=param_real.length)return null
+    if(generic_iden.size!=generic_real.length)return null
+    param_iden=param_iden.map(v=>generic_type_real(v,generic_iden,scope))
+    const generic:Map<string,Type>=new Map()
+    {
+        let index=0
+        for(const key of generic_iden.keys())
+            generic.set(key,generic_real[index++])
+    }
+    param_real=param_real.map(v=>generic_type_real(v,generic,scope))
+    return param_best(param_iden,param_real,scope)&&
+           param_best(Array.from(generic_iden.values()),generic_real,scope)?
+           generic_type_real(ret,generic,scope):null
 }

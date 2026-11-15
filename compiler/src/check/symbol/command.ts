@@ -3,8 +3,8 @@ import {
     Assign,
     Await,
     DoWhileStatement,
-    ExprCommand, ForStatement,
-    IfStatement, ListCommand,
+    ExprCommand, ForStatement, GotoCommand,
+    IfStatement, LabelCommand, ListCommand,
     Return, SwitchStatement,
     Throw, TryStatement,
     VarDecl,
@@ -37,6 +37,15 @@ const Symbol_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
 const Symbol_VM:slang_check_visitor=(ast:VM,scope,call)=>{
     for(const param of ast.param)
         call(param,2)
+}
+const Symbol_Label:slang_check_visitor=(ast:LabelCommand,scope,call)=>{
+    if(scope.label.includes(ast.name))
+        scope.thr('标签重复定义',ast)
+    scope.label_set(ast.name)
+}
+const Symbol_Goto:slang_check_visitor=(ast:GotoCommand,scope,call)=>{
+    if(!scope.label.includes(ast.name))
+        scope.thr('标签未定义',ast)
 }
 const Symbol_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,2)

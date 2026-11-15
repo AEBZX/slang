@@ -108,7 +108,6 @@ const G_TryStatement:slang_ast_generate=(data,tree)=>{
     const finally_data=find('FinallyData')
     const finally_=finally_data==null?new ListCommand([]):tree_ast<Command>(finally_data,0,tree)
     const ret=new TryStatement(tree_ast(data,0,tree),catch_,finally_)
-    ret.no_catch=catch_data==null
     return ret
 }
 const G_Commands:slang_ast_generate=(data,tree)=>{

@@ -95,6 +95,8 @@ const Censor_Function:slang_check_visitor=(ast:Function,scope,call)=>{
 const Censor_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
     call(ast.t,0)
     call(ast.command,0)
+    if(ast.command.params.size!=1)
+        scope.thr('cast必须只有一个参数',ast)
 }
 const Censor_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     if(ast.t instanceof ReferenceType&&ast.value==null)
@@ -104,4 +106,6 @@ const Censor_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
 }
 const Censor_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     call(ast.command,0)
+    if(ast.command.params.size==0)
+        scope.thr('operation不能重载滚木',ast)
 }
