@@ -6,7 +6,7 @@ import {
     ClassType, Enum, EnumType, Expression, FixType,
     Function, GenericType, IdentifierExpr,
     Interface, LambdaType, LiteralType,
-    Module,
+    Module, NumberType,
     Operation, PointType, ReferencePrefix,
     ReferenceType,
     Type,
@@ -382,4 +382,23 @@ export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map
     return param_best(param_iden,param_real,scope)&&
            param_best(Array.from(generic_iden.values()),generic_real,scope)?
            generic_type_real(ret,generic,scope):null
+}
+export function fast_operation(scope:Scope,ast:Expression,op:string,ret:Type,...param:(Expression|Type)[]){
+    const operation=operation_get(scope,ast,op,ret,...param.map(v=>v instanceof Expression?v.type:v))
+    if(operation!=null){
+        ast.type=operation.type
+        ast.oper=operation.global_local.join('.')+'.'+operation.index
+        return true
+    }
+    return false
+}
+export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Type){
+    if(type_is(input.type,output,scope)==output)return true
+    const cast=cast_get(scope,ast,input.type,output)
+    if(cast!=null){
+        ast.type=cast.t
+        input.cast=cast.global_local.join('.')+'.'+cast.id
+        return true
+    }
+    return false
 }

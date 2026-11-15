@@ -1,23 +1,27 @@
 import {
     block_get,
-    cast_get,
+    cast_get, fast_cast, fast_operation,
     generic_type_real,
     operation_get,
     param_best,
     param_check,
-    slang_check_visitor,
+    slang_check_visitor, try_bool,
     type_is
 } from '../tool'
 import {
+    AddressPrefix,
     ArgumentsPostfix,
     ArrayExpression,
-    ArrayType, BlockType, Class, ClassType, DecrementPostfix,
-    IdentifierExpr, IncrementPostfix, IndexPostfix, LambdaExpression, LambdaType, MemberPostfix,
+    ArrayType,
+    BinaryExpression, BitNotPrefix, BlockType, BooleanType, Class, ClassType, DecrementPostfix, DecrementPrefix,
+    IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, LambdaExpression, LambdaType, MemberPostfix,
+    MinusPrefix,
+    NotPrefix,
     NullLiteral,
     NumberLiteral,
-    NumberType,
+    NumberType, PointType, ReferencePrefix,
     ReferenceType,
-    StringLiteral, Type,
+    StringLiteral, TernaryExpression, Type, TypePrefix,
     VoidType
 } from '../../utils'
 
@@ -71,23 +75,15 @@ const Type_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
 const Type_Inc_Dec:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix,scope,call)=>{
     call(ast.expr,3)
     //先看重载,postfix++的operation要加空气number
-    const operation=operation_get(scope,ast,ast.oper,new VoidType(),ast.expr.type,new NumberType())
-    if(operation!=null){
-        ast.type=operation.type
-        ast.expr.oper=operation.global_local.join('.')+'.'+operation.index
+    if(fast_operation(scope,ast,ast instanceof IncrementPostfix?'++':'--',new VoidType(),ast.expr,new NumberType()))
         return
-    }
     if(ast.expr.type instanceof NumberType){
         ast.type=new NumberType()
         return
     }
     //转换
-    const cast=cast_get(scope,ast,ast.expr.type,new NumberType())
-    if(cast!=null){
-        ast.type=new NumberType()
-        ast.expr.cast=cast.global_local.join('.')+'.'+cast.id
+    if(fast_cast(scope,ast,ast.expr,new NumberType()))
         return
-    }
     scope.thr('不是number,也没后置++/--重载,还没转换',ast)
 }
 const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
@@ -103,40 +99,18 @@ const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
 const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=>{
     call(ast.expr,3)
     call(ast.index,3)
-    const operation=operation_get(scope,ast,'[]',new VoidType(),ast.expr.type,ast.expr.type,ast.index.type)
-    if(operation!=null){
-        ast.type=operation.type
-        ast.expr.oper=operation.global_local.join('.')+'.'+operation.index
+    if(fast_operation(scope,ast,'[]',new VoidType(),ast.expr,ast.index))
         return
-    }
     if(ast.expr.type instanceof ArrayType&&ast.expr.type instanceof NumberType){
         ast.type=ast.expr.type.t
         return
     }
-    if(ast.expr.type instanceof ArrayType){
-        const cast=cast_get(scope,ast,ast.index.type,new NumberType())
-        if(cast!=null){
-            ast.type=ast.expr.type.t
-            ast.index.cast=cast.global_local.join('.')+'.'+cast.id
-            return
-        }
-    }
-    if(ast.index.type instanceof NumberType){
-        const cast=cast_get(scope,ast,ast.expr.type,new ArrayType(new VoidType()))
-        if(cast!=null){
-            ast.type=(cast.type as ArrayType).t
-            ast.expr.cast=cast.global_local.join('.')+'.'+cast.id
-            return
-        }
-    }
-    const cast1=cast_get(scope,ast,ast.expr.type,new ArrayType(new VoidType()))
-    const cast2=cast_get(scope,ast,ast.index.type,new NumberType())
-    if(cast1!=null&&cast2!=null){
-        ast.type=(cast1.type as ArrayType).t
-        ast.expr.cast=cast1.global_local.join('.')+'.'+cast1.id
-        ast.index.cast=cast2.global_local.join('.')+'.'+cast2.id
+    if(ast.expr.type instanceof ArrayType&&fast_cast(scope,ast,ast.index,new NumberType()))
         return
-    }
+    if(ast.index.type instanceof NumberType&&fast_cast(scope,ast,ast.expr,new ArrayType(new VoidType())))
+        return
+    if(fast_cast(scope,ast,ast.expr,new ArrayType(new VoidType()))&&fast_cast(scope,ast,ast.index,new NumberType()))
+        return
     scope.thr('不能当作array[number],[]重载不存在,而且类型转换失败',ast)
 }
 const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
@@ -145,13 +119,8 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
         call(item,3)
     for(const item of ast.args)
         call(item,3)
-    const operation=operation_get(scope,ast,'()',new VoidType(),
-        ast.expr.type,...ast.args.map(item=>item.type))
-    if(operation!=null){
-        ast.type=operation.type
-        ast.expr.oper=operation.global_local.join('.')+'.'+operation.index
+    if(fast_operation(scope,ast,'()',new VoidType(),ast.expr,...ast.args))
         return
-    }
     //是不是lambda_type
     if(ast.expr.type instanceof LambdaType){
         //没有overload,直接检查
@@ -198,5 +167,132 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
         return
     }
     //尝试cast重载
-    const cast=cast_get(scope,ast,ast.expr.type,new LambdaType(new Map(),new Map(),new VoidType()))
+    if(fast_cast(scope,ast,ast.expr,new LambdaType(
+        new Map(
+            [...ast.generic.entries()].map(([i, v]) => [String(i), v] as const)
+        ),new Map(
+            [...ast.args.entries()].map(([i, v]) => [String(i), v] as const)
+        ),new VoidType())))return
+    scope.thr('不是lambda,而且重载不存在,而且类型转换失败',ast)
+}
+const Type_PreInc_Dec:slang_check_visitor=(ast:IncrementPrefix|DecrementPrefix,scope,call)=>{
+    call(ast.expr,3)
+    //先看重载,prefix++直接填
+    if(fast_operation(scope,ast,ast instanceof IncrementPrefix?'++':'--',new VoidType(),ast.expr,new NumberType()))
+        return
+    if(ast.expr.type instanceof NumberType){
+        ast.type=new NumberType()
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+        return
+    scope.thr('不是number,也没前置++/--重载,还没转换',ast)
+}
+const Type_Not:slang_check_visitor=(ast:NotPrefix,scope,call)=>{
+    call(ast.expr,3)
+    if(fast_operation(scope,ast,'!',new VoidType(),ast.expr))
+        return
+    if(ast.expr.type instanceof BooleanType){
+        ast.type=new BooleanType()
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new BooleanType()))
+        return
+    scope.thr('不是boolean,也没!重载,还没转换',ast)
+}
+const Type_BitNot:slang_check_visitor=(ast:BitNotPrefix,scope,call)=>{
+    call(ast.expr,3)
+    if(fast_operation(scope,ast,'~',new VoidType(),ast.expr))
+        return
+    if(ast.expr.type instanceof NumberType){
+        ast.type=new NumberType()
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+        return
+    scope.thr('不是number,也没~重载,还没转换',ast)
+}
+const Type_Minus:slang_check_visitor=(ast:MinusPrefix,scope,call)=>{
+    call(ast.expr,3)
+    if(fast_operation(scope,ast,'-',new VoidType(),ast.expr))
+        return
+    if(ast.expr.type instanceof NumberType){
+        ast.type=new NumberType()
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+        return
+    scope.thr('不是number,也没-重载,还没转换',ast)
+}
+const Type_Reference:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
+    call(ast.expr,3)
+    if(fast_operation(scope,ast,'&',new VoidType(),ast.expr))
+        return
+    if(ast.expr.type instanceof PointType){
+        ast.type=new ReferenceType(ast.expr.type.t)
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new PointType(new VoidType())))
+        return
+    scope.thr('不是指针不能重载,而且类型转换失败',ast)
+}
+const Type_Point:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
+    call(ast.expr,3)
+    if(fast_operation(scope,ast,'*',new VoidType(),ast.expr))
+        return
+    if(ast.expr.type instanceof ReferenceType){
+        ast.type=new PointType(ast.expr.type.t)
+        return
+    }
+    //转换
+    if(fast_cast(scope,ast,ast.expr,new ReferenceType(new VoidType())))
+        return
+    scope.thr('不是引用不能重载,而且类型转换失败',ast)
+}
+const Type_Type:slang_check_visitor=(ast:TypePrefix,scope,call)=>{
+    call(ast.expr,3)
+    ast.type=ast.t
+    if(fast_cast(scope,ast,ast.expr,ast.t))return
+    scope.thr('你没有定义强转的类型的cast',ast)
+}
+const Type_Binary:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
+    call(ast.left,3)
+    call(ast.right,3)
+    if(fast_operation(scope,ast,ast.op,new VoidType(),ast.left,ast.right))
+        return
+    if(['|','&','==','<','>','&&','||','^'].includes(ast.op)&&ast.left.type instanceof BooleanType&&ast.right.type instanceof BooleanType){
+        ast.type=new BooleanType()
+        return
+    }
+    if(ast.left.type instanceof NumberType&&ast.right.type instanceof NumberType){
+        ast.type=new NumberType()
+        return
+    }
+    if(['|','&','==','<','>','&&','||','^'].includes(ast.op))
+        if(fast_cast(scope,ast,ast.left,new BooleanType())&&fast_cast(scope,ast,ast.right,new BooleanType())){
+            ast.type=new BooleanType()
+            return
+        }
+    if(fast_cast(scope,ast,ast.left,new NumberType())&&fast_cast(scope,ast,ast.right,new NumberType())){
+        ast.type=new NumberType()
+        return
+    }
+    scope.thr('没有重载,而且类型转换失败',ast)
+}
+const Type_Ternary:slang_check_visitor=(ast:TernaryExpression,scope,call)=>{
+    call(ast.condition,3)
+    call(ast.trueExpr,3)
+    call(ast.falseExpr,3)
+    try_bool(scope,ast.condition)
+    if(!(type_is(ast.trueExpr,ast.falseExpr,scope) instanceof VoidType)){
+        ast.type=type_is(ast.trueExpr,ast.falseExpr,scope)
+        return
+    }
+    //Ternary不做强转
+    scope.thr('类型不匹配',ast)
 }
