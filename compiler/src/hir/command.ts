@@ -1,9 +1,9 @@
 import {
     AAssign,
-    Await, Command,
+    Await, Command, Delete,
     GotoCommand,
     HAssign,
-    HAwait, HExpr,
+    HAwait, HDelete, HExpr,
     HGoto, HIfStatement, HIRTree,
     HLabel, HListCommand,
     HReturn,
@@ -35,6 +35,9 @@ const H_Throw:slang_hir_visitor=(node:Throw,scope,call)=>{
 }
 const H_VM:slang_hir_visitor=(node:VM,scope,call)=>{
     return new HVM(node.data,node.param.map(call) as HExpr[])
+}
+const H_Delete:slang_hir_visitor=(node:Delete,scope,call)=>{
+    return new HDelete(call(node.expr))
 }
 const H_If:slang_hir_visitor=(node:IfStatement,scope,call)=>{
     return new HIfStatement(call(node.condition),call(node.commands),call(node.else_))

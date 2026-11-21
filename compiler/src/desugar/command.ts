@@ -10,7 +10,7 @@ import {
     VarDecl, VM,
     Command, Return, ExprCommand, Throw, Continue, GotoCommand, Break, IfStatement, WhileStatement, DoWhileStatement,
     ListCommand, LabelCommand, ForStatement, ForeachStatement, NumberType, NumberLiteral, InequalExpression,
-    IndexPostfix, NullLiteral, IncrementPostfix, IncrementPrefix, SwitchStatement
+    IndexPostfix, NullLiteral, IncrementPostfix, IncrementPrefix, SwitchStatement, Delete, Case, EqualExpression
 } from '../utils'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
@@ -56,6 +56,12 @@ const D_VM:slang_desugar_visitor=(node:VM,call)=>{
     node.param=node.param.map(call) as Expression[]
     return node
 }
+const D_Delete:slang_desugar_visitor=(node:Delete,call)=>{
+    const is_ref=node.expr.type instanceof ReferenceType&&node.expr.type.literal=='call'
+    node.expr=call(node.expr) as Expression
+    if(is_ref)node.expr=(node.expr as ReferencePrefix).expr
+    return node
+}
 const D_If:slang_desugar_visitor=(node:IfStatement,call)=>{
     node.condition=call(de_cond(node.condition)) as Expression
     node.commands=call(node.commands) as Command
@@ -99,19 +105,13 @@ const D_Foreach:slang_desugar_visitor=(node:ForeachStatement,call)=>{
     ))
 }
 const D_Switch:slang_desugar_visitor=(node:SwitchStatement,call)=>{
-    let ret:IfStatement=null
-    let ls:IfStatement=null
-    for(const i of node.case_list){
-        if(ret==null){
-            ret=new IfStatement(i.condition,i.commands,null)
-            ls=ret.else_ as IfStatement
-            continue
-        }
-        ls.else_=new IfStatement(i.condition,i.commands,null)
-        ls=ls.else_ as IfStatement
+    const build=(index:number)=>{
+        if(index==node.case_list.length)return node.default_
+        const cast_list=node.case_list[index]
+        return new IfStatement(new EqualExpression(node.condition,cast_list.condition),
+            cast_list.commands,build(index++))
     }
-    ls.else_=node.default_
-    return call(ret)
+    return call(build(0))
 }
 const D_ListCommand:slang_desugar_visitor=(node:ListCommand,call)=>{
     node.commands=node.commands.map(call) as Command[]
@@ -127,6 +127,7 @@ export default new Map<any,slang_desugar_visitor>([
     [Continue,D_Continue],
     [Break,D_Break],
     [VM,D_VM],
+    [Delete,D_Delete],
     [IfStatement,D_If],
     [WhileStatement,D_While],
     [DoWhileStatement,D_DoWhile],

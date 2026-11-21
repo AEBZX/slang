@@ -8,16 +8,6 @@ export class HNumberLiteral extends HLiteral{
         super()
     }
 }
-export class HStringLiteral extends HLiteral{
-    constructor(public value:string) {
-        super()
-    }
-}
-export class HBooleanLiteral extends HLiteral{
-    constructor(public value:boolean) {
-        super()
-    }
-}
 export class HNullLiteral extends HLiteral{}
 export class HIdentifierExpr extends HPrimaryExpr{
     constructor(public name:number) {
@@ -41,12 +31,7 @@ export class HLambdaExpr extends HPrimaryExpr{
 }
 export class HFixExpr extends HExpr{}
 export class HIndexExpr extends HFixExpr{
-    constructor(public target:HExpr,public index:HExpr,public is_string:boolean=false) {
-        super()
-    }
-}
-export class HMemberExpr extends HFixExpr{
-    constructor(public target:HExpr,public member:number) {
+    constructor(public target:HExpr,public index:HExpr) {
         super()
     }
 }

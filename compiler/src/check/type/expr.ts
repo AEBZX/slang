@@ -352,6 +352,7 @@ export default new Map<any,slang_check_visitor>([
     [ReferencePrefix,Type_Reference],
     [AddressPrefix,Type_Point],
     [TypePrefix,Type_Type],
+    [NewPrefix,Type_New],
     [BinaryExpression,Type_Binary],
     [TernaryExpression,Type_Ternary],
 ])

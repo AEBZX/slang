@@ -43,6 +43,7 @@ const VM=$.s('VM',$.d('vm')
     ,$.d(')'),$.d(';'))
 const Label=$.s('Label',$.r('Identifier'),$.d(':'))
 const Goto=$.s('Goto',$.d('goto'),$.r('Identifier'),$.d(';'))
+const Delete=$.s('Delete',$.d('delete'),$.r('Expression'),';')
 const BasicCommand=$.o('BasicCommand',
     $.r('VarDecl'),
     $.r('ExprCommand'),
@@ -54,7 +55,8 @@ const BasicCommand=$.o('BasicCommand',
     $.r('VM'),
     $.r('Assign'),
     $.r('Label'),
-    $.r('Goto')
+    $.r('Goto'),
+    $.r('Delete')
 )
 const Condition=$.s('Condition',$.t('(',$.r('Expression'),')'))
 const IfStatement=$.s('IfStatement',

@@ -1,13 +1,41 @@
 import {
-    BooleanLiteral, VoidType, AAssign,
-    AddAssign, AndAssign, ast_data, Await, Break, Case, Command, Continue,
-    DivAssign, DoWhileStatement, ExprCommand,
-    Expression, ForeachStatement, ForStatement, IfStatement, ListCommand,
+    AAssign,
+    AddAssign,
+    AndAssign,
+    ast_data,
+    Await,
+    BooleanLiteral,
+    Break,
+    Case,
+    Command,
+    Continue, Delete,
+    DivAssign,
+    DoWhileStatement,
+    ExprCommand,
+    Expression,
+    ForeachStatement,
+    ForStatement,
+    GotoCommand,
+    IfStatement,
+    LabelCommand,
+    ListCommand,
     ModAssign,
-    MulAssign, OrAssign, Return, ShlAssign, ShrAssign,
+    MulAssign,
+    OrAssign,
+    Return,
+    ShlAssign,
+    ShrAssign,
     slang_ast_generate,
-    SubAssign, SwitchStatement, Throw, TryStatement, Type, VarDecl, VM, WhileStatement, XorAssign, LabelCommand,
-    GotoCommand
+    SubAssign,
+    SwitchStatement,
+    Throw,
+    TryStatement,
+    Type,
+    VarDecl,
+    VM,
+    VoidType,
+    WhileStatement,
+    XorAssign
 } from '../../utils'
 import {AssignMap, to_ast_data, to_string, tree_ast} from "./tool";
 
@@ -41,6 +69,7 @@ const G_VM:slang_ast_generate=(data,tree)=> {
 }
 const G_Label:slang_ast_generate=(data,tree)=>new LabelCommand(to_string(to_ast_data(data,0),0))
 const G_Goto:slang_ast_generate=(data, tree)=>new GotoCommand(to_string(to_ast_data(data,0),0))
+const G_Delete:slang_ast_generate=(data,tree)=>new Delete(tree_ast(data,0,tree))
 const G_Condition:slang_ast_generate=(data,tree)=>tree(data.children.get(0) as ast_data)
 const G_IfStatement:slang_ast_generate=(data,tree)=>new IfStatement(
     tree_ast(data,0,tree),
@@ -107,8 +136,7 @@ const G_TryStatement:slang_ast_generate=(data,tree)=>{
         :{iden:to_string(catch_data,0),type:tree_ast<Type>(catch_data,1,tree),command:tree_ast<Command>(catch_data,2,tree)}
     const finally_data=find('FinallyData')
     const finally_=finally_data==null?new ListCommand([]):tree_ast<Command>(finally_data,0,tree)
-    const ret=new TryStatement(tree_ast(data,0,tree),catch_,finally_)
-    return ret
+    return new TryStatement(tree_ast(data, 0, tree), catch_, finally_)
 }
 const G_Commands:slang_ast_generate=(data,tree)=>{
     let commands=[]

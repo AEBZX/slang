@@ -65,7 +65,7 @@ export let keywords=[
     //类型关键字
     'void','boolean','number','string','[',']','{','}',
     //命令关键字
-    'vm','break','continue','return','throw','await','try','catch','finally','foreach',
+    'vm','break','continue','return','throw','await','try','catch','finally','foreach','delete',
     //选择块关键字
     'if','else','switch','case','default','for','while','do',
     //其他

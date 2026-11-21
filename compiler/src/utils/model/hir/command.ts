@@ -52,3 +52,9 @@ export class HThrow extends HCommand{
         super()
     }
 }
+export class HDelete extends HCommand{
+    constructor(public expr:HExpr) {
+        super()
+    }
+
+}

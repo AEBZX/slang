@@ -2,7 +2,7 @@ import {
     ArrayType,
     Assign,
     Await,
-    BooleanType, DoWhileStatement,
+    BooleanType, Delete, DoWhileStatement,
     ExprCommand, ForeachStatement, ForStatement, IfStatement, ListCommand,
     NumberType,
     ReferenceType,
@@ -93,6 +93,11 @@ const Type_Await:slang_check_visitor=(ast:Await,scope,call)=>{
 }
 const Type_ExprCommand:slang_check_visitor=(ast:ExprCommand,scope,call)=>{
     call(ast.data,3)
+}
+const Type_Delete:slang_check_visitor=(ast:Delete,scope,call)=>{
+    call(ast.expr,3)
+    if(!(ast.expr.type instanceof ReferenceType))
+        scope.thr('不能删除右值',ast)
 }
 const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
     call(ast.data,3)
@@ -215,6 +220,7 @@ export default new Map<any,slang_check_visitor>([
     [Return,Type_Return],
     [Throw,Type_Throw],
     [VM,Type_VM],
+    [Delete,Type_Delete],
     [IfStatement,Type_If],
     [WhileStatement,Type_While_DoWhile],
     [DoWhileStatement,Type_While_DoWhile],

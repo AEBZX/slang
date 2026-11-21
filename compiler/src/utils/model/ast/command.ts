@@ -119,6 +119,11 @@ export class VM extends BasicCommand{
         super()
     }
 }
+export class Delete extends BasicCommand{
+    constructor(public expr:Expression) {
+        super()
+    }
+}
 export class BlockCommand extends Command{}
 export class IfStatement extends BlockCommand{
     constructor(public condition:Expression,public commands:Command,public else_:Command) {

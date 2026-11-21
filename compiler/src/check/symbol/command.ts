@@ -1,7 +1,7 @@
 import {slang_check_visitor} from '../tool'
 import {
     Assign,
-    Await,
+    Await, Delete,
     DoWhileStatement,
     ExprCommand, ForStatement, GotoCommand,
     IfStatement, LabelCommand, ListCommand,
@@ -46,6 +46,9 @@ const Symbol_Label:slang_check_visitor=(ast:LabelCommand,scope,call)=>{
 const Symbol_Goto:slang_check_visitor=(ast:GotoCommand,scope,call)=>{
     if(!scope.label.includes(ast.name))
         scope.thr('标签未定义',ast)
+}
+const Symbol_Delete:slang_check_visitor=(ast:Delete,scope,call)=>{
+    call(ast.expr,2)
 }
 const Symbol_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,2)
@@ -99,6 +102,7 @@ export default new Map<any,slang_check_visitor>([
     [VM,Symbol_VM],
     [LabelCommand,Symbol_Label],
     [GotoCommand,Symbol_Goto],
+    [Delete,Symbol_Delete],
     [IfStatement,Symbol_If],
     [WhileStatement,Symbol_While_DoWhile],
     [DoWhileStatement,Symbol_While_DoWhile],

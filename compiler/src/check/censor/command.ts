@@ -3,7 +3,7 @@ import {
     Assign,
     Await,
     Break,
-    Continue, DoWhileStatement,
+    Continue, Delete, DoWhileStatement,
     ExprCommand, ForeachStatement, ForStatement,
     IfStatement, ListCommand, ReferenceType,
     Return,
@@ -41,6 +41,9 @@ const Censor_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
 const Censor_VM:slang_check_visitor=(ast:VM,scope,call)=>{
     for(const param of ast.param)
         call(param,0)
+}
+const Censor_Delete:slang_check_visitor=(ast:Delete,scope,call)=>{
+    call(ast.expr,0)
 }
 const Censor_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,0)
@@ -91,6 +94,7 @@ export default new Map<any,slang_check_visitor>([
     [Continue,Censor_Break_Continue],
     [Throw,Censor_Throw],
     [VM,Censor_VM],
+    [Delete,Censor_Delete],
     [IfStatement,Censor_If],
     [SwitchStatement,Censor_Switch],
     [DoWhileStatement,Censor_While_DoWhile],
