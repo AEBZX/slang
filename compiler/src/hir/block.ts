@@ -1,51 +1,34 @@
-import {slang_hir_visitor} from './tool'
-import {Class, File, hir_visitor, HModule, HVariable, Module, Variable} from '../utils'
+import {slang_hir_visitor,register} from './tool'
+import {Module, File, HModule, Class, Variable, Interface, HVariable} from '../utils'
 const H_File:slang_hir_visitor=(node:File,scope,call)=>{
-    for(const i of node.links)
-        scope.link_target.set(i.as,i.module.join('.'))
-    return new HModule(null,node.children.map(i=>{
-        scope.path=''
-        return call(i)
-    }))
+    scope=scope.enter()
+    for(const link of node.links)
+        scope.link_set(link.as,link.module.join('.'))
+    //提前注册
+    register(scope,node.children)
+    const module=node.children.map(call)
+    scope=scope.leave()
+    return new HModule(scope.global_id(),module)
 }
 const H_Module:slang_hir_visitor=(node:Module,scope,call)=>{
-    const id=scope.id()
-    const old=scope.path
-    node.name=scope.path_(node.name)
-    scope.set(node.name,id)
-    //全名同时登记到根作用域:函数/成员访问按点路径查,子作用域退出后不能丢
-    scope.global.set(node.name,id)
     scope=scope.enter()
-    let children=node.children.map(i=>call(i))
+    register(scope,node.children)
+    scope.symbol_set('up',scope.symbol_get(node.name))
+    const block=node.children.map(call)
     scope=scope.leave()
-    scope.path=old
-    return new HModule(id,children)
+    //register在上一轮已经在作用域注册
+    return new HModule(scope.symbol_get(node.name),block)
+}
+const H_Class_Interface:slang_hir_visitor=(node:Class|Interface,scope,call)=>{
+    scope=scope.enter()
+    register(scope,node.children)
+    const block=node.children.map(call)
+    scope=scope.leave()
+    return new HModule(scope.symbol_get(node.name),block)
 }
 const H_Variable:slang_hir_visitor=(node:Variable,scope,call)=>{
-    const id=scope.id()
-    const old=scope.path
-    node.name=scope.path_(node.name)
-    scope.set(node.name,id)
-    scope.global.set(node.name,id)
-    const ret=new HVariable(id,call(node.value),node.name.split('.').pop()!.split('@')[0]=='main',!node.modifiers.unstatic)
-    scope.path=old
-    return ret
-}
-const H_Class:slang_hir_visitor=(node:Class,scope,call)=>{
-    const id=scope.id()
-    const old=scope.path
-    node.name=scope.path_(node.name)
-    scope.set(node.name,id)
-    scope.global.set(node.name,id)
     scope=scope.enter()
-    let children=node.children.map(i=>call(i))
+    const value=call(node.value)
     scope=scope.leave()
-    scope.path=old
-    return new HModule(id,children)
+    return new HVariable(scope.symbol_get(node.name),value)
 }
-export default new Map<any,hir_visitor>([
-    [File,H_File],
-    [Module,H_Module],
-    [Variable,H_Variable],
-    [Class,H_Class]
-])

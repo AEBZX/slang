@@ -38,4 +38,10 @@ export class FixType extends Type{
 }
 export class ArrayType extends FixType{}
 export class PointType extends FixType{}
-export class ReferenceType extends FixType{}
+export class ReferenceType extends FixType{
+    //literal:是不是identifier,call,identifier就是无需特殊处理的左值,call就是需要特殊处理的左值(比如返回引用的函数)
+    constructor(t:Type,public literal:'identifier'|'call'='call') {
+        super(t)
+    }
+
+}

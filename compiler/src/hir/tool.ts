@@ -1,80 +1,67 @@
 import {PeepholeScope} from '../utils/lib/tool'
-import {ASTTree, HIRTree} from '../utils'
+import {ASTTree, Block, Class, HIRTree, Interface, Module} from '../utils'
 
 export type slang_hir_visitor =(node:ASTTree, scope:HScope, call:(node:ASTTree)=>HIRTree)=>HIRTree
-//标签按词法作用域压栈:列表进入时压一层,内层同名标签覆盖外层
-export const label_stack:Map<string,number>[]=[]
-export function push_labels(labels:Map<string,number>){
-    label_stack.push(labels)
-}
-export function pop_labels(){
-    label_stack.pop()
-}
-export function set_label(name:string,id:number){
-    const top=label_stack[label_stack.length-1]
-    if(top==null)throw new Error('标签不在任何作用域里:'+name)
-    top.set(name,id)
-}
-export function get_label(name:string):number{
-    for(let i=label_stack.length-1;i>=0;i--)
-        if(label_stack[i].has(name))return label_stack[i].get(name)
-    return null
-}
 export class HScope extends PeepholeScope{
-    symbol:Map<string,number>
-    index:number
-    link:Map<number,number>
-    link_target:Map<string,string>//link别名目标路径
-    entry:boolean
-    path:string
-    path_(name:string){
-        this.path=this.path==''?name:this.path+'.'+name
-        return this.path
-    }
-    constructor(public parent:HScope,public global:HScope){
+    public index:number=1
+    public link:Map<string,string>=new Map()
+    public symbol:Map<string,number>=new Map()
+    public label:Map<string,number>=new Map()
+    public global:HScope
+    public parent:HScope
+    public path=''
+    constructor(parent:HScope,global:HScope,path:string='') {
         super(parent,global)
-        this.index=1
-        this.symbol=new Map()
-        this.link=new Map()
-        this.link_target=new Map()
-        this.entry=false
-        this.path=this.parent!=null?this.parent.path:''
+        this.path=path
     }
-    lnk(id:number,data:number){
-        this.link.set(id,data)
+    label_set(name:string,id:number){
+        this.label.set(name,id)
     }
-    lnk_get(id:number):number{
-        if(this.link.has(id))
-            return this.link.get(id)
-        if(this.parent!=null)
-            return this.parent.lnk_get(id)
-        if(this.global!=null&&this.global!==this)
-            return this.global.lnk_get(id)
-        return null
+    label_get(name:string):number{
+        return this.label.get(name)||this?.parent?.label_get(name)
+    }
+    link_set(path:string,target:string){
+        this.link.set(path,target)
+    }
+    link_get(path:string):string{
+        return this.link.get(path)||this?.parent?.link_get(path)
+    }
+    symbol_set(name:string,id:number){
+        this.symbol.set(name,id)
+    }
+    symbol_get(name:string):number{
+        return this.symbol.get(name)||this?.parent?.symbol_get(name)||this?.global?.symbol_get(name)
     }
     id(){
-        if(this.global!=null&&this.global!==this)return this.global.id()
         return this.index++
     }
-    get(name:string):number{
-        if(this.symbol.has(name))
-            return this.symbol.get(name)
-        if(this.parent!=null)
-            return this.parent.get(name)
-        //全名(模块成员/函数)登记在根作用域的 global 表里
-        if(this.global!=null&&this.global!==this&&this.global.symbol.has(name))
-            return this.global.symbol.get(name)
-        const id=this.id()
-        this.set(name,id)
-        return id
-    }
-    set(name:string,value:number){
-        this.symbol.set(name,value)
+    global_id(){
+        return this.global.id()
     }
     enter():HScope{
-        return new HScope(this,this.global)
+        return new HScope(this,this.global,this.path)
     }
     leave():HScope{
         return this.parent
     }
+}
+//分别在全局和当前作用域进行注册
+export function register(scope:HScope,block:Block[]){
+    for(const i of block) {
+        scope = scope.enter()
+        scope.path = scope.path == '' ? i.name : scope.path + '.' + i.name
+        scope.global.symbol_set(scope.path, scope.global_id())
+        if (i instanceof Class || i instanceof Interface || i instanceof Module)
+            register(scope, i.children.filter(i => !i.modifiers.unstatic))
+        scope = scope.leave()
+    }
+    const run=(path:string,_block:Block[])=>{
+        for(const i of _block) {
+            const _path = path == '' ? i.name : path + '.' + i.name
+            scope.symbol_set(_path, scope.global_id())
+            if (i instanceof Class || i instanceof Interface || i instanceof Module)
+                run(_path, i.children.filter(i => !i.modifiers.unstatic))
+        }
+    }
+    run('',block)
 }

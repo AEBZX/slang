@@ -9,7 +9,7 @@ import {
     LambdaType,
     Variable,
     Operation,
-    Cast
+    Cast, ReferenceType, ClassType, ArrayType
 } from '../../utils'
 import {slang_check_visitor, symbol_iden} from '../tool'
 const Type_File:slang_check_visitor=(ast:File,scope,call)=>{
@@ -40,6 +40,7 @@ const Type_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=
     ast.type=new BlockType(scope.global.path.split('.'))
     scope=scope.enter()
     scope.set('up',new BlockType(scope.global.path.split('.'),true))
+    scope.set('this',new ReferenceType(new ClassType(ast.global_local,Array.from(ast.generic.values()),true)))
     call(ast.implement,3)
     symbol_iden(ast.children,scope)
     for(const item of ast.children)

@@ -5,7 +5,7 @@ import {
     operation_get,
     param_best,
     param_check,
-    slang_check_visitor, try_bool,
+    slang_check_visitor, symbol_do_generic, try_bool,
     type_is
 } from '../tool'
 import {
@@ -23,16 +23,16 @@ import {
     NumberType, PointType, ReferencePrefix,
     ReferenceType,
     StringLiteral, TernaryExpression, Type, TypePrefix,
-    VoidType
+    VoidType,convert
 } from '../../utils'
 
 const Type_Number:slang_check_visitor=(ast:NumberLiteral,scope,call)=>{
-    //语言特性,数字类型带小数点是number[],这样浮点数就可以让用户自己搞了
-    if(ast.value.includes('.')){
-        ast.type=new ArrayType(new NumberType())
+    const data=convert(ast.value)
+    if(typeof ast.value=='string'){
+        ast.type=new NumberType()
         return
     }
-    ast.type=new NumberType()
+    ast.type=new ArrayType(new ArrayType(new NumberType()))
 }
 const Type_Boolean:slang_check_visitor=(ast:BooleanLiteral,scope,call)=>{
     ast.type=new BooleanType()
@@ -49,7 +49,7 @@ const Type_Null:slang_check_visitor=(ast:NullLiteral,scope,call)=>{
     ast.type=new VoidType()
 }
 const Type_Identifier:slang_check_visitor=(ast:IdentifierExpr,scope,call)=>{
-    ast.type=new ReferenceType(scope.get(ast.name).type)
+    ast.type=new ReferenceType(scope.get(ast.name).type,'identifier')
 }
 const Type_Array:slang_check_visitor=(ast:ArrayExpression,scope,call)=>{
     for(const item of ast.elements)
@@ -100,19 +100,23 @@ const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
     }
     scope.thr('不是类或者模块,而且后缀查无此物',ast)
 }
-const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=>{
-    call(ast.expr,3)
-    call(ast.index,3)
-    if(fast_operation(scope,ast,'[]',new VoidType(),ast.expr,ast.index))
+const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=> {
+    call(ast.expr, 3)
+    call(ast.index, 3)
+    if (fast_operation(scope, ast, '[]', new VoidType(), ast.expr, ast.index))
         return
-    if(ast.expr.type instanceof ArrayType&&ast.expr.type instanceof NumberType){
-        ast.type=ast.expr.type.t
+    if (ast.expr.type instanceof ArrayType && ast.expr.type instanceof NumberType) {
+        ast.type = new ReferenceType(ast.expr.type.t, 'identifier')
         return
     }
-    if(ast.expr.type instanceof ArrayType&&fast_cast(scope,ast,ast.index,new NumberType()))
+    if (ast.expr.type instanceof ArrayType && fast_cast(scope, ast, ast.index, new NumberType())) {
+        ast.type = new ReferenceType(ast.expr.type.t, 'identifier')
         return
-    if(ast.index.type instanceof NumberType&&fast_cast(scope,ast,ast.expr,new ArrayType(new VoidType())))
+    }
+    if (ast.index.type instanceof NumberType && fast_cast(scope, ast, ast.expr, new ArrayType(new VoidType()))){
+        ast.type=new ReferenceType(cast_get(scope,ast,ast.expr.type,new ArrayType(new VoidType())).t,'identifier')
         return
+    }
     if(fast_cast(scope,ast,ast.expr,new ArrayType(new VoidType()))&&fast_cast(scope,ast,ast.index,new NumberType()))
         return
     scope.thr('不能当作array[number],[]重载不存在,而且类型转换失败',ast)
@@ -280,6 +284,18 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
     if(!(scope.get(ast.expr.expr.type.local.join('.')) instanceof Class))
         scope.thr('new后面得跟类',ast)
     ast.type=new ClassType(ast.expr.expr.type.local,ast.expr.generic)
+    //检查泛型相容性
+    const iden_generic=(scope.get(ast.expr.expr.type.local.join('.')) as Class).generic
+    {
+        let index=0
+        for (const iden of iden_generic.values()) {
+            if(!(type_is(ast.expr.generic[index],iden,scope)==ast.expr.generic[index]))
+                scope.thr('泛型不相容',ast)
+            index++
+        }
+    }
+    //把generic去了防止arg在报错
+    ast.expr.generic=[]
     ast.expr.expr=new MemberPostfix(ast.expr.expr,'constructor')
     call(ast.expr.expr,3)
 }

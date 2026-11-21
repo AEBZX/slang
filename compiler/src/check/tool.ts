@@ -366,7 +366,7 @@ export function generic_type_real(type:Type,generic:Map<string,Type>,scope:Scope
         return type
     }
 }
-//类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型,返回false(不匹配)或者true(匹配时)
+//类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型
 export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map<string,Type>,generic_real:Type[],
                             ret:Type,scope:Scope){
     if(param_iden.length!=param_real.length)return null

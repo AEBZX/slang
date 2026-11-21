@@ -1,4 +1,4 @@
-import {de_cond, de_operation, slang_desugar_visitor} from './tool'
+import {de_cond, de_operation, de_ref, slang_desugar_visitor} from './tool'
 import {
     AAssign,
     Assign,
@@ -15,22 +15,17 @@ import {
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
-    if(node.oper!=null)return de_operation(node.oper,node.data,node.value)
-    //左边不是引用类型,右边是(被脱糖成指针),加解引用
-    if(!(node.data.type instanceof ReferenceType)&&node.value.type instanceof ReferenceType){
-        node.value.type=node.value.type.t
-        node.value=new ReferencePrefix(node.value)
-    }
+    if(node.oper!=null)return de_ref(de_operation(node.oper,node.data,node.value))
     return node
 }
 const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
+    //如果是需要处理ref需要撤销de_ref
+    const is_ref=node.value.type instanceof ReferenceType&&node.value.type.literal=='call'
     node.value=call(node.value) as Expression
-    //左边不是引用类型,右边是(被脱糖成指针),加解引用
-    if(!(node.t instanceof ReferenceType)&&node.value.type instanceof ReferenceType){
-        node.value.type=node.value.type.t
-        node.value=new ReferencePrefix(node.value)
-    }
-    //如果是a:T&=b,那么按照语义b已经被脱糖成&b,不用管
+    //operation
+    if(node.oper!=null)
+        return de_ref(de_operation(node.oper,new IdentifierExpr(node.name),node.value))
+    if(is_ref)node.value=(node.value as ReferencePrefix).expr
     return new AAssign(new IdentifierExpr(node.name),node.value)
 }
 const D_Await:slang_desugar_visitor=(node:Await,call)=>{
@@ -38,7 +33,9 @@ const D_Await:slang_desugar_visitor=(node:Await,call)=>{
     return node
 }
 const D_Return:slang_desugar_visitor=(node:Return,call)=>{
+    const is_ref=node.data.type instanceof ReferenceType&&node.data.type.literal=='call'
     node.data=call(node.data) as Expression
+    if(is_ref)node.data=(node.data as ReferencePrefix).expr
     return node
 }
 const D_ExprCommand:slang_desugar_visitor=(node:ExprCommand,call)=>{

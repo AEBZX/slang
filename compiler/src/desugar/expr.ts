@@ -1,9 +1,9 @@
-﻿import {char_to_number, de_cast, de_operation, slang_desugar_visitor} from './tool'
+﻿import {char_to_number, de_cast, de_operation, de_ref, slang_desugar_visitor} from './tool'
 import {
     AddressPrefix, ArgumentsPostfix,
     ArrayExpression,
     ArrayType, BinaryExpression, BitNotPrefix,
-    BooleanLiteral, Command, DecrementPostfix, DecrementPrefix,
+    BooleanLiteral, ClassType, Command, convert, DecrementPostfix, DecrementPrefix,
     Expression, IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix, LambdaExpression, MemberPostfix,
     MinusPrefix, NewPrefix,
     NotPrefix,
@@ -15,13 +15,9 @@ import {
 
 const D_Number:slang_desugar_visitor=(node:NumberLiteral,call)=>{
     if(de_cast(node.cast,node)!=null)return de_cast(node.cast,node)
-    let ret:Expression=null
-    if(node.value.includes('.')){
-        ret=new ArrayExpression([new NumberLiteral(node.value.split('.')[0]),new NumberLiteral(node.value.split('.')[1])])
-        ret.type=new ArrayType(new NumberType())
-        return ret
+    const num=convert(node.value)
+    if(typeof num=='string'){
     }
-    return node
 }
 const D_String:slang_desugar_visitor=(node:StringLiteral,call)=>{
     if(de_cast(node.cast,node)!=null)return de_cast(node.cast,node)
@@ -36,12 +32,7 @@ const D_Boolean:slang_desugar_visitor=(node:BooleanLiteral,call)=>{
     return new NumberLiteral(node.value=='true'?'1':'0')
 }
 const D_IdentifierExpr:slang_desugar_visitor=(node:IdentifierExpr,call)=>{
-    //是引用类型,剥去加指针
-    node.type=(node.type as ReferenceType).t
-    node=de_cast(node.cast,node) as any
-    let ret=new AddressPrefix(node)
-    ret.type=new PointType(node.type)
-    return ret
+    return de_ref(node)
 }
 const D_Array:slang_desugar_visitor=(node:ArrayExpression,call)=> {
     node.elements = node.elements.map(call) as Expression[]
@@ -49,22 +40,37 @@ const D_Array:slang_desugar_visitor=(node:ArrayExpression,call)=> {
 }
 const D_Lambda:slang_desugar_visitor=(node:LambdaExpression,call)=>{
     node.body=call(node.body) as Command
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 const D_Inc_Dec:slang_desugar_visitor=(node:IncrementPostfix|DecrementPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node=de_operation(node instanceof IncrementPostfix?'++':'--',node.expr) as any
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 const D_Member:slang_desugar_visitor=(node:MemberPostfix,call)=>{
     node.expr=call(node.expr) as Expression
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 const D_Index:slang_desugar_visitor=(node:IndexPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node.index=call(node.index) as Expression
     node=de_operation('[]',node.expr,node.index) as any
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
+}
+const D_Arguments:slang_desugar_visitor=(node:ArgumentsPostfix,call)=>{
+    node.expr=call(node.expr) as Expression
+    node.args=node.args.map(call) as Expression[]
+    if(node.oper!=null)
+        return de_ref(de_cast(node.cast,de_operation(node.oper,node.expr,...node.args)))
+    //call_target检查
+    if(node.call_target!=null){
+        //call_target必定是函数调用,node.expr是Identifier/Member,替换为call_target
+        if(node.expr instanceof IdentifierExpr)node.expr=new IdentifierExpr(node.call_target)
+        if(node.expr instanceof MemberPostfix)node.expr.name=node.call_target
+    }
+    //把调用者传进去,如果是this调用就充当this,已经deref过不需要重复
+    if(node.expr instanceof MemberPostfix&&node.expr.expr.type instanceof ClassType)
+        node.args.push(node.expr.expr)
 }
 const D_Prefix:slang_desugar_visitor=(node:PrefixExpression,call)=>{
     let oper=null
@@ -78,19 +84,19 @@ const D_Prefix:slang_desugar_visitor=(node:PrefixExpression,call)=>{
     if(node instanceof NewPrefix)oper='new'
     node.expr=call(node.expr) as Expression
     node=de_operation(oper,node.expr) as any
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 const D_Binary:slang_desugar_visitor=(node:BinaryExpression,call)=>{
     node.left=call(node.left) as Expression
     node.right=call(node.right) as Expression
     node=de_operation(node.oper,node.left,node.right) as any
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 const D_Ternary:slang_desugar_visitor=(node:TernaryExpression,call)=>{
     node.condition=call(node.condition) as Expression
     node.trueExpr=call(node.trueExpr) as Expression
     node.falseExpr=call(node.falseExpr) as Expression
-    return de_cast(node.cast,node)
+    return de_ref(de_cast(node.cast,node))
 }
 export default new Map<any,slang_desugar_visitor>([
     [NumberLiteral,D_Number],
@@ -102,6 +108,7 @@ export default new Map<any,slang_desugar_visitor>([
     [IncrementPostfix,D_Inc_Dec],
     [DecrementPostfix,D_Inc_Dec],
     [MemberPostfix,D_Member],
+    [ArgumentsPostfix,D_Arguments],
     [IndexPostfix,D_Index],
     [IncrementPrefix,D_Prefix],
     [DecrementPrefix,D_Prefix],

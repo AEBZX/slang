@@ -42,11 +42,6 @@ export class HListCommand extends HCommand{
         super()
     }
 }
-export class HExprCommand extends HCommand{
-    constructor(public data:HExpr) {
-        super()
-    }
-}
 export class HTryStatement extends HCommand{
     constructor(public try_:HCommand,public catch_:HCommand,public iden:number,public finally_:HCommand) {
         super()

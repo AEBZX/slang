@@ -33,7 +33,7 @@ const BIDX=$.s('BIDX',$.d('['),$.d(']'))
 const CALL=$.s('CALL',$.d('('),$.d(')'))
 const _operation=$.s('Operation',$.d('operation'),
     //[] 与 () 是双 token 运算符,不能直接和单 token 一起按字符串匹配
-    $.o('symbol',BIDX,CALL,...operations.filter(i=>i!='[]'&&i!='()')),
+    $.o('symbol',BIDX,CALL,...operations),
     $.r('LambdaExpression'))
 const _cast=$.s('Cast',$.d('cast'),$.r('Type'),$.r('LambdaExpression'))
 const _var=$.s('Variable',$.r('Type'),$.c($.d('='),$.r('Expression')),';')

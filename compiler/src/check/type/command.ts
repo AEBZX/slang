@@ -10,7 +10,16 @@ import {
     VarDecl, VM,
     VoidType, WhileStatement
 } from '../../utils'
-import {cast_get, operation_get, slang_check_visitor, to_right, try_bool, type_is} from '../tool'
+import {
+    cast_get,
+    fast_cast,
+    fast_operation,
+    operation_get,
+    slang_check_visitor,
+    to_right,
+    try_bool,
+    type_is
+} from '../tool'
 const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,3)
     call(ast.value,3)
@@ -55,11 +64,29 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
 }
 const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
     call(ast.t,3)
+    scope.set(ast.name,ast.t instanceof ReferenceType?ast.t:new ReferenceType(ast.t))
     call(ast.value,3)
-    if(ast.t instanceof ReferenceType&&!(ast.value.type instanceof ReferenceType))
-        scope.thr('引用类型变量的初始化值必须是左值',ast)
-    if(type_is(ast.t,ast.value.type,scope) instanceof VoidType)
-        scope.thr('初始化时右值类型和声明类型不匹配',ast)
+    if(!(ast.t instanceof ReferenceType)){
+        //如果不是引用,那么就可以进行重载决议和cast决议
+        //=的参数基础上在加一个滚木number就是初始化'='
+        const operation=operation_get(scope,ast,'=',ast.t,ast.value.type||new VoidType(),new NumberType())
+        if(operation!=null){
+            ast.t=operation.type
+            ast.oper=operation.global_local.join('.')+'.'+operation.index
+            return
+        }
+        //如果类型匹配就可以不管
+        if(!(type_is(ast.t,ast.value.type,scope)==ast.t))return
+        //尝试转换
+        if(!fast_cast(scope,ast,ast.value,ast.t))scope.thr('变量声明类型不匹配',ast)
+        return
+    }
+    //只可能是引用类型
+    //引用类型必须赋值
+    if(ast.value==null)
+        scope.thr('引用类型必须初始化',ast)
+    if(!(ast.value.type instanceof ReferenceType))
+        scope.thr('引用类型的初始化必须是左值',ast)
 }
 const Type_Await:slang_check_visitor=(ast:Await,scope,call)=>{
     call(ast.command,3)

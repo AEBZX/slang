@@ -46,7 +46,6 @@ let exp_match:(stream:CharStream,ret:string)=>string=(stream,ret)=>{
     return ret
 }
 let number_match:(stream:CharStream)=>pre_token= (stream:CharStream)=>{
-    //数字不带符号:负数由前缀 - 表达式表达,词法级 '+'/'-' 一律是运算符
     if(stream.now()=='0'){
         stream.next()
         if(number_radix.includes(stream.now())){
