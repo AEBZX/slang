@@ -20,8 +20,8 @@ export class MOV extends IRTree{
         super()
     }
 }
-export class LOAD extends IRTree{
-    constructor(public reg:IRArgs,public data:IRArgs) {
+export class REF extends IRTree{
+    constructor(public left:IRArgs,public right:IRArgs) {
         super()
     }
 }
@@ -40,14 +40,8 @@ export class BIT_NOT extends IRTree{
         super()
     }
 }
-export class CMP extends IRTree{
-    //oper=0:==,oper=1:>,oper=2:>=,oper=3:!=,oper=4:<,oper=5:<=
-    constructor(public left:IRArgs,public right:IRArgs,public oper:IRArgs) {
-        super()
-    }
-}
 export class ControlStream extends IRTree{
-    //frame=0:块帧,frame=1:函数帧,frame=2:异常帧
+    //frame=0:块帧,frame=1:函数帧
     constructor(public target:IRArgs,public frame:IRArgs) {
         super()
     }
@@ -86,26 +80,6 @@ export class OFFSET_SET extends IRTree{
 export class OFFSET_GET extends IRTree{
     constructor(public target:IRArgs,public data:IRArgs,public offset:IRArgs) {
         super()
-    }
-}
-export class OFFSET_ADDR extends OFFSET_GET{
-    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
-        super(target,data,offset)
-    }
-}
-export class OFFSET_STR_GET extends OFFSET_GET{
-    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
-        super(target,data,offset)
-    }
-}
-export class OFFSET_STR_SET extends OFFSET_SET{
-    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
-        super(target,data,offset)
-    }
-}
-export class OFFSET_STR_ADDR extends OFFSET_ADDR{
-    constructor(target:IRArgs,data:IRArgs,offset:IRArgs) {
-        super(target,data,offset)
     }
 }
 export class IN extends IRTree{

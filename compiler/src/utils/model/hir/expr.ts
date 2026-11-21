@@ -19,11 +19,6 @@ export class HArrayExpr extends HPrimaryExpr{
         super()
     }
 }
-export class HMapExpr extends HPrimaryExpr{
-    constructor(public elements:Map<string,HExpr>) {
-        super()
-    }
-}
 export class HLambdaExpr extends HPrimaryExpr{
     constructor(public params:number[],public commands:HCommand) {
         super()

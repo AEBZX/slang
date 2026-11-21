@@ -100,3 +100,21 @@ const H_Binary:slang_hir_visitor=(node:BinaryExpression,scope,call)=>{
 const H_Ternary:slang_hir_visitor=(node:TernaryExpression,scope,call)=>{
     return new HTernaryExpr(call(node.condition),call(node.trueExpr),call(node.falseExpr))
 }
+export default new Map<any,slang_hir_visitor>([
+    [NumberLiteral,H_Number],
+    [ArrayExpression,H_Array],
+    [LambdaExpression,H_Lambda],
+    [IncrementPostfix,H_PostInc],
+    [DecrementPostfix,H_PostDec],
+    [IndexPostfix,H_Index],
+    [MemberPostfix,H_Member],
+    [ArgumentsPostfix,H_Arguments],
+    [IncrementPrefix,H_PreInc],
+    [DecrementPrefix,H_PreDec],
+    [NotPrefix,H_Not],
+    [BitNotPrefix,H_BitNot],
+    [AddressPrefix,H_Address],
+    [ReferencePrefix,H_Reference],
+    [BinaryExpression,H_Binary],
+    [TernaryExpression,H_Ternary]
+])

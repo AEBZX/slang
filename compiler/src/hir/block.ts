@@ -30,5 +30,12 @@ const H_Variable:slang_hir_visitor=(node:Variable,scope,call)=>{
     scope=scope.enter()
     const value=call(node.value)
     scope=scope.leave()
-    return new HVariable(scope.symbol_get(node.name),value)
+    return new HVariable(scope.symbol_get(node.name),value,node.name=='main')
 }
+export default new Map<any,slang_hir_visitor>([
+    [File,H_File],
+    [Module,H_Module],
+    [Class,H_Class_Interface],
+    [Interface,H_Class_Interface],
+    [Variable,H_Variable]
+])

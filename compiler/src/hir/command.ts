@@ -56,3 +56,16 @@ const H_ListCommand:slang_hir_visitor=(node:ListCommand,scope,call)=>{
     scope=scope.leave()
     return new HListCommand(command)
 }
+export default new Map<any,slang_hir_visitor>([
+    [AAssign,H_AAssign],
+    [Await,H_Await],
+    [Return,H_Return],
+    [LabelCommand,H_Label],
+    [GotoCommand,H_Goto],
+    [Throw,H_Throw],
+    [VM,H_VM],
+    [Delete,H_Delete],
+    [IfStatement,H_If],
+    [TryStatement,H_Try],
+    [ListCommand,H_ListCommand]
+])
