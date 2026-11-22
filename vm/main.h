@@ -232,20 +232,37 @@ namespace data
             arg3 = a3;
         }
     };
+    struct runtime_data
+    {
+        int block;
+        int pc;
+        int frame;
+    };
 }
 namespace runtime{class Runtime;}
 namespace instruction
 {
     using instruction=std::function<void(runtime::Runtime*,int,int,int)>;
     void init();
-    //得是 inline:static 是内部链接,init 填的和 Manage 读的会变成两张表
     inline std::unordered_map<int,instruction> run_table;
 }
 namespace runtime
 {
-    class ConstPool
+    class Manage;
+    class Runtime
     {
-        std::unordered_map<int,int>
+    public:
+        Runtime();
+        ~Runtime();
+        Runtime(const Runtime&) = delete;
+        Runtime& operator=(const Runtime&) = delete;
+        Manage* father;
+        data::runtime_data frame;
+        void stop();
+        void start(int block,int pc);
+    };
+    class Manage
+    {
     };
 }
 namespace sbin

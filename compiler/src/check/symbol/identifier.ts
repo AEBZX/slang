@@ -7,15 +7,15 @@ const Symbol_Generic:slang_check_visitor=(ast:GenericType,scope,call)=>{
 const Symbol_Lambda:slang_check_visitor=(ast:LambdaType,scope,call)=> {
     symbol_do_generic(ast,ast.generic,scope,call)
     for(const type of ast.params.values())
-        call(type,2)
-    call(ast.returnType,2)
+        call(type,2,scope)
+    call(ast.returnType,2,scope)
 }
 const Symbol_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
     for(const type of ast.generic)
-        call(type,2)
+        call(type,2,scope)
 }
 const Symbol_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
-    call(ast.t,2)
+    call(ast.t,2,scope)
 }
 export default new Map<any,slang_check_visitor>([
     [GenericType,Symbol_Generic],

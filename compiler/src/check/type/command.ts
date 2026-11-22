@@ -21,8 +21,8 @@ import {
     type_is
 } from '../tool'
 const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
-    call(ast.data,3)
-    call(ast.value,3)
+    call(ast.data,3,scope)
+    call(ast.value,3,scope)
     //先看有没有重载
     const operation=operation_get(scope,ast,ast.oper,ast.data.type,ast.value.type)
     if(operation!=null){
@@ -63,9 +63,9 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
 }
 const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
-    call(ast.t,3)
+    call(ast.t,3,scope)
     scope.set(ast.name,ast.t instanceof ReferenceType?ast.t:new ReferenceType(ast.t))
-    call(ast.value,3)
+    call(ast.value,3,scope)
     if(!(ast.t instanceof ReferenceType)){
         //如果不是引用,那么就可以进行重载决议和cast决议
         //=的参数基础上在加一个滚木number就是初始化'='
@@ -89,18 +89,18 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
         scope.thr('引用类型的初始化必须是左值',ast)
 }
 const Type_Await:slang_check_visitor=(ast:Await,scope,call)=>{
-    call(ast.command,3)
+    call(ast.command,3,scope)
 }
 const Type_ExprCommand:slang_check_visitor=(ast:ExprCommand,scope,call)=>{
-    call(ast.data,3)
+    call(ast.data,3,scope)
 }
 const Type_Delete:slang_check_visitor=(ast:Delete,scope,call)=>{
-    call(ast.expr,3)
+    call(ast.expr,3,scope)
     if(!(ast.expr.type instanceof ReferenceType))
         scope.thr('不能删除右值',ast)
 }
 const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
-    call(ast.data,3)
+    call(ast.data,3,scope)
     if(ast.data==null){
         if(scope.ret instanceof VoidType)
             return
@@ -118,36 +118,36 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
     scope.thr('函数返回值类型不匹配',ast)
 }
 const Type_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
-    call(ast.data,3)
+    call(ast.data,3,scope)
 }
 const Type_VM:slang_check_visitor=(ast:VM,scope,call)=>{
     for(const param of ast.param)
-        call(param,3)
+        call(param,3,scope)
 }
 const Type_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
-    call(ast.condition,3)
-    call(ast.commands,3)
-    call(ast.else_,3)
+    call(ast.condition,3,scope)
+    call(ast.commands,3,scope)
+    call(ast.else_,3,scope)
     try_bool(scope,ast.condition)
 }
 const Type_While_DoWhile:slang_check_visitor=(ast:WhileStatement|DoWhileStatement,scope,call)=>{
-    call(ast.condition,3)
-    call(ast.commands,3)
+    call(ast.condition,3,scope)
+    call(ast.commands,3,scope)
     try_bool(scope,ast.condition)
 }
 const Type_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     scope=scope.enter()
     for(const init of ast.init)
-        call(init,3)
-    call(ast.condition,3)
+        call(init,3,scope)
+    call(ast.condition,3,scope)
     for(const step of ast.step)
-        call(step,3)
-    call(ast.commands,3)
+        call(step,3,scope)
+    call(ast.commands,3,scope)
     try_bool(scope,ast.condition)
     scope=scope.leave()
 }
 const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
-    call(ast.data,3)
+    call(ast.data,3,scope)
     scope=scope.enter();
     //类型推断:ast.data是array返回内部元素否则尝试强转
     (()=>{
@@ -174,13 +174,13 @@ const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
         scope.thr('foreach的data类型不是数组也不能强转成数组,也没有重载:',ast)
     })()
     scope.set(ast.iden,ast.iden_type)
-    call(ast.commands,3)
+    call(ast.commands,3,scope)
     scope=scope.leave()
 }
 const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
-    call(ast.condition,3)
+    call(ast.condition,3,scope)
     for(const case_ of ast.case_list){
-        call(case_.condition,3);
+        call(case_.condition,3,scope);
         //检查两个是否是同一类型
         (()=>{
             if(!(type_is(ast.condition,case_.condition,scope) instanceof VoidType))
@@ -194,22 +194,22 @@ const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
             }
             scope.thr('case的条件类型不匹配',case_.condition)
         })()
-        call(case_.commands,3)
+        call(case_.commands,3,scope)
     }
-    call(ast.default_,3)
+    call(ast.default_,3,scope)
 }
 const Type_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
-    call(ast.commands,3)
+    call(ast.commands,3,scope)
     scope=scope.enter()
     scope.set(ast.catch_.iden,ast.catch_.type)
-    call(ast.catch_.command,3)
+    call(ast.catch_.command,3,scope)
     scope=scope.leave()
-    call(ast.finally_,3)
+    call(ast.finally_,3,scope)
 }
 const Type_List:slang_check_visitor=(ast:ListCommand,scope,call)=>{
     scope=scope.enter()
     for(const item of ast.commands)
-        call(item,3)
+        call(item,3,scope)
     scope=scope.leave()
 }
 export default new Map<any,slang_check_visitor>([

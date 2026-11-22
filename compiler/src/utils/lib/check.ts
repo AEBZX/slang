@@ -1,15 +1,3 @@
-import {
-    BasicType,
-    BlockType, Cast,
-    ClassType,
-    EnumType,
-    FixType,
-    GenericType,
-    LiteralType, NumberType,
-    Operation,
-    Type, Value,
-    VoidType
-} from '../model/ast'
 import {process} from './tool'
 import PeepholeTool, {init_peephole, PeepholeScope, PeepholeTree} from './tool'
 export type check_visitor=(ast:PeepholeTree,scope:PeepholeScope,call:(ast:PeepholeTree,round:number,scope?:PeepholeScope)=>void)=>void

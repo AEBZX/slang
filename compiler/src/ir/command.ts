@@ -4,9 +4,9 @@ import {
     CZ, DELETE,
     HAssign, HAwait, HDelete,
     HGoto,
-    HIdentifierExpr,
+    HIdentifierExpr, HIfStatement,
     HIndexExpr,
-    HLabel,
+    HLabel, HListCommand,
     HReferenceExpr, HReturn, HThrow, HTryStatement, HVM, IfStatement, INT, INT_GET, INT_REGISTER,
     IRArgs,
     JMP, ListCommand,
@@ -15,7 +15,7 @@ import {
 } from '../utils'
 import IR from '../utils/lib/ir'
 const G_Assign:slang_ir_factory=(data:HAssign,tool,call)=>{
-    const right_id=IRArgs.value(tool.id())
+    const right_id=IRArgs.reg(tool.id())
     expr_set(right_id,data.value,tool,call)
     //如果是IdentifierExpr,最简单直接写
     if(data.data instanceof HIdentifierExpr)
@@ -133,10 +133,10 @@ export default new Map<any,slang_ir_factory>([
     [HGoto,G_Goto],
     [HVM,G_VM],
     [HReturn,G_Return],
-    [IfStatement,G_If],
+    [HIfStatement,G_If],
     [HTryStatement,G_Try],
     [HAwait,G_Await],
-    [ListCommand,G_ListCommand],
+    [HListCommand,G_ListCommand],
     [HThrow,G_Throw],
     [HDelete,G_Delete]
 ])

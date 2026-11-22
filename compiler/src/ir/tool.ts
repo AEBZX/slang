@@ -100,6 +100,5 @@ export function expr_set(arg:IRArgs,data:HExpr,tool:IRTool,call:(data:HIRTree)=>
     call(data)
 }
 export function to_v(arg:IRArgs){
-    arg.type='value'
-    return arg
+    return IRArgs.value(arg.data)
 }

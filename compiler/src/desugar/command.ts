@@ -7,24 +7,80 @@ import {
     IdentifierExpr,
     ReferencePrefix,
     ReferenceType,
-    VarDecl, VM,
-    Command, Return, ExprCommand, Throw, Continue, GotoCommand, Break, IfStatement, WhileStatement, DoWhileStatement,
-    ListCommand, LabelCommand, ForStatement, ForeachStatement, NumberType, NumberLiteral, InequalExpression,
-    IndexPostfix, NullLiteral, IncrementPostfix, IncrementPrefix, SwitchStatement, Delete, Case, EqualExpression
+    VarDecl,
+    VM,
+    Command,
+    Return,
+    ExprCommand,
+    Throw,
+    Continue,
+    GotoCommand,
+    Break,
+    IfStatement,
+    WhileStatement,
+    DoWhileStatement,
+    ListCommand,
+    LabelCommand,
+    ForStatement,
+    ForeachStatement,
+    NumberType,
+    NumberLiteral,
+    InequalExpression,
+    IndexPostfix,
+    NullLiteral,
+    IncrementPostfix,
+    IncrementPrefix,
+    SwitchStatement,
+    Delete,
+    Case,
+    EqualExpression,
+    AddAssign,
+    AddExpression,
+    SubAssign,
+    SubExpression,
+    MulAssign,
+    MulExpression,
+    DivAssign,
+    DivExpression,
+    ModAssign,
+    ModExpression,
+    AndAssign,
+    ShrAssign,
+    ShlExpression,
+    ShrExpression,
+    ShlAssign,
+    XorExpression,
+    XorAssign,
+    OrExpression,
+    OrAssign, AndExpression
 } from '../utils'
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
-    if(node.oper!=null)return de_ref(de_operation(node,node.oper,node.data,node.value))
-    return node
+    if(node.oper!=null)
+        return de_operation(node,node.oper,node.data,node.value)
+    if(node instanceof AddAssign)node.value=new AddExpression(node.data,node.value)
+    if(node instanceof SubAssign)node.value=new SubExpression(node.data,node.value)
+    if(node instanceof MulAssign)node.value=new MulExpression(node.data,node.value)
+    if(node instanceof DivAssign)node.value=new DivExpression(node.data,node.value)
+    if(node instanceof ModAssign)node.value=new ModExpression(node.data,node.value)
+    if(node instanceof AndAssign)node.value=new AndExpression(node.data,node.value)
+    if(node instanceof OrAssign)node.value=new OrExpression(node.data,node.value)
+    if(node instanceof XorAssign)node.value=new XorExpression(node.data,node.value)
+    if(node instanceof ShlAssign)node.value=new ShlExpression(node.data,node.value)
+    if(node instanceof ShrAssign)node.value=new ShrExpression(node.data,node.value)
+    return new AAssign(node.data,node.value)
 }
 const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
     //如果是需要处理ref需要撤销de_ref
     const is_ref=node.value.type instanceof ReferenceType&&node.value.type.literal=='call'
     node.value=call(node.value) as Expression
     //operation
-    if(node.oper!=null)
-        return de_ref(de_operation(node,node.oper,new IdentifierExpr(node.name),node.value))
+    if(node.oper!=null){
+        const ret=de_operation(node,node.oper,new IdentifierExpr(node.name),node.value)
+        if(ret instanceof Expression)return call(new ExprCommand(de_ref(ret)))
+        if(ret instanceof VarDecl)return new AAssign(new IdentifierExpr(ret.name),ret.value)
+    }
     if(is_ref)node.value=(node.value as ReferencePrefix).expr
     return new AAssign(new IdentifierExpr(node.name),node.value)
 }
@@ -69,13 +125,13 @@ const D_If:slang_desugar_visitor=(node:IfStatement,call)=>{
     return node
 }
 const D_While:slang_desugar_visitor=(node:WhileStatement,call)=>{
-    return new ListCommand([
+    return call(new ListCommand([
         new LabelCommand('while'),
         node.commands,
         new LabelCommand('continue'),
         new IfStatement(node.condition,new GotoCommand('while'),null),
         new LabelCommand('break')
-    ])
+    ]))
 }
 const D_DoWhile:slang_desugar_visitor=(node:DoWhileStatement,call)=>{
     return call(new ListCommand([

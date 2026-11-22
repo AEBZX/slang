@@ -34,16 +34,18 @@ const CommandOffset=new Map<any,number>([
     [POP,10],
     [OFFSET_SET,11],
     [OFFSET_GET,12],
-    [IN,13],
-    [OUT,14],
-    [GC,15],
-    [DELETE,16],
-    [INT,17],
-    [INT_REGISTER,18],
-    [INT_GET,19],
-    [NOT,20],
-    [BIT_NOT,21],
-    [BINARY,22]
+    [PARAM_LOAD,13],
+    [PARAM_SET,14],
+    [IN,15],
+    [OUT,16],
+    [GC,17],
+    [DELETE,18],
+    [INT,19],
+    [INT_REGISTER,20],
+    [INT_GET,21],
+    [NOT,22],
+    [BIT_NOT,23],
+    [BINARY,24]
 ])
 const BinaryOffset=new Map<string,number>([
     ['add',0],
@@ -96,6 +98,8 @@ const G_PUSH:slang_generate_visitor=(data:PUSH)=>fill(data,data.target)
 const G_POP:slang_generate_visitor=(data:POP)=>fill(data)
 const G_OFFSET_SET:slang_generate_visitor=(data:OFFSET_SET)=>fill(data,data.target,data.offset,data.value)
 const G_OFFSET_GET:slang_generate_visitor=(data:OFFSET_GET)=>fill(data,data.data,data.target,data.offset)
+const G_PARAM_LOAD:slang_generate_visitor=(data:PARAM_LOAD)=>fill(data,data.data,data.param)
+const G_PARAM_SET:slang_generate_visitor=(data:PARAM_SET)=>fill(data,data.param,data.value,data.value)
 const G_IN:slang_generate_visitor=(data:IN)=>fill(data,data.oper,data.target)
 const G_OUT:slang_generate_visitor=(data:OUT)=>fill(data,data.oper,data.target)
 const G_GC:slang_generate_visitor=(data:GC)=>fill(data)
@@ -120,6 +124,8 @@ export default new Generate().use(new Map<any,slang_generate_visitor>([
     [POP,G_POP],
     [OFFSET_SET,G_OFFSET_SET],
     [OFFSET_GET,G_OFFSET_GET],
+    [PARAM_LOAD,G_PARAM_LOAD],
+    [PARAM_SET,G_PARAM_SET],
     [IN,G_IN],
     [OUT,G_OUT],
     [GC,G_GC],

@@ -25,10 +25,11 @@ const G_IdentifierExpr:slang_ir_factory=(data:HIdentifierExpr,tool,call)=>{
     tool.push(new MOV(tool.set_arg,IRArgs.value(data.name)))
 }
 const G_ArrayExpr:slang_ir_factory=(data:HArrayExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const value_arg=IRArgs.reg(tool.id())
     for(const [index,value] of data.elements.entries()){
         expr_set(value_arg,value,tool,call)
-        tool.push(new OFFSET_SET(tool.set_arg,IRArgs.reg(index),value_arg))
+        tool.push(new OFFSET_SET(set_arg,IRArgs.reg(index),value_arg))
     }
 }
 const G_HLambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
@@ -43,38 +44,44 @@ const G_HLambdaExpr:slang_ir_factory=(data:HLambdaExpr,tool,call)=>{
     tool.replace(now)
 }
 const G_IndexExpr:slang_ir_factory=(data:HIndexExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const offset=IRArgs.reg(tool.id())
     const index=IRArgs.reg(tool.id())
     expr_set(offset,data.target,tool,call)
     expr_set(index,data.index,tool,call)
-    tool.push(new OFFSET_GET(tool.set_arg,offset,index))
-    tool.push(new REF(tool.set_arg,to_v(tool.set_arg)))
+    tool.push(new OFFSET_GET(set_arg,offset,index))
+    tool.push(new REF(set_arg,to_v(tool.set_arg)))
 }
 const G_PostInc:slang_ir_factory=(data:HPostIncrementExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
-    tool.push(new MOV(tool.set_arg,to_v(expr)))
+    tool.push(new MOV(set_arg,to_v(expr)))
     tool.push(new BINARY('add',expr,to_v(expr),IRArgs.reg(1)))
 }
 const G_PostDec:slang_ir_factory=(data:HPostDecrementExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
-    tool.push(new MOV(tool.set_arg,to_v(expr)))
+    tool.push(new MOV(set_arg,to_v(expr)))
     tool.push(new BINARY('sub',expr,to_v(expr),IRArgs.reg(1)))
 }
 const G_PreInc:slang_ir_factory=(data:HPreIncrementExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
     tool.push(new BINARY('add',expr,to_v(expr),IRArgs.reg(1)))
-    tool.push(new MOV(tool.set_arg,to_v(expr)))
+    tool.push(new MOV(set_arg,to_v(expr)))
 }
 const G_PreDec:slang_ir_factory=(data:HPreDecrementExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
     tool.push(new BINARY('sub',expr,to_v(expr),IRArgs.reg(1)))
-    tool.push(new MOV(tool.set_arg,to_v(expr)))
+    tool.push(new MOV(set_arg,to_v(expr)))
 }
 const G_Arguments:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const param=tool.params
     const param_set_arg=IRArgs.reg(tool.id())
     for(const [index,value] of data.args.entries()){
@@ -88,47 +95,53 @@ const G_Arguments:slang_ir_factory=(data:HArgumentsExpr,tool,call)=>{
     tool.push(new CALL(to_v(target),IRArgs.reg(1)))
     for(const i of param)
         tool.push(new POP())
-    tool.push(new PARAM_LOAD(tool.set_arg,IRArgs.reg(0)))
+    tool.push(new PARAM_LOAD(set_arg,IRArgs.reg(0)))
 }
 const G_Not:slang_ir_factory=(data:HNotExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
-    tool.push(new NOT(tool.set_arg,to_v(expr)))
+    tool.push(new NOT(set_arg,to_v(expr)))
 }
 const G_BitNot:slang_ir_factory=(data:HBitNotExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const expr=IRArgs.reg(tool.id())
     expr_set(expr,data.target,tool,call)
-    tool.push(new BIT_NOT(tool.set_arg,to_v(expr)))
+    tool.push(new BIT_NOT(set_arg,to_v(expr)))
 }
 const G_Address:slang_ir_factory=(data:HAddressExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     if(data.target instanceof HIdentifierExpr)
-        tool.push(new MOV(tool.set_arg,IRArgs.reg(data.target.name)))
+        tool.push(new MOV(set_arg,IRArgs.reg(data.target.name)))
     if(data.target instanceof HReferenceExpr){
         const address=IRArgs.reg(tool.id())
         expr_set(address,data.target.target,tool,call)
-        tool.push(new MOV(tool.set_arg,address))
+        tool.push(new MOV(set_arg,address))
     }
     if(data.target instanceof HIndexExpr){
         const offset=IRArgs.reg(tool.id())
         const index=IRArgs.reg(tool.id())
         expr_set(offset,data.target.target,tool,call)
         expr_set(index,data.target.index,tool,call)
-        tool.push(new OFFSET_GET(tool.set_arg,offset,index))
+        tool.push(new OFFSET_GET(set_arg,offset,index))
     }
 }
 const G_Reference:slang_ir_factory=(data:HReferenceExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const address=IRArgs.reg(tool.id())
     expr_set(address,data.target,tool,call)
-    tool.push(new REF(tool.set_arg,to_v(address)))
+    tool.push(new REF(set_arg,to_v(address)))
 }
 const G_Binary:slang_ir_factory=(data:HBinaryExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const left=IRArgs.reg(tool.id())
     const right=IRArgs.reg(tool.id())
     expr_set(left,data.left,tool,call)
     expr_set(right,data.right,tool,call)
-    tool.push(new BINARY(BinaryDict.get(data.op),tool.set_arg,to_v(left),to_v(right)))
+    tool.push(new BINARY(BinaryDict.get(data.op),set_arg,to_v(left),to_v(right)))
 }
 const G_Ternary:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
+    const set_arg=tool.set_arg
     const cond=IRArgs.reg(tool.id())
     const left=IRArgs.reg(tool.id())
     const right=IRArgs.reg(tool.id())
@@ -139,9 +152,9 @@ const G_Ternary:slang_ir_factory=(data:HTernaryExpr,tool,call)=>{
     expr_set(left,data.trueExpr,tool,call)
     expr_set(right,data.falseExpr,tool,call)
     tool.replace(true_block.data)
-    tool.push(new MOV(tool.set_arg,left))
+    tool.push(new MOV(set_arg,left))
     tool.replace(false_block.data)
-    tool.push(new MOV(tool.set_arg,right))
+    tool.push(new MOV(set_arg,right))
     tool.replace(now)
     tool.push(new CZ(true_block,IRArgs.reg(1),cond))
     tool.push(new NOT(cond,to_v(cond)))

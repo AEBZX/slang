@@ -130,6 +130,7 @@ export default [
     ExprCommand,
     Return,
     Break,
+    Delete,
     Continue,
     Throw,
     VM,

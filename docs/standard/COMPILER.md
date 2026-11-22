@@ -201,9 +201,11 @@ try := 'try' 命令 ('catch' '(' 标识符 ':' 类型 ')' 命令)? ('finally' �
 |轮|名称|职责|
 |--|--|--|
 |0|censor|结构校验：修饰符合法性、块内成员种类、enum 重名、lambda 参数/泛型重名、引用必须初始化、cast 单参数、operation 非零参数、break/continue 必须在循环内|
-|1|symbol|符号表构建（§6.2）、link 别名绑定、label 注册与 goto 延迟结算（§6.5）、泛型检查|
-|2|build|全局符号注册：模块/类/静态函数/静态变量路径、函数重载表、operation/cast 注册表、implement 继承链|
+|1|build|全局符号注册：模块/类/静态函数/静态变量路径、函数重载表、operation/cast 注册表、implement 继承链|
+|2|symbol|符号表构建（§4.2）、link 别名绑定、label 注册与 goto 延迟结算（§4.2）、泛型检查|
 |3|type|类型推导与决议：表达式/语句类型标注、重载决议、cast 插入、`oper`/`cast` 调用路径写入|
+
+所有 visitor 通过 `call(节点, 轮次, scope)` 把**当前作用域显式传给子节点**；进入新作用域（函数体/lambda 体/语句列表/for/catch）的 visitor 必须把 enter 后的作用域作为第 3 参传出，否则子节点会拿到父级作用域。
 
 ## 4.1 修饰符规则
 
@@ -236,8 +238,8 @@ Slang 语言本体只提供**够用的最小内建集**，其余一切能力由�
 
 |内建能力|说明|
 |--|--|
-|二元算术/位/比较|`+ - * / % << >> & \| ^ == > <`（操作数同为 number → number）|
-|布尔逻辑|`\| & == < > ^` 对 boolean → boolean；`&&` `\|\|` **必须由标准库重载提供**（内建指令表暂无对应子号，见 §12）|
+|二元算术/位/比较|`+ - * / % << >> & \| ^ == > <`（操作数同为 number → number；比较结果为 boolean）|
+|`!=` `&&` `\|\|`|**内建 VM 不提供**，由 Slang 层（标准库）以 operation 提供；条件降糖产生的 `x != null` 依赖该 operation|
 |一元|`!`（boolean）、`~` `-`（number）；前缀 `++` `--`（number，单参数）|
 |后缀自增|`++` `--`（双参数 `(操作数, number占位)`，可重载）|
 |数组索引|`a[i]` 读写（OFFSET_GET/OFFSET_SET）|
@@ -254,7 +256,9 @@ desugar 把语法统一降级为极小的核心形态：
 
 |源语法|降级产物|
 |--|--|
-|函数 `f`（重载序号 k）|Variable `f@k`，值为 lambda 表达式；类/接口成员函数追加 `this` 引用参数|
+|变量声明 `var x: T = v`|赋值 `x = v`；局部变量的槽由 HIR 阶段分配（首次赋值懒分配）|
+|复合赋值 `x += v` 等|无重载时降为 `x = x + v`|
+|函数 `f`（重载序号 k）|Variable `f@k`，值为 lambda 表达式；类/接口成员函数追加 `this` 引用参数；`constructor` 追加隐式 `return this`|
 |value 块|Module `number`/`boolean`；operation→函数 `operation@序号`，cast→函数 `cast@序号`|
 |enum|一组静态 number 变量|
 |while|`label 'while'; 体; if(cond) goto 'while'; label 'break';`|
@@ -296,8 +300,8 @@ desugar 把语法统一降级为极小的核心形态：
 
 ## 5.7 入口约定
 
-- 入口是名为 `main` 的全局变量（其值为 lambda）。
-- 块 0 是 VM 的运行起点：先执行全部全局变量的初始化（每个全局变量：求值其 lambda → 写入全局槽），尾部以 frame=1 的 JMP 跳转到 `main` 的值槽（槽内容 = main lambda 的块号）。
+- 入口是名为 `main` 的全局变量（函数形式的 `main@0` 同样视为入口；其值为 lambda）。
+- 块 0 是 VM 的运行起点：先执行全部全局变量的初始化（每个全局变量：求值其 lambda → 写入全局槽），尾部以 `JMP(value(entry槽), frame=0)` 跳转 —— 槽内容 = main lambda 的块号。每个模块只发射一条（重复发射被去重）。
 
 # 6. 运行时值模型
 
@@ -351,7 +355,7 @@ HIR 阶段遍历 desugar 后的 AST：
 |4|TZ|12|OFFSET_GET|20|NOT|
 |5|JMP|13|IN|21|BIT_NOT|
 |6|CALL|14|OUT|22|BINARY|
-|7|THREAD|15|GC|||
+|7|THREAD|15|GC|23/24|PARAM_SET / PARAM_LOAD|
 
 BINARY 子号：`add 0 / sub 1 / mul 2 / div 3 / mod 4 / shl 5 / shr 6 / and 7 / or 8 / xor 9 / eq 10 / grt 11 / smr 12`。
 （`eq/grt/smr` 只由内建二元表达式产生；`vm()` 助记符表暂未收录它们，见 §8.9。）
@@ -385,8 +389,8 @@ BINARY 子号：`add 0 / sub 1 / mul 2 / div 3 / mod 4 / shl 5 / shr 6 / and 7 /
 
 ## 8.4 控制转移与帧
 
-- **frame=0（块级）**：target 是**立即数块号**。`JMP` 无条件跳转；`CZ` 块级调用进入的块**执行到块尾自动返回**调用点（G_If 的编排依赖此语义）；`THREAD` 把块作为协程启动。
-- **frame=1（函数级）**：target 是**槽引用** —— 槽内容 = 目标函数的块号。`CALL` 创建新函数帧；`RET`（参数恒为 1）返回上一层函数帧。frame 标记的作用是让 RET 不会跨层乱跳。
+- **target 的解释由操作数类型决定**（与 frame 无关）：`reg n` = 立即数块号 n；`value n` = 槽间接（读槽 n 的内容得到目标块号，如 lambda 值槽）。
+- **frame 只标记是否函数帧**：`frame=0` 为块级 —— `CZ/JZ` 进入的块执行到块尾自动返回调用点（G_If 的编排依赖此语义），`THREAD` 把块作为协程启动；`frame=1` 为函数级 —— `CALL` 创建新函数帧，`RET`（参数恒为 1）用于提前返回。**函数帧的块尾同样自动返回**；缺失 RET 属于 UB，编译器不强制报错。
 - JZ/CZ/TZ = 带条件的 JMP/CALL/THREAD：**cond 槽内容 = 1 执行，= 0 不执行**。
 
 ## 8.5 调用约定
@@ -449,14 +453,13 @@ uint64BE           id 空间总长（块号+槽号上限）
 'POOL_END'
 'CODE_START'
   ('BLOCK_START' uint32BE 块号 指令×16字节* 'BLOCK_END')*
-'CODE_END'=
+'CODE_END'
 ```
 # 10. 标准库职责边界
 
 语言内建仅 §5.1 所列最小集。标准库（Slang 层）负责提供：
 
-- number 的扩展运算、boolean 的 `&&`/`||`；
-- 指针/引用的 `'&'`（解引用）、`'*'`（取地址）operation；
+- number 的扩展运算、boolean 的 `&&`/`||`
 - 类的 `constructor`；
 - 容器（数组之外的结构，经 `'[]'` / `'()'` operation 重载接入 foreach 与调用语法）;
 - 字符串及其他一切高级设施。
@@ -466,3 +469,14 @@ uint64BE           id 空间总长（块号+槽号上限）
 # 11. 插件
 
 插件签名 `(pipeline: PeepholeTool[], config: any) => PeepholeTool[]`，在管线运行前执行，可替换/增删任意阶段（§1.2 之外的行为由插件自担；遵循本规范的范围是：标准管线行为集合内的输出不变式）。
+
+# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11）
+
+已验证通过：全部样例通过 parse/check/desugar；`i++` 走内建 BINARY；局部变量懒分配槽生效；switch/if 的 CZ/NOT 条件链与 case 体完整；bootstrap JMP 去重与 value 间接跳转正确。以下为剩余缺口：
+
+1. **generate 的指令映射表缺 `[PARAM_SET, G_PARAM_SET]` / `[PARAM_LOAD, G_PARAM_LOAD]` 两项** —— visitor 与基号(13/14)已定义但未注册，所有 PARAM 指令序列化返回 undefined，`Buffer.concat` 崩溃（S1/S4/S11）。
+2. **HIR 的 `call()` 未把 enter 后的 scope 显式传给子节点**（与 check 同款问题）—— `H_Lambda` 的 `register_label` 把标签注册进 lambda 作用域，但 `H_Label`/`H_Goto` 拿到的是外层 scope，`label_get` 全部 undefined → `G_Label` 对 undefined `replace` → 块丢失/`push` 崩溃（S3/S5/S7）；函数参数名同样不可见（S11 的 `a`）。`H_Lambda` 的 body、`H_ListCommand` 的 children、`H_Try` 的 catch 体需要 `call(节点, scope)`。
+3. **`G_Binary`/`G_PostInc` 等工厂在 `expr_set` 子表达式后引用 `tool.set_arg`** —— set_arg 已被最后一个子表达式覆盖，BINARY 结果写进右操作数槽，`G_Assign` 预留的 `right_id` 槽从未被写入（S2 的 `MOV 8,12,0` 读到未初始化槽）。进入子表达式求值前应先保存 result。
+4. **`D_Assign` 复合赋值重写后仍返回 AddAssign** —— HIR 无对应 visitor，`x += 2` 的 += 部分依旧丢失（S9）。重写应返回 `new AAssign(node.data, node.value)`。
+5. **`!=` / `&&` / `||` 的 Slang 层实现未落地** —— 设计上由标准库 operation 提供，但目前 check 不重写、BinaryDict 无子号，编码成 NaN→opcode 0 的垃圾 MOV（S8/S10）。需在 check 对未解析的三者报错，或提供降糖。
+6. generate 对 undefined/NaN 参数静默写 0（Node 24 行为），把逻辑 bug 降级成 opcode 0/槽 0 —— 可选：在 fill 处校验，按 UB 处理也可。

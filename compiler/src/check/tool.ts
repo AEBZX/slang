@@ -20,9 +20,9 @@ export class Scope extends PeepholeScope{
     global:Scope
     func:boolean=false
     //标签表
-    label:string[]
+    label:string[]=[]
     //标签需要延迟处理
-    label_delay:{label:string,ast:GotoCommand}[]
+    label_delay:{label:string,ast:GotoCommand}[]=[]
     //继承链,key implements value
     implement:Map<string[],ClassType[]>
     //符号表
@@ -140,7 +140,7 @@ export class Scope extends PeepholeScope{
         else return this.parent?.loop()||false
     }
     public enter(func:boolean=false):Scope{
-        let ret=super.enter() as Scope
+        let ret=new Scope(this,this.global)
         ret.func=func
         return ret
     }
@@ -150,10 +150,10 @@ export class Scope extends PeepholeScope{
             for(const {label,ast} of this.label_delay)
                 if(!this.label.includes(label))
                     this.thr(`标签${label}未定义`,ast)
-        return super.leave() as Scope
+        return this.parent
     }
 }
-export type slang_check_visitor =(ast:ASTTree, scope:Scope, call:(ast:ASTTree,round:number)=>void)=>void
+export type slang_check_visitor =(ast:ASTTree, scope:Scope, call:(ast:ASTTree,round:number,scope?:Scope)=>void)=>void
 //模块合并
 function module_merge(a:Module,b:Module){
     return new Module(a.modifiers,a.name,[...a.children,...b.children])

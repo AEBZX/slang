@@ -4,11 +4,11 @@ import {
     Class,
     Command, Enum, Expression,
     File,
-    Function,
+    Function, IdentifierExpr,
     Interface,
     LambdaExpression,
-    LambdaType, Modifier,
-    Module, NumberLiteral, NumberType, Operation, ReferenceType, Value,
+    LambdaType, ListCommand, Modifier,
+    Module, NumberLiteral, NumberType, Operation, ReferenceType, Return, Value,
     VarDecl,
     Variable, VoidType
 } from '../utils'
@@ -29,6 +29,9 @@ const D_Function:slang_desugar_visitor=(node:Function,call)=>{
     if(!node.modifiers.unstatic)
         node.params=new Map([...node.params,['this',new ReferenceType(new VoidType())]])
     node.commands=call(node.commands) as Command
+    //构造函数特殊处理,就算不是构造函数也不可达或者没用
+    if(node.name=='constructor')
+        node.commands=call(new ListCommand([node.commands,new Return(new IdentifierExpr('this'))]))
     return new Variable(node.modifiers,node.name+'@'+node.index,
         new LambdaType(node.generic,node.params,node.return_type),
         new LambdaExpression(node.generic,node.params,node.return_type,node.commands))
@@ -50,9 +53,14 @@ const D_Enum:slang_desugar_visitor=(node:Enum,call)=>{
         }))
     )
 }
+const D_Variable:slang_desugar_visitor=(node:Variable,call)=>{
+    //variable不oper/cast
+    return new Variable(node.modifiers,node.name,node.t,call(node.value) as Expression)
+}
 export default new Map<any,slang_desugar_visitor>([
     [File,D_File],
     [Module,D_Module],
+    [Variable,D_Variable],
     [Class,D_Class_Interface],
     [Interface,D_Class_Interface],
     [Function,D_Function],

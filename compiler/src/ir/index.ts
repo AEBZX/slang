@@ -6,5 +6,5 @@ import {HScope} from '../hir/tool'
 import {HModule} from '../utils'
 import {IRTool} from './tool'
 export default new IR().use(expr).use(command).use(block).use((param:[HScope,HModule[]])=>{
-    return new IRTool(param[0].id())
+    return new IRTool(param[0].global.index)
 })

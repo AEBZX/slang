@@ -1,4 +1,4 @@
-﻿import {member_visit, slang_hir_visitor} from './tool'
+﻿import {member_visit, register_label, slang_hir_visitor} from './tool'
 import {
     AddressPrefix,
     ArgumentsPostfix,
@@ -8,7 +8,7 @@ import {
     HLambdaExpr, HNotExpr,
     HNumberLiteral, HPostDecrementExpr,
     HPostIncrementExpr, HPreDecrementExpr, HPreIncrementExpr,
-    HReferenceExpr, HTernaryExpr, IncrementPostfix, IncrementPrefix, IndexPostfix,
+    HReferenceExpr, HTernaryExpr, IdentifierExpr, IncrementPostfix, IncrementPrefix, IndexPostfix,
     LambdaExpression, MemberPostfix, NewPrefix, NotPrefix,
     NumberLiteral, ReferencePrefix, TernaryExpression
 } from '../utils'
@@ -17,26 +17,31 @@ const H_Number:slang_hir_visitor=(node:NumberLiteral,scope,call)=>{
     return new HNumberLiteral(parseInt(node.value))
 }
 const H_Array:slang_hir_visitor=(node:ArrayExpression,scope,call)=>{
-    return new HArrayExpr(node.elements.map(call))
+    return new HArrayExpr(node.elements.map(i=>call(i)))
+}
+const H_Identifier:slang_hir_visitor=(node:IdentifierExpr,scope,call)=>{
+    return new HIdentifierExpr(scope.symbol_get(node.name))
 }
 const H_Lambda:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
     scope=scope.enter()
+    //把label都注册进来
+    register_label(scope,node.body)
     const params=Array.from(node.params.keys()).map(i=>scope.global_id())
     let index=0
     for(const i of node.params.keys())
         scope.symbol_set(i,params[index++])
-    const body=call(node.body)
+    const body=call(node.body,scope)
     scope=scope.leave()
     return new HLambdaExpr(params,body)
 }
 const H_PostInc:slang_hir_visitor=(node:IncrementPostfix,scope,call)=>{
-    return new HPostIncrementExpr(call(node.expr))
+    return new HPostIncrementExpr(call(node.expr,scope))
 }
 const H_PostDec:slang_hir_visitor=(node:DecrementPostfix,scope,call)=>{
-    return new HPostDecrementExpr(call(node.expr))
+    return new HPostDecrementExpr(call(node.expr,scope))
 }
 const H_Index:slang_hir_visitor=(node:IndexPostfix,scope,call)=>{
-    return new HIndexExpr(call(node.expr),call(node.index))
+    return new HIndexExpr(call(node.expr,scope),call(node.index,scope))
 }
 const H_Member:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     const chain=member_visit(node)
@@ -75,33 +80,34 @@ const H_Member:slang_hir_visitor=(node:MemberPostfix,scope,call)=>{
     return chain_index(new HIdentifierExpr(scope.symbol_get(global_name)),global_name,chain.slice(end_index))
 }
 const H_Arguments:slang_hir_visitor=(node:ArgumentsPostfix,scope,call)=>{
-    return new HArgumentsExpr(node.expr,node.args.map(call))
+    return new HArgumentsExpr(call(node.expr,scope),node.args.map(i=>call(i,scope)))
 }
 const H_PreInc:slang_hir_visitor=(node:IncrementPrefix,scope,call)=>{
-    return new HPreIncrementExpr(call(node.expr))
+    return new HPreIncrementExpr(call(node.expr,scope))
 }
 const H_PreDec:slang_hir_visitor=(node:DecrementPrefix,scope,call)=>{
-    return new HPreDecrementExpr(call(node.expr))
+    return new HPreDecrementExpr(call(node.expr,scope))
 }
 const H_Not:slang_hir_visitor=(node:NotPrefix,scope,call)=>{
-    return new HNotExpr(call(node.expr))
+    return new HNotExpr(call(node.expr,scope))
 }
 const H_BitNot:slang_hir_visitor=(node:BitNotPrefix,scope,call)=>{
-    return new HBitNotExpr(call(node.expr))
+    return new HBitNotExpr(call(node.expr,scope))
 }
 const H_Address:slang_hir_visitor=(node:AddressPrefix,scope,call)=>{
-    return new HAddressExpr(call(node.expr))
+    return new HAddressExpr(call(node.expr,scope))
 }
 const H_Reference:slang_hir_visitor=(node:ReferencePrefix,scope,call)=>{
-    return new HReferenceExpr(call(node.expr))
+    return new HReferenceExpr(call(node.expr,scope))
 }
 const H_Binary:slang_hir_visitor=(node:BinaryExpression,scope,call)=>{
-    return new HBinaryExpr(call(node.left),node.op,call(node.right))
+    return new HBinaryExpr(call(node.left,scope),node.op,call(node.right,scope))
 }
 const H_Ternary:slang_hir_visitor=(node:TernaryExpression,scope,call)=>{
-    return new HTernaryExpr(call(node.condition),call(node.trueExpr),call(node.falseExpr))
+    return new HTernaryExpr(call(node.condition,scope),call(node.trueExpr,scope),call(node.falseExpr,scope))
 }
 export default new Map<any,slang_hir_visitor>([
+    [IdentifierExpr,H_Identifier],
     [NumberLiteral,H_Number],
     [ArrayExpression,H_Array],
     [LambdaExpression,H_Lambda],

@@ -15,7 +15,7 @@ import {
 import {slang_check_visitor} from './tool'
 const Build_File:slang_check_visitor=(ast:File,scope,call)=>{
     for(const module of ast.children)
-        call(module,1)
+        call(module,1,scope)
 }
 const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.global.set(scope.path+'.'+ast.name,ast)

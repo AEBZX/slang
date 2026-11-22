@@ -1,6 +1,18 @@
 import {PeepholeScope} from '../utils/lib/tool'
-import {ASTTree, Block, Class, Expression, HIRTree, IdentifierExpr, Interface, MemberPostfix, Module} from '../utils'
-export type slang_hir_visitor =(node:ASTTree, scope:HScope, call:(node:ASTTree)=>HIRTree)=>HIRTree
+import {
+    ASTTree, Await,
+    Block,
+    Class, Command,
+    Expression,
+    HCommand,
+    HIRTree, HLabel,
+    IdentifierExpr, IfStatement,
+    Interface, LabelCommand, ListCommand,
+    MemberPostfix,
+    Module, TryStatement
+} from '../utils'
+import {Scope} from "../check/tool";
+export type slang_hir_visitor =(node:ASTTree, scope:HScope, call:(node:ASTTree,s?:HScope)=>HIRTree)=>HIRTree
 export class HScope extends PeepholeScope{
     public index:number=1
     public link:Map<string,string>=new Map()
@@ -83,4 +95,22 @@ export function member_visit(member:Expression):string[]{
     if(member instanceof MemberPostfix&&!(member.expr instanceof MemberPostfix||member.expr instanceof IdentifierExpr))return null
     if(member instanceof IdentifierExpr)return [member.name]
     return [...member_visit(member.expr),member.name]
+}
+export function register_label(scope:HScope,command:Command){
+    if(command instanceof LabelCommand)
+        scope.label_set(command.name,scope.global_id())
+    if(command instanceof ListCommand)
+        for(const i of command.commands)
+            register_label(scope,i)
+    if(command instanceof Await)
+        register_label(scope,command.command)
+    if(command instanceof IfStatement){
+        register_label(scope,command.commands)
+        register_label(scope,command.else_)
+    }
+    if(command instanceof TryStatement){
+        register_label(scope,command.commands)
+        register_label(scope,command.catch_.command)
+        register_label(scope,command.finally_)
+    }
 }

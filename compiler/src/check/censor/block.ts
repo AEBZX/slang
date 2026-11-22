@@ -23,7 +23,7 @@ const Censor_File:slang_check_visitor=(ast:File,scope,call)=>{
         //子块只能是value/module
         if(!(block instanceof Value||block instanceof Module))
             scope.thr('文件顶层只能是value/module',block)
-        call(block,0)
+        call(block,0,scope)
     }
 }
 const Censor_Value:slang_check_visitor=(ast:Value,scope,call)=>{
@@ -36,7 +36,7 @@ const Censor_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     for(const child of ast.children){
         if(!(child instanceof Operation||child instanceof Cast))
             scope.thr('value内部必须是operation/cast',child)
-        call(child,0)
+        call(child,0,scope)
     }
 }
 const Censor_Module:slang_check_visitor=(ast:Module,scope,call)=>{
@@ -48,7 +48,7 @@ const Censor_Module:slang_check_visitor=(ast:Module,scope,call)=>{
             scope.thr('module内部不能是value/operation/cast',child)
         if(child instanceof Variable&&child.modifiers.unstatic)
             scope.thr('module内部的变量必须是静态的',child)
-        call(child,0)
+        call(child,0,scope)
     }
 }
 const Censor_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
@@ -61,17 +61,17 @@ const Censor_Enum:slang_check_visitor=(ast:Enum,scope,call)=>{
 const Censor_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     //修饰符强制static=true,sync=true
     ast.modifiers=new Modifier(false,false,ast.modifiers._private)
-    call(ast.implement,0)
+    call(ast.implement,0,scope)
     const generic_data=Array.from(ast.generic.keys())
     if(generic_data.length!=new Set(generic_data).size)
         scope.thr('类/接口中的泛型定义中存在重名',ast)
     for(const generic of ast.generic.values())
-        call(generic,0)
+        call(generic,0,scope)
     //子块只能是function/var/operation/cast
     for(const child of ast.children){
         if(!(child instanceof Function||child instanceof Variable||child instanceof Operation||child instanceof Cast))
             scope.thr('class/interface内部只能是function/var/operation/cast',child)
-        call(child,0)
+        call(child,0,scope)
     }
 }
 const Censor_Function:slang_check_visitor=(ast:Function,scope,call)=>{
@@ -84,26 +84,26 @@ const Censor_Function:slang_check_visitor=(ast:Function,scope,call)=>{
     if(param_list.length!=new Set(param_list).size)
         scope.thr('函数中的参数定义中存在重名',ast)
     for(const type of ast.generic.values())
-        call(type,0)
+        call(type,0,scope)
     for(const param of ast.params.values())
-        call(param,0)
-    call(ast.return_type,0)
-    call(ast.commands,0)
+        call(param,0,scope)
+    call(ast.return_type,0,scope)
+    call(ast.commands,0,scope)
 }
 const Censor_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
-    call(ast.t,0)
-    call(ast.command,0)
+    call(ast.t,0,scope)
+    call(ast.command,0,scope)
     if(ast.command.params.size!=1)
         scope.thr('cast必须只有一个参数',ast)
 }
 const Censor_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     if(ast.t instanceof ReferenceType&&ast.value==null)
         scope.thr('引用类型必须初始化',ast)
-    call(ast.t,0)
-    call(ast.value,0)
+    call(ast.t,0,scope)
+    call(ast.value,0,scope)
 }
 const Censor_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
-    call(ast.command,0)
+    call(ast.command,0,scope)
     if(ast.command.params.size==0)
         scope.thr('operation不能重载滚木',ast)
 }
