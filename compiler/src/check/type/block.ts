@@ -48,7 +48,7 @@ const Type_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=
     scope=scope.leave()
 }
 const Type_Function:slang_check_visitor=(ast:Function,scope,call)=>{
-    ast.type=new LambdaType(ast.generic,ast.params,ast.return_type,true,ast.name)
+    ast.type=new LambdaType(ast.generic,ast.params,ast.return_type,true,ast.global_local.join('.'))
     scope=scope.enter()
     for(const [name,type] of ast.generic)
         scope.set_generic(name,type)

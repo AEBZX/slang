@@ -24,9 +24,9 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,3)
     call(ast.value,3)
     //先看有没有重载
-    const operation=operation_get(scope,ast,ast.oper,ast.data,ast.value)
+    const operation=operation_get(scope,ast,ast.oper,ast.data.type,ast.value.type)
     if(operation!=null){
-        ast.oper=operation.global_local.join('.')+'.'+operation.index
+        ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
         return
     }
     //常规情况
@@ -56,7 +56,7 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
             scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
             return
         }
-        ast.value.cast=cast.global_local.join('.')+'.'+cast.id
+        ast.value.cast=cast.global_local.join('.')+'.cast@'+cast.id
         ast.type=cast.type
         return
     }
@@ -72,7 +72,7 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
         const operation=operation_get(scope,ast,'=',ast.t,ast.value.type||new VoidType(),new NumberType())
         if(operation!=null){
             ast.t=operation.type
-            ast.oper=operation.global_local.join('.')+'.'+operation.index
+            ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
             return
         }
         //如果类型匹配就可以不管

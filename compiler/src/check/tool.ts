@@ -4,8 +4,8 @@ import {
     Block, BooleanType,
     Cast, Class,
     ClassType, Enum, EnumType, Expression, FixType,
-    Function, GenericType, IdentifierExpr,
-    Interface, LambdaType, LiteralType,
+    Function, GenericType, GotoCommand, IdentifierExpr,
+    Interface, LabelCommand, LambdaType, LiteralType,
     Module, NumberType,
     Operation, PointType, ReferencePrefix,
     ReferenceType,
@@ -18,8 +18,11 @@ import ast from '../parser/ast'
 export class Scope extends PeepholeScope{
     parent:Scope
     global:Scope
+    func:boolean=false
     //标签表
     label:string[]
+    //标签需要延迟处理
+    label_delay:{label:string,ast:GotoCommand}[]
     //继承链,key implements value
     implement:Map<string[],ClassType[]>
     //符号表
@@ -48,11 +51,24 @@ export class Scope extends PeepholeScope{
         this.error=[]
         this.label=[]
     }
-    public label_set(name:string){
+    private label_set(name:string){
         if(!this.label.includes(name))this.label.push(name)
     }
-    public label_get(name:string):boolean{
-        return this.label.includes(name)||this.parent?.label_get(name)||this.global?.label_get(name)||false
+    register_label(name:string,ast:LabelCommand){
+        if(this.func){
+            if(this.label.includes(name))this.thr(`标签${name}重复定义`,ast)
+            this.label_set(name)
+            return
+        }
+        this.parent.register_label(name,ast)
+    }
+    delay_set(name:string,ast:GotoCommand){
+        if(this.func){
+            if(this.label.includes(name))return
+            this.label_delay.push({label:name,ast:ast})
+            return
+        }
+        this.parent.delay_set(name,ast)
     }
     public implement_set(local:string[],type:ClassType){
         if(this.global!=null)this.global.implement_set(local,type)
@@ -123,10 +139,17 @@ export class Scope extends PeepholeScope{
         if(this._loop)return true
         else return this.parent?.loop()||false
     }
-    public enter():Scope{
-        return super.enter() as Scope
+    public enter(func:boolean=false):Scope{
+        let ret=super.enter() as Scope
+        ret.func=func
+        return ret
     }
     public leave():Scope{
+        if(this.func)
+            //delay结算
+            for(const {label,ast} of this.label_delay)
+                if(!this.label.includes(label))
+                    this.thr(`标签${label}未定义`,ast)
         return super.leave() as Scope
     }
 }
@@ -401,4 +424,8 @@ export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Typ
         return true
     }
     return false
+}
+export function de_ref(type:Type){
+    if(type instanceof ReferenceType)return type.t
+    return type
 }

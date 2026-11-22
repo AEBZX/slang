@@ -25,8 +25,9 @@ const H_Lambda:slang_hir_visitor=(node:LambdaExpression,scope,call)=>{
     let index=0
     for(const i of node.params.keys())
         scope.symbol_set(i,params[index++])
+    const body=call(node.body)
     scope=scope.leave()
-    return null
+    return new HLambdaExpr(params,body)
 }
 const H_PostInc:slang_hir_visitor=(node:IncrementPostfix,scope,call)=>{
     return new HPostIncrementExpr(call(node.expr))

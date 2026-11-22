@@ -66,7 +66,7 @@ export const VMMap=new Map<string,(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>IRTree>([
     ['offset_get',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OFFSET_GET(p1,to_v(p2),to_v(p3))],
     ['delete',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new DELETE(p1)],
     ['gc',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new GC()],
-    ['in',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new IN(to_v(p1),p2)],
+    ['in',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new IN(to_v(p1),to_v(p2))],
     ['out',(p1:IRArgs,p2:IRArgs,p3:IRArgs)=>new OUT(to_v(p1),to_v(p2))]
 ])
 export class IRTool extends PeepholeScope{

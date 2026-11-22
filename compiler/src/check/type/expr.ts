@@ -1,6 +1,6 @@
 import {
     block_get,
-    cast_get, fast_cast, fast_operation,
+    cast_get, de_ref, fast_cast, fast_operation,
     generic_type_real,
     operation_get,
     param_best,
@@ -49,7 +49,7 @@ const Type_Null:slang_check_visitor=(ast:NullLiteral,scope,call)=>{
     ast.type=new VoidType()
 }
 const Type_Identifier:slang_check_visitor=(ast:IdentifierExpr,scope,call)=>{
-    ast.type=new ReferenceType(scope.get(ast.name).type,'identifier')
+    ast.type=new ReferenceType(scope.get(ast.name),'identifier')
 }
 const Type_Array:slang_check_visitor=(ast:ArrayExpression,scope,call)=>{
     for(const item of ast.elements)
@@ -92,10 +92,15 @@ const Type_Inc_Dec:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix,sc
 }
 const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
     call(ast.expr,3)
-    if(ast.expr.type instanceof BlockType||ast.expr.type instanceof ClassType){
-        ast.type=block_get(ast.expr.type._this,true,
-            ast.expr.type.local.join('.'),ast.name,
-            (ast.type instanceof ClassType?ast.type.generic:[]),scope)
+    if(de_ref(ast.expr.type) instanceof BlockType||de_ref(ast.expr.type) instanceof ClassType){
+        ast.type=block_get(
+            (<ClassType | BlockType>de_ref(ast.expr.type))._this,
+            ast.expr.type instanceof BlockType,
+            (<BlockType | ClassType>de_ref(ast.expr.type)).local.join('.'),
+            ast.name,
+            (ast.type instanceof ClassType?ast.type.generic:[]),
+            scope
+        )
         return
     }
     scope.thr('不是类或者模块,而且后缀查无此物',ast)
@@ -105,7 +110,7 @@ const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=> {
     call(ast.index, 3)
     if (fast_operation(scope, ast, '[]', new VoidType(), ast.expr, ast.index))
         return
-    if (ast.expr.type instanceof ArrayType && ast.expr.type instanceof NumberType) {
+    if (ast.expr.type instanceof ArrayType && ast.index.type instanceof NumberType) {
         ast.type = new ReferenceType(ast.expr.type.t, 'identifier')
         return
     }
@@ -186,7 +191,7 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
 const Type_PreInc_Dec:slang_check_visitor=(ast:IncrementPrefix|DecrementPrefix,scope,call)=>{
     call(ast.expr,3)
     //先看重载,prefix++直接填
-    if(fast_operation(scope,ast,ast instanceof IncrementPrefix?'++':'--',new VoidType(),ast.expr,new NumberType()))
+    if(fast_operation(scope,ast,ast instanceof IncrementPrefix?'++':'--',new VoidType(),ast.expr))
         return
     if(ast.expr.type instanceof NumberType){
         ast.type=new NumberType()
@@ -277,15 +282,16 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
     }
     //不能直接调用不然会找不到函数
     call(ast.expr.expr,3)
-    if(!(ast.expr.expr.type instanceof BlockType)){
+    const ast_type=de_ref(ast.expr.expr.type)
+    if(!(ast_type instanceof BlockType)){
         scope.thr('new后面得跟类',ast)
         return
     }
-    if(!(scope.get(ast.expr.expr.type.local.join('.')) instanceof Class))
+    if(!(scope.get(ast_type.local.join('.')) instanceof Class))
         scope.thr('new后面得跟类',ast)
-    ast.type=new ClassType(ast.expr.expr.type.local,ast.expr.generic)
+    ast.type=new ClassType(ast_type.local,ast.expr.generic)
     //检查泛型相容性
-    const iden_generic=(scope.get(ast.expr.expr.type.local.join('.')) as Class).generic
+    const iden_generic=(scope.get(ast_type.local.join('.')) as Class).generic
     {
         let index=0
         for (const iden of iden_generic.values()) {
@@ -343,6 +349,10 @@ export default new Map<any,slang_check_visitor>([
     [BooleanLiteral,Type_Boolean],
     [NullLiteral,Type_Null],
     [IdentifierExpr,Type_Identifier],
+    [IncrementPostfix,Type_PreInc_Dec],
+    [DecrementPostfix,Type_PreInc_Dec],
+    [MemberPostfix,Type_Member],
+    [IndexPostfix,Type_Index],
     [ArgumentsPostfix,Type_Arguments],
     [IncrementPrefix,Type_PreInc_Dec],
     [DecrementPrefix,Type_PreInc_Dec],

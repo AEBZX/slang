@@ -15,7 +15,7 @@ import {
 const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
-    if(node.oper!=null)return de_ref(de_operation(node.oper,node.data,node.value))
+    if(node.oper!=null)return de_ref(de_operation(node,node.oper,node.data,node.value))
     return node
 }
 const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
@@ -24,7 +24,7 @@ const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
     node.value=call(node.value) as Expression
     //operation
     if(node.oper!=null)
-        return de_ref(de_operation(node.oper,new IdentifierExpr(node.name),node.value))
+        return de_ref(de_operation(node,node.oper,new IdentifierExpr(node.name),node.value))
     if(is_ref)node.value=(node.value as ReferencePrefix).expr
     return new AAssign(new IdentifierExpr(node.name),node.value)
 }
@@ -47,7 +47,7 @@ const D_Throw:slang_desugar_visitor=(node:Throw,call)=>{
     return node
 }
 const D_Continue:slang_desugar_visitor=(node:Continue,call)=>{
-    return new GotoCommand('while')
+    return new GotoCommand('continue')
 }
 const D_Break:slang_desugar_visitor=(node:Break,call)=>{
     return new GotoCommand('break')
@@ -72,6 +72,7 @@ const D_While:slang_desugar_visitor=(node:WhileStatement,call)=>{
     return new ListCommand([
         new LabelCommand('while'),
         node.commands,
+        new LabelCommand('continue'),
         new IfStatement(node.condition,new GotoCommand('while'),null),
         new LabelCommand('break')
     ])
@@ -109,7 +110,7 @@ const D_Switch:slang_desugar_visitor=(node:SwitchStatement,call)=>{
         if(index==node.case_list.length)return node.default_
         const cast_list=node.case_list[index]
         return new IfStatement(new EqualExpression(node.condition,cast_list.condition),
-            cast_list.commands,build(index++))
+            cast_list.commands,build(index+1))
     }
     return call(build(0))
 }

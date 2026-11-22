@@ -18,7 +18,8 @@ const G_Number:slang_ir_factory=(data:HNumberLiteral,tool,call)=>{
     tool.push(new MOV(tool.set_arg,IRArgs.reg(data.value)))
 }
 const G_Null:slang_ir_factory=(data:HNullLiteral,tool,call)=>{
-    tool.push(new MOV(tool.set_arg,IRArgs.reg(0)))
+    //null就是寄存器号为0的寄存器
+    tool.push(new MOV(tool.set_arg,IRArgs.value(0)))
 }
 const G_IdentifierExpr:slang_ir_factory=(data:HIdentifierExpr,tool,call)=>{
     tool.push(new MOV(tool.set_arg,IRArgs.value(data.name)))

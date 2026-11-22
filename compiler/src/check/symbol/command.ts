@@ -39,13 +39,10 @@ const Symbol_VM:slang_check_visitor=(ast:VM,scope,call)=>{
         call(param,2)
 }
 const Symbol_Label:slang_check_visitor=(ast:LabelCommand,scope,call)=>{
-    if(scope.label.includes(ast.name))
-        scope.thr('标签重复定义',ast)
-    scope.label_set(ast.name)
+    scope.register_label(ast.name,ast)
 }
 const Symbol_Goto:slang_check_visitor=(ast:GotoCommand,scope,call)=>{
-    if(!scope.label.includes(ast.name))
-        scope.thr('标签未定义',ast)
+    scope.delay_set(ast.name,ast)
 }
 const Symbol_Delete:slang_check_visitor=(ast:Delete,scope,call)=>{
     call(ast.expr,2)

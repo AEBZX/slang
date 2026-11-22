@@ -60,7 +60,7 @@ const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call
     scope=scope.leave()
 }
 const Symbol_Function:slang_check_visitor=(ast:Function,scope,call)=>{
-    scope=scope.enter()
+    scope=scope.enter(true)
     symbol_do_generic(ast,ast.generic,scope,call)
     for(const type of ast.generic.values())
         call(type,2)

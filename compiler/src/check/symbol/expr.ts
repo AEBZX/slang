@@ -17,7 +17,7 @@ const Symbol_Array:slang_check_visitor=(ast:ArrayExpression,scope,call)=>{
         call(item,2)
 }
 const Symbol_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
-    scope=scope.enter()
+    scope=scope.enter(true)
     symbol_do_generic(ast,ast.generic,scope,call)
     for(const type of ast.params.values())
         call(type,2)

@@ -20,10 +20,12 @@ const Build_File:slang_check_visitor=(ast:File,scope,call)=>{
 const Build_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.global.set(scope.path+'.'+ast.name,ast)
     ast.global_local=(scope.path+'.'+ast.name).split('.')
+    const path=scope.path
     for(const item of ast.children) {
-        scope.path=scope.path+'.'+ast.name+'.'
+        scope.path=path+'.'+ast.name+'.'
         call(item, 1)
     }
+    scope.path=path
 }
 const Build_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope.global.set(scope.path+'.'+ast.name,ast)

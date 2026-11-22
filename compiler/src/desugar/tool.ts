@@ -8,9 +8,9 @@ import {
     MemberPostfix, NullLiteral, ReferencePrefix, ReferenceType
 } from '../utils'
 export type slang_desugar_visitor=(node:ASTTree,call:(node:ASTTree)=>ASTTree)=>ASTTree
-export function de_operation(oper:string,...param:Expression[]){
+export function de_operation(ast:Expression,oper:string,...param:Expression[]){
     param=param.map(de_ref)
-    if(oper==null)return param[0]
+    if(oper==null)return ast
     let ret:Expression=null
     for(const i of oper.split('.')){
         if(ret==null)ret=new IdentifierExpr(i)

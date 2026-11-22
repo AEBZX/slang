@@ -30,7 +30,7 @@ const Censor_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     //value修饰符强制public=true,static=true,sync=true
     ast.modifiers=new Modifier(false,false,false)
     //重写类型必须是LiteralType
-    if(!(ast instanceof LiteralType))
+    if(!(ast.value instanceof LiteralType))
         scope.thr('重写类型必须是LiteralType',ast)
     //子块必须是operation/cast
     for(const child of ast.children){

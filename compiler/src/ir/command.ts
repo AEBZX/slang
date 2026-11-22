@@ -78,9 +78,12 @@ const G_Try:slang_ir_factory=(data:HTryStatement,tool,call)=>{
     const try_id=IRArgs.reg(tool.id())
     const catch_id=IRArgs.reg(tool.id())
     const finally_id=IRArgs.reg(tool.id())
+    tool.create(try_id.data)
+    tool.create(catch_id.data)
+    tool.create(finally_id.data)
     const now=tool.block_id
     tool.push(new INT_REGISTER(try_id))
-    tool.push(new CALL(try_id,IRArgs.value(0)))
+    tool.push(new CALL(try_id,IRArgs.reg(0)))
     tool.replace(try_id.data)
     call(data.try_)
     tool.push(new CALL(finally_id,IRArgs.reg(0)))
