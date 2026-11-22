@@ -250,7 +250,7 @@ const Type_Minus:slang_check_visitor=(ast:MinusPrefix,scope,call)=>{
 }
 const Type_Reference:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
     call(ast.expr,3,scope)
-    if(fast_operation(scope,ast,'&',new VoidType(),ast.expr))
+    if(fast_operation(scope,ast,'*',new VoidType(),ast.expr))
         return
     if(ast.expr.type instanceof PointType){
         ast.type=new ReferenceType(ast.expr.type.t)
@@ -263,7 +263,7 @@ const Type_Reference:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
 }
 const Type_Point:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
     call(ast.expr,3,scope)
-    if(fast_operation(scope,ast,'*',new VoidType(),ast.expr))
+    if(fast_operation(scope,ast,'&',new VoidType(),ast.expr))
         return
     if(ast.expr.type instanceof ReferenceType){
         ast.type=new PointType(ast.expr.type.t)

@@ -238,7 +238,6 @@ namespace data
     struct runtime_data
     {
         int block;
-        int pc;
         int frame;
     };
     struct reg
@@ -260,7 +259,8 @@ namespace runtime
     class Runtime
     {
     public:
-        bool _stop;
+        std::condition_variable cv;
+        std::mutex wait_mtx;
         int id;
         Runtime();
         ~Runtime();
@@ -271,7 +271,6 @@ namespace runtime
         std::unordered_map<int,data::reg> param;
         data::runtime_data frame;
         std::stack<std::pair<int,data::reg>> stack;
-        void stop();
         void start();
     };
     struct instruction_task{
@@ -281,12 +280,13 @@ namespace runtime
         instruction::instruction ins;
         std::function<bool(Runtime*,int,int,int)> cond;
         Runtime* runtime;
+        bool ok;
     };
     class Manage
     {
     public:
         std::atomic<int> runtime_max=0;
-        Manage(std::unordered_map<int,std::vector<std::vector<instruction_task>>>,int);
+        Manage(const std::unordered_map<int,std::vector<std::vector<instruction_task>>>&,int);
         ~Manage();
         void gc();
         Manage(const Manage&) = delete;
@@ -307,7 +307,7 @@ namespace runtime
         std::atomic<bool> _stop{false};
         std::atomic<int> inflight{0};
         std::mutex queue_mtx;
-        std::vector<std::pair<bool,instruction_task>> run_queue;
+        std::vector<instruction_task> run_queue;
     };
 }
 namespace sbin

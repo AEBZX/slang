@@ -16,8 +16,7 @@ describe('check censor: 结构校验', () => {
         expect(censor_errors('app: module { main: void() { var x: number = 1; } }')).toHaveLength(0)
     })
 
-    //BUG: 顶层 class 使 Symbol_Class_Interface 崩溃(implement 为 null 时读 .local),错误无法收集
-    it.skip('文件顶层只能是 value/module', () => {
+    it('文件顶层只能是 value/module', () => {
         expect(censor_errors('bad: class { }').some(e => e.includes('文件顶层'))).toBe(true)
     })
 
@@ -37,13 +36,11 @@ describe('check censor: 结构校验', () => {
         expect(censor_errors('app: module { main: void() { for (var i: number = 0; i < 3; i = i + 1;) { continue; } } }')).toHaveLength(0)
     })
 
-    //BUG: 无初始化的 var 使 Type_VarDecl 对 null value 调 generate 崩溃
-    it.skip('引用类型必须初始化', () => {
+    it('引用类型必须初始化', () => {
         expect(censor_errors('app: module { main: void() { var r: number&; } }').some(e => e.includes('引用类型必须初始化'))).toBe(true)
     })
 
-    //BUG: symbol_iden 对 enum 字符串成员做 'children' in item 崩溃
-    it.skip('enum 成员重名报错', () => {
+    it('enum 成员重名报错', () => {
         expect(censor_errors('app: module { e: enum { A, A } }').some(e => e.includes('enum'))).toBe(true)
     })
 

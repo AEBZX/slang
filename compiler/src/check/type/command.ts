@@ -68,8 +68,10 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
     //引用类型必须赋值
     if(ast.t instanceof ReferenceType&&ast.value==null)
         scope.thr('引用类型必须初始化',ast)
-    call(ast.value,3,scope)
+    if(ast.value)call(ast.value,3,scope)
     if(!(ast.t instanceof ReferenceType)){
+        //无初始化器:仅声明,无 '=' 重载决议
+        if(ast.value==null)return
         //如果不是引用,那么就可以进行重载决议和cast决议
         //=的参数基础上在加一个滚木number就是初始化'='
         const operation=operation_get(scope,ast,'=',ast.t,ast.value.type||new VoidType(),new NumberType())
@@ -84,7 +86,7 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
         if(!fast_cast(scope,ast,ast.value,ast.t))scope.thr('变量声明类型不匹配',ast)
         return
     }
-    if(!(ast.value.type instanceof ReferenceType))
+    if(ast.value&&!(ast.value.type instanceof ReferenceType))
         scope.thr('引用类型的初始化必须是左值',ast)
 }
 const Type_Await:slang_check_visitor=(ast:Await,scope,call)=>{

@@ -101,12 +101,18 @@ const G_File:slang_ast_generate=(data,tree)=>{
 const G_Operation:slang_ast_generate=(data,tree)=>{
     let sym=to_ast_data(data,0)
     let oper=typeof sym=='string'?sym:(sym.type=='BIDX'?'[]':'()')
-    return new Operation(oper,
+    //modifiers 必须非空:censor 强制 value 子项 static,desugar 的 D_Function 会读 modifiers.unstatic
+    const op=new Operation(oper,
         tree_ast(data,1,tree))
+    op.modifiers=new Modifier(false,false,false)
+    return op
 }
-const G_Cast:slang_ast_generate=(data,tree)=>
-    new Cast(tree_ast(data,0,tree),
+const G_Cast:slang_ast_generate=(data,tree)=>{
+    const cast=new Cast(tree_ast(data,0,tree),
         tree_ast(data,1,tree))
+    cast.modifiers=new Modifier(false,false,false)
+    return cast
+}
 export default new Map([
     ['link',G_Link],
     ['Link',G_Link],

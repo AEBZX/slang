@@ -40,10 +40,15 @@ const D_Value:slang_desugar_visitor=(node:Value,call)=>{
     return call(new Module(node.modifiers,node instanceof BooleanType?'boolean':'number',node.children))
 }
 const D_Operation:slang_desugar_visitor=(node:Operation,call)=>{
-    return call(new Function(node.modifiers,'operation@'+node.index,new Map(),new Map(),node.command.ret,node.command.body))
+    //名字不带索引,由 D_Function 统一追加 @index,否则产出 operation@0@0
+    const fn=new Function(node.modifiers,'operation',new Map(),new Map(),node.command.ret,node.command.body)
+    fn.index=node.index
+    return call(fn)
 }
 const D_Cast:slang_desugar_visitor=(node:Cast,call)=>{
-    return call(new Function(node.modifiers,'cast@'+node.id,new Map(),new Map(),node.command.ret,node.command.body))
+    const fn=new Function(node.modifiers,'cast',new Map(),new Map(),node.command.ret,node.command.body)
+    fn.index=node.id
+    return call(fn)
 }
 const D_Enum:slang_desugar_visitor=(node:Enum,call)=>{
     return new Module(node.modifiers,node.name,

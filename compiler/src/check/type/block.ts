@@ -39,10 +39,12 @@ const Type_Value:slang_check_visitor=(ast:Value,scope,call)=>{
 const Type_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     ast.type=new BlockType(ast.global_local)
     scope=scope.enter()
-    scope.set('up',new BlockType(scope.global.path.split('.'),true))
+    scope.set('up',new BlockType(ast.global_local,true))
     scope.set('this',new ReferenceType(new ClassType(ast.global_local,Array.from(ast.generic.values()),true)))
-    call(ast.implement,3,scope)
-    scope.implement_set(ast.global_local,ast.implement as ClassType)
+    if(ast.implement!=null){
+        call(ast.implement,3,scope)
+        scope.implement_set(ast.global_local,ast.implement as ClassType)
+    }
     symbol_iden(ast.children,scope)
     for(const item of ast.children)
         call(item,3,scope)

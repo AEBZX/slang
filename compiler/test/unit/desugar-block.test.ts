@@ -12,8 +12,7 @@ describe('desugar block: 函数降糖', () => {
         expect(fn_var.value).toBeInstanceOf(LambdaExpression)
     })
 
-    //BUG: 无 implements 的 interface/class 使 Symbol_Class_Interface 读 null.local 崩溃
-    it.skip('constructor 追加隐式 return this', () => {
+    it('constructor 追加隐式 return this', () => {
         const desugared = run_to_desugar('app: module { i: interface { } c: class implements i { constructor: void() { } } }') as any
         const module_block = desugared[0].children[0]
         const class_block = module_block.children[1]
@@ -27,18 +26,21 @@ describe('desugar block: 函数降糖', () => {
 })
 
 describe('desugar block: enum 降糖', () => {
-    //BUG: symbol_iden 对 enum 的字符串子项做 'children' in item 崩溃,enum 路径当前不可测
-    it.skip('enum 展开为一组 number 变量', () => {
+    it('enum 展开为一组 number 变量', () => {
         const desugared = run_to_desugar('app: module { e: enum { A, B } }') as any
-        const enum_var = desugared[0].children[0].children[0] as Variable
+        //D_Enum 产出 Module('e'),变量在其 children 里
+        const enum_module = desugared[0].children[0].children[0] as Module
+        expect(enum_module.name).toBe('e')
+        const enum_var = enum_module.children[0] as Variable
         expect(enum_var.t).toBeInstanceOf(NumberType)
         expect(enum_var.value.value).toBe('0')
+        const enum_var2 = enum_module.children[1] as Variable
+        expect(enum_var2.value.value).toBe('1')
     })
 })
 
 describe('desugar block: value 降糖', () => {
-    //BUG: Value 节点 name=null 使 Build_File 的 join_path 产出 null.path 崩溃
-    it.skip('value 块转为固定名字的 module', () => {
+    it('value 块转为固定名字的 module', () => {
         const desugared = run_to_desugar("value number { operation '+' (a: number, b: number) => number { } }") as any
         const value_module = desugared[0].children[0] as Module
         expect(value_module).toBeInstanceOf(Module)

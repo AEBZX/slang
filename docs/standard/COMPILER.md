@@ -1,486 +1,396 @@
-# COMPILER 规范
+# Slang Language and Toolchain Specification
 
-本文档定义 Slang 编译器的**实现规范**：对源文件集合的输入行为、语法、语义、中间表示、指令集与二进制产物。
-其目的是统一不同实现之间的行为，确保它们在处理相同输入时产生相同输出。
+**Document**: docs/standard/COMPILER.md
+**Applies to**: Slang source programs; conforming compilers; the `bzx-ins1` interchange instruction set
+**Style**: normative sections use *shall* / *ill-formed* / *undefined behavior (UB)* in the ISO C++ sense
 
-> 标注 **[TBD]** 的条目是尚未定稿的部分（多为与 null/任意精度 number 方案联动的编码细节）。
-> 标注 *（注）* 的条目是从当前实现反推的约定，若与设计意图冲突以实现为准并应回改本文档。
+本文档定义 Slang 语言的**语法、静态语义、运行时语义**，合觃编译器的工具链接口，以及编译器与虚拟机之间的交换指令集 `bzx-ins1`。
 
-# 1. 暴露接口
+本规范描述**必须成立的性质与可观测行为**，不描述任何特定实现的内部机制。凡未由本规范规定的行为，其处理方式由实现自行决定；凡显式标注 UB 的行为，本规范不施加任何约束。
 
-应当暴露一个默认导出的 JavaScript/TypeScript 函数：
+各节使用形如 [lex.number]、[expr.add]、[isa.call] 的锚点编号互相引用。
+
+---
+
+# 1 Scope [scope]
+
+本规范适用于：
+
+- Slang 源程序的语言语义；
+- 合觃编译器的诊断要求与产物要求；
+- 编译器工具链接口（[toolchain]）；
+- 交换指令集 `bzx-ins1` 与二进制格式（[isa], [binfmt]）。
+
+不适用于：VM 内部实现策略、标准库的具体实现方式。
+
+---
+
+# 2 Terms and definitions [terms]
+
+| 术语 | 定义 |
+|--|--|
+| **well-formed** | 满足全部语法与静态语义 shall 规则的程序。合觃编译器必须接受并编译。 |
+| **ill-formed** | 违反语法或静态语义规则的程序。合觃编译器必须诊断并拒绝编译，诊断消息不得为空。 |
+| **UB** | undefined behavior。本规范对该构造不施加任何要求；实现可产生任意行为，包括拒绝编译。 |
+| **slot** | 虚拟机的可寻址存储单元，以非负整数编号。 |
+| **frame** | 控制转移层级标记：`0` 为块帧，`1` 为函数帧。 |
+| **module frame** | 由 source 中的顶层块实例化出的全局初始化上下文。 |
+
+---
+
+# 3 Conformance [conform]
+
+- **[conform]/1** 合觃编译器 shall 接受所有 well-formed 程序并产出符合 [binfmt] 的二进制。
+- **[conform]/2** 合觃编译器 shall 诊断所有 ill-formed 程序，并以非空诊断消息拒绝产出二进制。
+- **[conform]/3** 诊断消息 shall 包含触发点的行号信息。
+- **[conform]/4** 对标注 UB 的构造，编译器不承担 [conform]/2 的诊断义务。
+- **[conform]/5** 目标 `bzx-ins1` 的合觃编译器 shall 按 [toolchain] 暴露工具链接口。
+
+---
+
+# 4 Toolchain interface [toolchain]
+
+## 4.1 Entry point [toolchain.entry]
+
+合法编译器暴露一个默认导出函数：
 
 ```typescript
-export default function (source: string[],
-                         plugin: (pipeline: PeepholeTool[], config: any) => PeepholeTool[],
-                         config: any): Buffer;
+function compile(source: string[],
+        plugin: (pipeline: PeepholeTool[], config: any) => PeepholeTool[],
+        config: any): Buffer{}
 ```
 
-|参数|语义|
-|--|--|
-|source|所有被编译的 .sl 文件内容集合|
-|plugin|插件集合，在管线启动前对管线做变换|
-|config|编译配置（优化级别等）|
-|返回值|二进制产物（见 §9）|
+## 4.2 Pipeline [toolchain.pipeline]
 
-## 1.1 PeepholeTool
+**[toolchain.pipeline]/1** 管线由 8 个顺序阶段组成，阶段顺序 shall 与下表一致；每个阶段是一个对象，暴露 `run(previous): current`。
 
-管线的每一级都是一个 `PeepholeTool`：
-
-```typescript
-export type peephole_type='lexer'|'parser'|'check'|'desugar'|'hir'|'ir'|'optimize'|'generate'
-export default class PeepholeTool{
-    constructor(public name:peephole_type){}
-    run(param:any):any{}
-    use(data:any):PeepholeTool{return null}
-}
-```
-
-|函数|作用|
-|--|--|
-|构造函数|区分阶段类型|
-|run|接收上一级产物，返回本阶段产物|
-|use|注入本阶段的规则/visitor 表|
-
-特殊语义：
-
-|条件|要求|
-|--|--|
-|name==lexer|必须接受 `string[]`，返回 `token[][]`|
-|name==parser|返回 `ASTTree[]`（File 节点）|
-|name==check|返回作用域对象；若收集到错误，必须以 `Error` 抛出，消息以 `check 报错:` 开头|
-|name==generate|必须返回 `Buffer`|
-
-## 1.2 运行顺序
-
-```typescript
-for (const i of plugin) pipeline = i(pipeline, config)
-let ret = pipeline[lexer].run(source)
-ret = pipeline[parser].run(ret)
-ret = pipeline[check].run(ret)      // 报错则抛出
-ret = pipeline[desugar].run(ret)
-ret = pipeline[hir].run(ret)
-ret = pipeline[ir].run(ret)
-ret = pipeline[optimize].run(ret)
-ret = pipeline[generate].run(ret)
-return ret
-```
-
-# 2. 编译管线与各阶段产物
-
-|阶段|输入|输出|职责|
+| # | 阶段 | 输入 → 输出 | 契约 |
 |--|--|--|--|
-|lexer|`string[]`|`token[][]`|分词；token 携带 `行:列` 定位；注释作为 token 保留，由 parser 丢弃|
-|parser|`token[][]`|`File[]`（AST）|CST 规则匹配 → AST 构建；parser 不做错误恢复，规则结束后仍有剩余 token 即语法错误|
-|check|`File[]`|作用域对象|四轮检查：censor（结构）→ symbol（符号）→ build（全局注册）→ type（类型），见 §4|
-|desugar|`File[]`|`File[]`|语法糖降级，见 §5.2|
-|hir|`File[]`|`[HScope, HModule[]]`|槽号化：标识符→槽号、label→块号，见 §7|
-|ir|同上|`IRTool`（块化指令）|HIR→IR 指令块，见 §8|
-|optimize|`IRTool`|`OPTTool`|优化（当前为占位，仅透传代码/常量池/id 计数）|
-|generate|`OPTTool`|`Buffer`|二进制序列化，见 §9|
+| 1 | lexer | `string[]` → token 序列的序列 | [lex] |
+| 2 | parser | token 序列的序列 → AST | [grammar] |
+| 3 | checker | AST → AST（写入静态属性）并收集诊断 | [static] |
+| 4 | desugar | AST → AST | [dsugar] |
+| 5 | hir | AST → 带槽号 IR 树 | [hir] |
+| 6 | ir-gen | IR 树 → 指令块集合 | [isa] |
+| 7 | optimizer | 指令块集合 → 指令块集合 | 保持程序可观测行为不变 |
+| 8 | generator | 指令块集合 → `Buffer` | [binfmt] |
 
-# 3. 语法
+**[toolchain.pipeline]/2** 阶段的内部组织、数据结构与命名 unspecified；仅上述输入/输出契约与可观测行为是规范性的。
 
-## 3.1 词法
+**[toolchain.pipeline]/3** checker 阶段 shall 以异常形式抛出全部静态诊断；异常消息 shall 非空且 shall 包含触发点行号。
 
-- 标识符：`[A-Za-z_$][A-Za-z0-9_$]*`。
-- 数字：十进制；`0x/0X` 十六进制、`0b/0B` 二进制、`0o/0O` 八进制；小数（`.` 后必须跟数字）；科学计数 `1e3 / 1.5e-2`。
-- 字符串：`'` `"` `` ` `` 三种引号成对出现；`\` 转义按 JSON 转义表解析（不认识的转义保留原字符）。词法层**不含引号**返回内容。
-- 注释：`//` 行注释与 `/* */` 块注释；不参与语法。
-- 换行与空格是空白；token 均记录 `行:列`。
+**[toolchain.pipeline]/4** optimizer 阶段 shall 保持程序的可观测行为不变；本规范版本中 optimizer 可以是恒等变换。
 
-## 3.2 文件与块
+## 4.3 Plugin [toolchain.plugin]
+
+**[toolchain.plugin]/1** 插件接收完整管线并返回替换后的管线；插件可在任意阶段插入、替换或移除。
+
+**[toolchain.plugin]/2** 被插件修改过的管线，其行为由插件定义；本规范仅约束未修改阶段的输出契约。
+
+---
+
+# 5 Lexical conventions [lex]
+
+## 5.1 Tokens [lex.token]
+
+| 类别 | 定义 |
+|--|--|
+| identifier | `[A-Za-z_$][A-Za-z0-9_$]*` |
+| keyword | 保留字（见 [grammar.kw]）；词类关键字匹配要求词边界 |
+| number | [lex.number] |
+| string | [lex.string] |
+| comment | [lex.comment] |
+
+## 5.2 Identifiers [lex.ident]
+
+- **[lex.ident]/1** 标识符以字母、`_` 或 `$` 开头，后续为字母、数字、`_`、`$`。
+
+## 5.3 Numbers [lex.number]
+
+- **[lex.number]/1** 十进制、`0x/0X` 十六进制、`0b/0B` 二进制、`0o/0O` 八进制。
+- **[lex.number]/2** 小数：`.` 后必须跟数字，否则该 `.` 属于后缀/成员。
+- **[lex.number]/3** 科学计数：`1e3`、`1.5e-2`、`2E+5`。
+- **[lex.number]/4** 进制前缀后无合法数字时，仅前缀前的 `0` 为数字字面量。
+
+## 5.4 Strings [lex.string]
+
+- **[lex.string]/1** 定界符为 `'`、`"`、`` ` ``，成对出现。
+- **[lex.string]/2** `\` 引导转义；转义表与 JSON 一致；未知转义保留转义符后的原字符。
+
+## 5.5 Comments [lex.comment]
+
+- **[lex.comment]/1** `//` 至行尾；`/* */` 可跨行。注释在词法层产出 token，语法层丢弃。
+
+---
+
+# 6 Grammar [grammar]
+
+## 6.1 Files [grammar.file]
 
 ```
-文件   := link* 块顶层*
-link   := 'link' 路径 'as' 标识符 ';'        // 路径是点分类型路径
-块顶层 := value | 块
-块     := 修饰符* 名字 ':' 块体
-块体   := module 体 | class 体 | interface 体 | enum 体 | 函数 | 变量
+file        := link* top-block*
+link        := 'link' 路径 'as' 标识符 ';'
+top-block   := module-block | value-block
+module-block := 修饰符* 名字 ':' 'module' '{' 块* '}'
+value-block := 'value' 字面量类型 '{' (operation | cast)* '}'
+```
 
-module    := 'module' '{' 块* '}'
-class     := 'class' 泛型声明? 'implements' 类型? '{' 块* '}'
-interface := 'interface' 泛型声明? 'implements' 类型? '{' 块* '}'
-enum      := 'enum' '{' 标识符 (',' 标识符)* '}'
-函数      := 泛型声明? 类型 '(' 参数 (',' 参数)* ')' (命令 | ';')   // 命令通常为 '{...}' 块
+- **[grammar.file]/1** 顶层只能是 module 块或 value 块；否则 ill-formed。
+- **[grammar.file]/2** link 别名在同一文件内唯一；否则 ill-formed。
+- **[grammar.file]/3** value 块无名字，其类型决定实例化后的模块名（number/boolean）。
+- **[grammar.file]/4** value 块的子项只能是 operation 或 cast（[grammar.value]）。
+
+## 6.2 Blocks [grammar.block]
+
+```
+块        := 修饰符* 名字 ':' 块体
+块体      := module 体 | class 体 | interface 体 | enum 体 | 函数 | 变量
+函数      := 泛型声明? 返回类型 '(' 参数 (',' 参数)* ')' 函数体
+函数体    := 命令 | ';'
 变量      := 类型 ('=' 表达式)? ';'
-泛型声明  := '<' 标识符 ('implements' 类型)? (',' ...)* '>'
-修饰符    := ('public'|'private'|'static'|'unstatic'|'async'|'sync')*
+enum      := 'enum' '{' 标识符 (',' 标识符)* '}'
+class     := 'class' 泛型声明? 'implements' 类型? '{' 块* '}'
 ```
 
-- 函数即 `名字: 返回类型(参数列表) {体}`；`Implement` 为 `;` 时是纯声明。
-- 重载：同作用域同名函数合法，按声明顺序获得重载序号（决议见 §4.3）。
-- value 块：
+- **[grammar.block]/1** 函数体省略（`;`）表示无实现声明。
+- **[grammar.block]/2** 同一作用域内同名函数构成重载组；同名非函数块与函数块混用 ill-formed。
+- **[grammar.block]/3** enum 子项重名 ill-formed。
+- **[grammar.block]/4** class/interface 的 `implements` 子句可选；引用的必须是 interface，否则 ill-formed。
+
+## 6.3 Modifiers [grammar.mod]
 
 ```
-value     := 'value' 字面量类型 '{' (operation | cast)* '}'
-operation := 'operation' 符号 lambda        // 符号 ∈ 运算符全集 + '[]' + '()'
+修饰符 := ('public'|'private'|'static'|'unstatic'|'async'|'sync')*
+```
+
+- **[grammar.mod]/1** 互斥对 `(public,private)`、`(static,unstatic)`、`(async,sync)` 同时出现 UB；同一修饰符重复出现 UB。
+- **[grammar.mod]/2** module/class/interface/enum 块强制 static、sync；value 块强制 public、static、sync。
+- **[grammar.mod]/3** module 内变量必须 static，否则 ill-formed。
+- **[grammar.mod]/4** 规范规定 module 下函数均为 static：仅 `unstatic` 的函数在调用约定中携带隐式接收者（[isa.call]）。
+
+## 6.4 Value blocks [grammar.value]
+
+- **[grammar.value]/1** value 块的字面量类型只能是 `number` 或 `boolean`；其他类型 ill-formed。
+- **[grammar.value]/2** 子项语法：`operation 运算符 lambda` 与 `cast 类型 lambda`；子项不带名字。
+- **[grammar.value]/3** operation 的运算符取自全部可重载符号（含 `[]` `()`）。
+- **[grammar.value]/4** cast 的 lambda 必须恰有一个参数；否则 ill-formed。
+- **[grammar.value]/5** value 块实例化后的模块名固定为其字面量类型名（`number`/`boolean`）；同类型多个 value 块的合并语义 unspecified。
+
+## 6.5 Types [grammar.type]
+
+```
+类型      := 基本类型 后缀*
+后缀      := '[' ']' | '*' | '&'
+基本类型  := 'number'|'boolean'|'void'|'@'标识符|'(' 类型 ')'|类路径|lambda 类型
+类路径    := 标识符 ('.' 标识符)* 泛型实参?
+lambda 类型 := 泛型声明? '(' 参数类型 (',' 参数类型)* ')' '=>' 类型
+```
+
+## 6.6 Operations and casts [grammar.op]
+
+```
+operation := 'operation' 运算符 lambda
 cast      := 'cast' 类型 lambda
-lambda    := 泛型声明? '(' 参数 (',' 参数)* ')' '=>' 类型 命令
+运算符    := 全部二元/一元运算符 | '[' ']' | '(' ')'
 ```
 
-- value 的类型只能是 `number` / `boolean`（LiteralType）。desugar 后 value 块被重命名为名为 `number` / `boolean` 的 module，其 operation/cast 成员被重命名为 `operation@序号` / `cast@序号` 的普通函数。
-- `operation '++'`（后缀自增）签名固定为 `(操作数, number)`，第二个参数是占位参数；前缀自增为 `(操作数)` 单参数 —— 以此区分前后缀。
-- enum 成员值为其声明序号（从 0 开始）。
+- **[grammar.op]/1** cast 的 lambda 必须恰有一个参数；否则 ill-formed。
+- **[grammar.op]/2** operation 的 lambda 必须至少有一个参数；否则 ill-formed。
+- **[grammar.op]/3** 后缀 `++`/`--` 的 operation 签名固定为 `(操作数, number)`；前缀 `++`/`--` 为 `(操作数)` 单参数。
 
-## 3.3 类型
+---
 
-```
-类型     := 基本类型 类型后缀*
-类型后缀 := '[' ']' | '*' | '&'
-基本类型 := 'number'|'boolean'|'void'|'null'? 泛型 '@'标识符 | '(' 类型 ')' | lambda类型 | 类路径
-类路径   := 标识符 ('.' 标识符)* 泛型实参?
-lambda类型 := 泛型声明? '(' 参数类型 (',' 参数类型)* ')' '=>' 类型
-```
+# 7 Static semantics [static]
 
-|类型|含义|
-|--|--|
-|`number`|任意精度数（见 §6.3）|
-|`boolean`|布尔（运行时以 0/1 数表示，见 §6.3）|
-|`void`|空类型；同时是"无值/未解析"的标记|
-|`T[]`|数组|
-|`T*`|指针|
-|`T&`|引用；引用变量必须初始化，且初始化必须是左值|
-|lambda 类型|函数值类型；`overload` 标记表示一组同名重载|
-|`@T`|泛型参数引用|
+## 7.1 Name resolution [static.name]
 
-- 引用类型带 `literal` 标记：`identifier`（变量/索引这类无需特殊处理的左值引用）与 `call`（返回引用的调用产生的引用值，使用前需解引用）。
+- **[static.name]/1** 标识符按词法作用域链解析：内层块 → 外层块 → … → 文件级；未解析标识符 ill-formed。
+- **[static.name]/2** 变量在符号表中以其类型登记；module/class/function 以块实体登记。
+- **[static.name]/3** link 别名指称被链接的顶层块；被链接模块不存在 ill-formed。
+- **[static.name]/4** class/interface 内 `this` 指称自身实例；module 内 `up` 指称父块。
 
-## 3.4 表达式（优先级从低到高）
+## 7.2 Type rules [static.type]
 
-|层级|运算符|结合|
-|--|--|--|
-|三元|`? :`|右结合|
-|逻辑或|`||`||
-|逻辑与|`&&`||
-|位或|`\|`||
-|异或|`^`||
-|位与|`&`||
-|相等|`==` `!=`||
-|关系|`<` `>` `<=` `>=`||
-|移位|`<<` `>>`||
-|加减|`+` `-`||
-|乘除模|`*` `/` `%`||
-|前缀|`(类型)` 强转、`++` `--` `!` `~` `-` `*` 解引用、`&` 取地址、`new`|右结合|
-|后缀|`++` `--` `.成员` `[索引]` `(调用)`（含显式泛型实参 `<T,...>`）|左结合|
-|初等|字面量、标识符、lambda、`(表达式)`、`[数组字面量]`||
+- **[static.type]/1** 内建二元运算（[expr.add] 等）要求两侧操作数同为 number，结果为 number；比较运算（`==` `!=` `<` `>` 及布尔域的 `| & ^ == != < >`）结果为 boolean。
+- **[static.type]/2** 一元 `-`/`~` 要求 number；`!` 要求 boolean；前缀/后缀 `++`/`--` 要求 number。
+- **[static.type]/3** 索引 `a[i]`：a 为数组且 i 为 number，结果为元素类型的左值引用；或命中 `'[]'` 重载。
+- **[static.type]/4** 赋值 `x = v`：v 可赋给 x 的类型；复合赋值 `x op= v` 等价 `x = x op v`。
+- **[static.type]/5** 引用类型变量必须初始化且初始化必须是左值；否则 ill-formed。
+- **[static.type]/6** 函数返回：`return e` 要求 e 可赋给函数返回类型；无值 `return` 要求返回类型为 void；否则 ill-formed。
+- **[static.type]/7** 三元 `c ? a : b`：c 可转换至 boolean，a 与 b 的公共类型为结果类型；无公共类型 ill-formed。
+- **[static.type]/8** 条件语境（if/while/三元条件/for 条件）：非 boolean 条件自动尝试一次到 boolean 的转换；失败 ill-formed。
 
-- `new` 语法固定为 `new 类名<泛型实参?>(实参)`；语义上改写为对 `类名.constructor` 的调用（§6.4）。
-- lambda：`(参数) => 返回类型 {体}`，参数带类型标注。
+## 7.3 Overload resolution [static.overload]
 
-## 3.5 语句
+- **[static.overload]/1** 调用 `f(a₁,…,aₙ)` 的候选为同名重载组全体；候选按参数相容筛选后按具体性决议：若存在参数比候选更具体的其他候选，则该候选被淘汰。
+- **[static.overload]/2** 恰有一个存活候选 → 决议成功；零个或多个 → ill-formed。
+- **[static.overload]/3** 显式泛型实参在相容筛选前注入。
+- **[static.overload]/4** operation/cast 决议同上：先按签名相容筛选，再做具体性决议，必须唯一。
 
-```
-命令 := 块命令 | 基本命令
-块命令 := if | while | do-while | for | foreach | switch | try | '{' 命令* '}'
+## 7.4 Diagnostics [static.diag]
 
-基本命令 :=
-    'var' 标识符 ':' 类型 ('=' 表达式)? ';'   // 变量声明
-  | 表达式 赋值符 表达式 ';'                  // 13 种赋值符：= += -= *= /= %= &= |= ^= <<= >>= &&= ||=
-  | 表达式 ';'                                // 表达式语句
-  | 'await' 命令                              // 协程（§6.7）
-  | 'return' 表达式? ';'
-  | 'break' ';' | 'continue' ';'
-  | 'throw' 表达式 ';'
-  | 'vm' '(' 字符串 (',' 表达式)* ')' ';'     // 内联指令（§8.9）
-  | 'delete' 表达式 ';'
-  | 标识符 ':'                                // label
-  | 'goto' 标识符 ';'                          // goto
+- **[static.diag]/1** 全部静态诊断 shall 在 checker 阶段以异常抛出，消息 shall 非空并 shall 包含行号。
+- **[static.diag]/2** 存在任一静态诊断时编译器 shall 不产出二进制。
 
-switch 的 case := 'case' 表达式 '=>' 命令
-try := 'try' 命令 ('catch' '(' 标识符 ':' 类型 ')' 命令)? ('finally' 命令)?
-```
+---
 
-- 赋值是**语句**而不是表达式，不存在 `a = b = c` 链。
-- label 的语法是 `名字:` 后紧跟一条命令（没有空语句形式）。
+# 8 Runtime semantics [runtime]
 
-# 4. 检查阶段（check）
+## 8.1 Evaluation order [runtime.order]
 
-四轮按序执行；symbol 与 build 通过 `call(节点, 轮次)` 互相交错递归，以处理嵌套作用域：
+除另有规定外：
 
-|轮|名称|职责|
-|--|--|--|
-|0|censor|结构校验：修饰符合法性、块内成员种类、enum 重名、lambda 参数/泛型重名、引用必须初始化、cast 单参数、operation 非零参数、break/continue 必须在循环内|
-|1|build|全局符号注册：模块/类/静态函数/静态变量路径、函数重载表、operation/cast 注册表、implement 继承链|
-|2|symbol|符号表构建（§4.2）、link 别名绑定、label 注册与 goto 延迟结算（§4.2）、泛型检查|
-|3|type|类型推导与决议：表达式/语句类型标注、重载决议、cast 插入、`oper`/`cast` 调用路径写入|
+- **[runtime.order]/1** 语句按出现顺序依次求值。
+- **[runtime.order]/2** 二元运算：先求左操作数，后求右操作数，再产生结果。
+- **[runtime.order]/3** 一元/后缀运算：先求操作数。
+- **[runtime.order]/4** 赋值 `x = v`：先求 v，再求 x 的地址，最后写入。
+- **[runtime.order]/5** 复合赋值 `x op= v` 等价于 `x = x op v`（x 的左值只求一次地址）。
+- **[runtime.order]/6** 调用 `f(a₁,…,aₙ)`：实参自左向右求值，随后求值被调指称，随后发生调用。
+- **[runtime.order]/7** 三元 `c ? a : b`：先求 c；仅求值被选中分支。
+- **[runtime.order]/8** 数组/对象字面量：元素/成员自左向右求值并写入。
+- **[runtime.order]/9** `&&`/`||`/`!=` 无内建语义，求值顺序由其标准库 operation 定义（[std]）。
 
-所有 visitor 通过 `call(节点, 轮次, scope)` 把**当前作用域显式传给子节点**；进入新作用域（函数体/lambda 体/语句列表/for/catch）的 visitor 必须把 enter 后的作用域作为第 3 参传出，否则子节点会拿到父级作用域。
+## 8.2 Variables [runtime.var]
 
-## 4.1 修饰符规则
+- **[runtime.var]/1** 变量声明引入一个槽；有初始化器时声明即执行初始化赋值。
+- **[runtime.var]/2** 无初始化器的声明仅引入槽，其内容为 null。
+- **[runtime.var]/3** 标识符读取求值为变量的当前内容；标识符作为左值/取地址目标时求值为变量槽的地址。
 
-- `(public, private)`、`(static, unstatic)`、`(async, sync)` 互斥，同时出现是 UB；重复出现同一修饰符是 UB。
-- module / class / interface / enum 强制 `static=true, sync=true`；value 强制 `public=true, static=true, sync=true`。
-- module 内的变量必须 `static`。
-- private 成员仅当前块内可见；`this` 的成员访问不受 private 限制。
+## 8.3 Functions and calls [runtime.call]
 
-## 4.2 作用域与符号
+- **[runtime.call]/1** 函数名指称一个函数实体；重载组按 [static.overload] 决议。
+- **[runtime.call]/2** 调用将实参按位置传入参数区，被调体执行至返回（[isa.call]）。
+- **[runtime.call]/3** `return e` 求值 e 并将值作为调用结果返回；无值 `return` 返回 null。
+- **[runtime.call]/4** 函数体执行至末尾等同执行了无值 `return`（缺失 RET 为 UB，见 [ub.ret]）。
+- **[runtime.call]/5** `unstatic` 函数经接收者调用时，接收者占据参数区第一槽绑定 `this`。
 
-- 文件级作用域持有 link 别名 → 被链接块。
-- class/interface 内：`this` = 指向自身 ClassType 的引用；module 内：`up` = 父路径 BlockType。
-- 变量在符号表中以其**类型**登记；块（module/class/function）以块节点登记。
-- 标签作用域：label 注册到最近的**函数作用域**（函数体/lambda 体为边界）；同一函数内标签必须唯一；**goto 允许前向引用**（延迟到函数作用域结束时统一结算，未定义则报错）。
+## 8.4 Loops [runtime.loop]
 
-## 4.3 类型推导与决议
+- **[runtime.loop]/1** `while (c) body`：重复求值 c，为真时求值 body；c 为假时循环结束。
+- **[runtime.loop]/2** `do body while (c)`：先求值 body 一次，随后与 while 相同。
+- **[runtime.loop]/3** `for (init; c; step) body`：求值 init（一次）、c、body、step 循环往复；c 为假时结束。
+- **[runtime.loop]/4** `break` 终止最近层循环；`continue` 跳过本轮剩余体并进入条件求值（for 含 step）。
+- **[runtime.loop]/5** label/goto 提供函数内非结构控制转移；转移不调整任何栈。
 
-- `type_is(a, b)` 求两类型的最小超类型：引用剥离后比较；泛型解析后比较；LiteralType 相等才相容；数组/指针逐元素；lambda 逐参数/泛型/返回值；ClassType 走 implement 继承链；enum 同路径；否则不相容（VoidType）。
-- 二元表达式决议顺序：先查 `operation` 重载 → 内建集合（§6.4）→ 双侧尝试 cast 到 number/boolean。
-- 赋值决议：先查赋值运算重载 → 左值必须是引用 → `=` 要求类型相容 → 布尔系赋值符（`&= |= &&= ||=`）要求双侧布尔 → number 系 → 尝试 cast。
-- 函数调用决议：显式泛型实参注入 → `param_check`（参数相容 + 泛型数量）筛选 → 具体性决议（`param_best`：存在参数比候选更具体的其他候选则淘汰）→ 必须唯一。调用成功后在 AST 上写入 `call_target = 全局路径 '@' 重载序号`。
-- 条件语境（if/while/三元条件）：非 boolean 条件自动尝试一次 cast 到 boolean。
-- foreach：容器类型 → 数组（元素类型作为迭代变量类型）；否则先查与迭代变量同名的 operation，再尝试 cast 到数组。
+## 8.5 Exceptions [runtime.exc]
 
-# 5. 语义
+- **[runtime.exc]/1** `throw e` 以 e 为异常值引发中断。
+- **[runtime.exc]/2** 中断被最近的 `try` 的处理块捕获；catch 变量绑定异常值。
+- **[runtime.exc]/3** finally 体在 try 正常结束与 catch 结束后各执行一次。
+- **[runtime.exc]/4** 无处理块覆盖的中断：行为 UB。
 
-## 5.1 语言内建能力的最小集
+## 8.6 await [runtime.await]
 
-Slang 语言本体只提供**够用的最小内建集**，其余一切能力由标准库以 `value` 块（operation/cast）拼装：
+- **[runtime.await]/1** `await 命令` 将命令作为独立协程启动；不阻塞当前执行流，两者的相对顺序 unspecified。
 
-|内建能力|说明|
-|--|--|
-|二元算术/位/比较|`+ - * / % << >> & \| ^ == > <`（操作数同为 number → number；比较结果为 boolean）|
-|`!=` `&&` `\|\|`|**内建 VM 不提供**，由 Slang 层（标准库）以 operation 提供；标准库未提供时行为为 **UB**（当前实现编码为 opcode 0）。条件降糖产生的 `x != null` 依赖该 operation|
-|一元|`!`（boolean）、`~` `-`（number）；前缀 `++` `--`（number，单参数）|
-|后缀自增|`++` `--`（双参数 `(操作数, number占位)`，可重载）|
-|数组索引|`a[i]` 读写（OFFSET_GET/OFFSET_SET）|
-|成员访问|`a.b`（按成员槽 id 的 OFFSET_GET/OFFSET_SET）|
-|赋值|13 种赋值符|
-|`new`|改写为 `类名.constructor(实参)` 调用|
-|`delete` `vm` `label/goto` `try/throw` `await`|见下文|
+---
 
-解引用 `*p` / 取地址 `&x`：`*p` 是对名为 `'&'` 的 operation 的调用、`&x` 是对名为 `'*'` 的 operation 的调用 —— 由标准库（指针类型）提供。编译器自身插入的引用处理（§5.3 de_ref）走 REF 指令，不经 operation。
+# 9 Instruction set bzx-ins1 [isa]
 
-## 5.2 desugar 降级规则
+> 本节是编译器与 VM 之间的交换契约。合觃编译器产出本节定义的指令序列；合觃 VM 按本节语义执行。
 
-desugar 把语法统一降级为极小的核心形态：
+## 9.1 Encoding [isa.enc]
 
-|源语法|降级产物|
-|--|--|
-|变量声明 `var x: T = v`|赋值 `x = v`；局部变量的槽由 HIR 阶段分配（首次赋值懒分配）|
-|复合赋值 `x += v` 等|无重载时降为 `x = x + v`|
-|函数 `f`（重载序号 k）|Variable `f@k`，值为 lambda 表达式；类/接口成员函数追加 `this` 引用参数；`constructor` 追加隐式 `return this`|
-|value 块|Module `number`/`boolean`；operation→函数 `operation@序号`，cast→函数 `cast@序号`|
-|enum|一组静态 number 变量|
-|while|`label 'while'; 体; if(cond) goto 'while'; label 'break';`|
-|do-while|体一次 + while 结构|
-|for|init 序列 + while(init;cond;step)|
-|foreach|`for@index` 下标 + while + 每轮把 `容器[for@index]` 存入迭代变量|
-|switch|case 的 if-else 链|
-|break / continue|`goto 'break'` / `goto 'while'`|
-|表达式语句|赋值给哑变量 `';Im air'`（该名字不可能与用户标识符冲突）后丢弃|
-|boolean 字面量|number 1 / 0|
-|单字符字符串|number（UTF-8 字节按大端打包）|
-|多字符字符串|number 数组字面量（每字符一个 number）|
-|超出 uint32 的 number 字面量|嵌套数组 `[[整商,整余],[小数商,小数余]]`（§6.3）|
-|带重载的运算/索引/解引用/取址/调用/强转|对 `全局路径.operation@N` / `cast@N` / `call_target` 的调用表达式|
-|无重载的运算|保留原表达式节点，走内建指令（§5.1）|
-|非 `identifier` 引用值的使用处|包裹解引用（HIR 层 REF 指令）|
+- **[isa.enc]/1** 每条指令 16 字节：4 字节操作码 + 3 个 4 字节大端参数（v1,v2,v3）；缺失参数按 `reg 0` 填充。
+- **[isa.enc]/2** 操作码 = `(基号+子号) × 8 + 寻址位`；寻址位 = `(v1 是 value ? 4:0) + (v2 是 value ? 2:0) + (v3 是 value ? 1:0)`。
 
-## 5.3 引用与指针
+基号表：
 
-- `T&` 引用是"指向槽的值"；`T*` 指针以整数地址参与运算（地址即槽号）。
-- 引用赋值/传参绑定的是**左值本身**（`identifier` 引用不拷贝）；`call` 引用携带运行时地址，使用时由编译器插入解引用。
-- `delete` 接受一个槽地址（左值/引用/索引结果），删除它指向的槽。
-
-## 5.4 try / catch / finally / throw
-
-编译到中断指令（§8.6）：`INT_REGISTER` 注册处理块，`throw` 即 `INT`（携带异常值），catch 变量由 `INT_GET` 取出。finally 由编译器排在 try 正常路径与 catch 路径之后各调用一次。异常值不按类型分派：一个 try 只有一个 catch。
-
-## 5.5 label / goto
-
-- 作用域：函数级；同一函数内唯一；允许前向引用（§4.2）。
-- 实现：label 是块边界（§8.4）；`break`/`continue` 降糖为对保留标签 `break`/`while` 的 goto。
-- goto 可跨越块边界跳出/跳入（同一函数内）；跳转不做栈调整，由目标位置的代码结构保证一致性。
-
-## 5.6 delete / vm / await
-
-- `delete expr`：expr 必须是引用（左值）；指令行为见 §8.3。
-- `vm("助记符", p1, p2, p3)`：内联指令，见 §8.9。
-- `await 命令`：把命令切到独立块并作为**协程**启动（`THREAD`，frame=0）；**不阻塞**当前执行流 —— 语义是"单独开一个协程执行这段代码"。
-
-## 5.7 入口约定
-
-- 入口是名为 `main` 的全局变量（函数形式的 `main@0` 同样视为入口；其值为 lambda）。
-- 块 0 是 VM 的运行起点：先执行全部全局变量的初始化（每个全局变量：求值其 lambda → 写入全局槽），尾部以 `JMP(value(entry槽), frame=0)` 跳转 —— 槽内容 = main lambda 的块号。每个模块只发射一条（重复发射被去重）。
-
-# 6. 运行时值模型
-
-## 6.1 槽（slot）
-
-VM 的可寻址单元是**槽**。以下 id 全部来自**同一自增 id 空间**（HIR 阶段分配全局变量/成员 id，IR 阶段延续同一计数器分配局部槽、临时槽与块号）：
-
-- 全局变量槽、类/模块成员槽（成员访问按成员 id 偏移）；
-- 函数局部槽/临时槽；
-- 块号（代码块 id，与 label 共用）。
-
-## 6.2 null
-
-**null 是 0 号寄存器的值**：一个独立的标记值，不等于任何数字（≠ 0）。0 号寄存器只读，恒为 null。
-*（注：foreach 终止条件、OFFSET_GET 越界行为与 null 的联动仍在定稿中，见 §12。）*
-
-## 6.3 number（任意精度）
-
-- 数值在 uint32 范围内时直接表示。
-- 超出时以块表示：以 `2147483647` 为基数分块，整数部分 `[整商, 整余]`、小数部分（去尾零）`[小数商, 小数余]`，即 `[[整商,整余],[小数商,小数余]]` 的嵌套数组形式参与编译。
-- boolean 以 0/1 数表示。
-
-## 6.4 字符串
-
-语言没有 string 类型：单字符字面量是 number（UTF-8 字节大端打包），字符串字面量是 number 数组。字符串操作由标准库提供。
-
-# 7. HIR（槽号化中间表示）
-
-HIR 阶段遍历 desugar 后的 AST：
-
-- 为每个块/变量分配全局 id，注册 `全局路径 → id`（global 与各级局部作用域双份）；`unstatic` 成员打上实例标记。
-- 标识符 → `HIdentifierExpr(槽号)`（局部变量查作用域链，全局查路径表）。
-- label → `HLabel(块号)`；goto → `HGoto(块号)`（允许前向，块号由 label 预分配）。
-- 成员访问链 `a.b.c` → **OFFSET_GET 链** `HIndexExpr(前缀, 成员id)`：前缀若是 link 别名先替换为真实路径；若最长前缀是模块/类（静态前缀）则以该前缀的全局槽为起点，剩余段逐级 OFFSET_GET；实例前缀（标记为 unstatic 的 id）整体作为对象。
-- 语句集合 → `HListCommand`；try 的 catch 变量分配 id；函数/lambda 体保持 `HVariable(全局槽, 值)`。
-- lambda 的值保留为 `HLambdaExpr(参数槽号表, 体)`；lambda 的运行时值是其**块号**。
-
-# 8. 指令集（bzx-ins1）
-
-## 8.1 指令编码
-
-- 每条指令 **16 字节**：4 字节操作码 + 3 个 4 字节大端参数（v1, v2, v3）；缺失参数按 `reg 0` 填充。
-- 操作码 = `(基号 + 子号) × 8 + 寻址位`，寻址位 = `(v1 是 value ? 4 : 0) + (v2 是 value ? 2 : 0) + (v3 是 value ? 1 : 0)`。
-
-|基号|指令|基号|指令|基号|指令|
+| 基号 | 指令 | 基号 | 指令 | 基号 | 指令 |
 |--|--|--|--|--|--|
-|0|MOV|8|RET|16|DELETE|
-|1|REF|9|PUSH|17|INT|
-|2|JZ|10|POP|18|INT_REGISTER|
-|3|CZ|11|OFFSET_SET|19|INT_GET|
-|4|TZ|12|OFFSET_GET|20|NOT|
-|5|JMP|13|IN|21|BIT_NOT|
-|6|CALL|14|OUT|22|BINARY|
-|7|THREAD|15|GC|23/24|PARAM_SET / PARAM_LOAD|
+| 0 | MOV | 8 | RET | 16 | OUT |
+| 1 | REF | 9 | PUSH | 17 | GC |
+| 2 | JZ | 10 | POP | 18 | DELETE |
+| 3 | CZ | 11 | OFFSET_SET | 19 | INT |
+| 4 | TZ | 12 | OFFSET_GET | 20 | INT_REGISTER |
+| 5 | JMP | 13 | PARAM_LOAD | 21 | INT_GET |
+| 6 | CALL | 14 | PARAM_SET | 22 | NOT |
+| 7 | THREAD | 15 | IN | 23 | BIT_NOT |
+|  |  |  |  | 24 | BINARY |
 
 BINARY 子号：`add 0 / sub 1 / mul 2 / div 3 / mod 4 / shl 5 / shr 6 / and 7 / or 8 / xor 9 / eq 10 / grt 11 / smr 12`。
-（`eq/grt/smr` 只由内建二元表达式产生；`vm()` 助记符表暂未收录它们，见 §8.9。）
 
-## 8.2 操作数模型
+## 9.2 Operand model [isa.op]
 
-操作数分两类，按其在指令中的**位置**解释：
-
-|位置|`reg n`|`value n`|
+| 位置 | `reg n` | `value n` |
 |--|--|--|
-|目标（左值）|槽 n ← 源（直接写槽）|p ← 槽 n 的内容；*p ← 源（间接写，写指针指向的目标）|
-|源（右值）|立即数 n|槽 n 的内容|
+| 目标（左值） | 槽 n ← 源 | p ← 槽 n 的内容；*p ← 源（间接写） |
+| 源（右值） | 立即数 n | 槽 n 的内容 |
 
-## 8.3 数据与运算指令
+## 9.3 Data instructions [isa.data]
 
-|指令|参数|语义|
+| 指令 | 形式 | Effects |
 |--|--|--|
-|MOV dst, src|2|槽/指针写入，按操作数模型|
-|REF dst, src|2|dst ← 引用值，指向 src 槽内容所表示的地址|
-|NOT dst, src|2|dst ← !src（按位/逻辑取反，VM 规范定义）|
-|BIT_NOT dst, src|2|dst ← ~src|
-|BINARY op, dst, l, r|3|dst ← l op r；op ∈ §8.1 子号表|
-|OFFSET_SET obj, idx, val|3|把 val 写入容器 obj 的 idx 位置（数组=下标；对象=成员槽 id）|
-|OFFSET_GET dst, obj, idx|3|dst ← obj[idx] 的**槽地址**（常跟 REF 包装成引用值）|
-|PUSH slot|1|进入上下文（保存该槽，VM 自管对应关系）|
-|POP|0|恢复最近一次 PUSH 的槽|
-|DELETE slot|1|删除参数给出的槽|
-|GC|0|建议 VM 执行垃圾回收|
-|IN oper, target|2|宿主交互：oper=命令字（干啥），target=数据槽|
-|OUT oper, target|2|同上，方向相反；命令字集合由 VM/宿主定义（语言没有 native，IN/OUT 就是与宿主交互的通道）|
+| MOV dst, src | 2 | 按 [isa.op] 写入 |
+| REF dst, src | 2 | dst ← 指向 src 槽内容所表示地址的引用值 |
+| NOT / BIT_NOT dst, src | 2 | dst ← !src / ~src |
+| BINARY op, dst, l, r | 3 | dst ← l op r（op ∈ 子号表） |
+| OFFSET_SET obj, idx, val | 3 | obj[idx] ← val（数组=下标；对象=成员槽 id） |
+| OFFSET_GET dst, obj, idx | 3 | dst ← obj[idx] 的槽地址（常跟 REF 包装为引用值） |
+| PUSH slot / POP | 1 / 0 | 进入/恢复上下文；VM 自管配对 |
+| DELETE slot | 1 | 删除该槽 |
+| GC | 0 | 建议 VM 执行回收 |
+| IN oper, target / OUT oper, target | 2 | 宿主交互：oper=命令字，target=数据槽；命令字集合由宿主定义 |
 
-## 8.4 控制转移与帧
+## 9.4 Control transfer [isa.flow]
 
-- **target 的解释由操作数类型决定**（与 frame 无关）：`reg n` = 立即数块号 n；`value n` = 槽间接（读槽 n 的内容得到目标块号，如 lambda 值槽）。
-- **frame 只标记是否函数帧**：`frame=0` 为块级 —— `CZ/JZ` 进入的块执行到块尾自动返回调用点（G_If 的编排依赖此语义），`THREAD` 把块作为协程启动；`frame=1` 为函数级 —— `CALL` 创建新函数帧，`RET`（参数恒为 1）用于提前返回。**函数帧的块尾同样自动返回**；缺失 RET 属于 UB，编译器不强制报错。
-- JZ/CZ/TZ = 带条件的 JMP/CALL/THREAD：**cond 槽内容 = 1 执行，= 0 不执行**。
+- **[isa.flow]/1** target 的解释由操作数类型决定，与 frame 无关：`reg n` = 立即数块号 n；`value n` = 槽间接（读槽 n 内容得目标块号）。
+- **[isa.flow]/2** frame 标记是否函数帧：`frame=0` 块级——`CZ/JZ` 进入的块执行到块尾自动返回调用点，`THREAD` 将块作为协程启动；`frame=1` 函数级——`CALL` 创建新函数帧，`RET` 执行提前返回。
+- **[isa.flow]/3** 函数帧的块尾自动返回；缺失显式 RET 为 UB（[ub.ret]）。
+- **[isa.flow]/4** JZ/CZ/TZ = 带条件的 JMP/CALL/THREAD：cond 槽内容 = 1 执行，= 0 不执行。
+- **[isa.flow]/5** goto/label 编译为块边界：label 处结束当前块（以 `JMP(label块号, frame=0)` 收尾）并从该块号开新块；goto 产生 `JMP(label块号, frame=0)`。
 
-## 8.5 调用约定
+## 9.5 Calling convention [isa.call]
 
-- 参数槽区：槽 0 = 返回值，槽 1..n = 实参（0 基实参 i 写入槽 i）。
-- 调用方：`PARAM_SET(reg(i), value(arg槽))` 逐个写入实参 → `PUSH` 自己的参数槽（保护现场）→ `CALL(value(目标槽), frame=1)` → `POP` 恢复 → `PARAM_LOAD(value(结果槽), reg(0))` 从槽 0 取返回值。
-- 被调方入口：`PARAM_LOAD(reg(形参槽), reg(i+1))` 逐个从槽 i+1 取实参。
-- 返回：`PARAM_SET(reg(0), value(结果槽))` → `RET(reg(1))`。
+- **[isa.call]/1** 参数槽区：槽 0 = 返回值，槽 1..n = 实参。
+- **[isa.call]/2** 调用方：`PARAM_SET(reg(i+1), value(arg槽))` 逐个写入实参 → `PUSH` 自身参数槽 → `CALL(value(目标槽), frame=1)` → `POP` 恢复 → `PARAM_LOAD(value(结果槽), reg(0))` 取返回值。
+- **[isa.call]/3** 被调方入口：`PARAM_LOAD(reg(形参槽), reg(i+1))` 逐个取实参；`unstatic` 函数的槽 1 绑定 `this`，显式参数自槽 2 起。
+- **[isa.call]/4** 返回：`PARAM_SET(reg(0), value(结果槽))` → `RET(reg(1))`。
 
-## 8.6 异常（中断）
+## 9.6 Interrupts [isa.int]
 
-|指令|语义|
+| 指令 | Effects |
 |--|--|
-|INT_REGISTER block|注册中断处理块|
-|INT data|抛出中断，data 槽内容为异常值|
-|INT_GET dst|取出当前中断的异常值写入 dst（catch 变量）|
+| INT_REGISTER block | 注册中断处理块 |
+| INT data | 以 data 槽内容为异常值引发中断 |
+| INT_GET dst | 取出当前中断异常值写入 dst |
 
-## 8.7 运算到指令的对应
+---
 
-|源语法|指令|
-|--|--|
-|内建二元运算|BINARY|
-|`!` `~`|NOT / BIT_NOT|
-|`a[i]` 读 / `a.b`|OFFSET_GET（+REF 包装引用）|
-|`a[i]=v` / `a.b=v`|OFFSET_SET|
-|`x = 表达式`|表达式结果入临时槽 → MOV|
-|`*p = 表达式`（引用左值）|间接 MOV（value 目标）|
-|数组/对象字面量|逐元素 OFFSET_SET|
-|三元 `c ? a : b`|两个子块 + CZ/NOT/CZ|
-|前缀/后缀 `++` `--`（内建 number）|BINARY add/sub ± 1|
-|lambda 值|MOV 立即数（块号）|
-
-## 8.8 块（block）与 label
-
-- 代码以**块**为单位组织，块有全局唯一块号；label 即块边界：label 处结束当前块（以 `JMP(label块号, frame=0)` 收尾）并从 label 块号开新块。
-- 块级调用进入的块执行到块尾自动返回（§8.4）。
-
-## 8.9 vm() 语句与助记符
-
-`vm("助记符", e1, e2, e3)`：三个实参表达式先求值到三个临时槽（p1, p2, p3，均以 value 传入），再由助记符构造指令。可用助记符（30 个）：
-
-```
-mov  add  sub  mul  div  mod  shr  shl  and  or  xor
-not  bit_not  jmp  call  thread  jz  cz  tz  ret
-push pop  param_load  param_set  offset_set  offset_get
-delete  gc  in  out
-```
-
-- `mov` 源端强制 value；`jz/cz/tz` 第三个参数是条件；`in` 双 value。
-- 注意：`eq/grt/smr` 比较指令只能由编译器内建二元表达式生成，vm() 暂无对应助记符。
-
-# 9. 二进制格式
+# 10 Interchange binary format [binfmt]
 
 ```
 'SLANG'            5 字节魔数
 'bzx-ins1'         8 字节格式版本
 uint64BE           id 空间总长（块号+槽号上限）
 'POOL_START'
-  uint32BE × N     常量池条目（当前仅 number；编码随任意精度/null 方案定稿调整 [TBD]）
+  uint32BE × N     常量池条目
 'POOL_END'
 'CODE_START'
   ('BLOCK_START' uint32BE 块号 指令×16字节* 'BLOCK_END')*
 'CODE_END'
 ```
-# 10. 标准库职责边界
 
-语言内建仅 §5.1 所列最小集。标准库（Slang 层）负责提供：
+- **[binfmt]/1** 常量池条目当前仅为 number；任意精度/null 编码定稿前，超出 uint32 的条目编码 unspecified。
 
-- number 的扩展运算、boolean 的 `&&`/`||`
-- 类的 `constructor`；
-- 容器（数组之外的结构，经 `'[]'` / `'()'` operation 重载接入 foreach 与调用语法）;
-- 字符串及其他一切高级设施。
+---
 
-标准库同样运行在 bzx-ins1 指令集上，通过 `vm()` 语句直接使用底层指令实现原语。
+# 11 Standard library requirements [std]
 
-# 11. 插件
+- **[std]/1** 以下 operation 由标准库提供，签名与语义由标准库规范定义；标准库缺失时程序按 [ub.logic] 处理：`!=` `&&` `||`。
+- **[std]/2** `!=`/`&&`/`||` 之外的运算符内建于 [lang.expr] 与 [isa]；指针解引用/取地址内建于 [lang.expr]。
+- **[std]/3** 非 32 位 int 的 number 算术运算（任意精度路径）行为 UB（[ub.bignum]）。
+- **[std]/4** 字符串及容器设施由标准库提供。
 
-插件签名 `(pipeline: PeepholeTool[], config: any) => PeepholeTool[]`，在管线运行前执行，可替换/增删任意阶段（§1.2 之外的行为由插件自担；遵循本规范的范围是：标准管线行为集合内的输出不变式）。
+---
 
-# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11 全通过 + 单测 78 例全通过）
+# 12 Undefined behavior index [ub]
 
-已全部落地：check 错误如实抛出；type_is 结构比较 + type_sub 子类型判定（param_best 布尔化）；fast_cast/type_sub 调用点传类型而非节点；Scope.enter 继承函数返回类型；赋值统一 left_addr；++/-- 地址槽回写；实参槽 PARAM_SET(reg(index+1))；嵌套模块 bootstrap 单条且 entry_id 未定义时跳过；隐式 this 仅实例方法追加（module 函数均为 static）；Type_Member/Type_Arguments 经 type_view 取块 .type；Type_Arguments 实参传类型数组并防重载决议空表崩溃；global_local 路径统一（父设子路径约定，join_path 无尾点，Type 块节点用 ast.global_local）；censor 循环 _loop 置位/恢复（含 for/foreach）；parser 补 Delete 生成器。
-
-## 语言特性（非缺陷，测试按此断言）
-- for 的 step 是 BasicCommand 列表，语句必须带分号：`for (…; …; i = i + 1;)` 合法，裸 `i++` 不合法。
-- value 块是顶层独立项且**无名字**：`value number { operation '+' … }`，块名由类型决定（desugar 后固定为 number/boolean）。
-- `!=` `&&` `||` 内建 VM 不提供，由标准库以 operation 提供；标准库缺失时按 UB 编码为 opcode 0。
-- 函数帧块尾自动返回，缺失 RET 为 UB，编译器不强制报错。
-
-## 后续工作
-- 标准库：!=/&&/||、指针 &/*、字符串等（均在 Slang 层实现）。
-- VM 对齐：按本规范实现 bzx-ins1 的新二进制格式与指令语义。
-- optimize 阶段仍为占位。
+| 条目 | 触发 |
+|--|--|
+| [ub.mod] | 互斥修饰符同时出现；同一修饰符重复出现 |
+| [ub.logic] | 使用 `!=`/`&&`/`||` 而标准库未提供对应 operation |
+| [ub.bignum] | 参与 number 运算的值超出 uint32（任意精度运算路径未定义） |
+| [ub.ret] | 函数体缺失 RET（块尾自动返回为约定行为） |
+| [ub.enc] | 生成阶段遇到未定义编码输入（undefined/NaN 参数写 0） |
+| [ub.foreign] | 插件替换阶段后的行为 |
