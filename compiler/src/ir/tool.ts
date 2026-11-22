@@ -2,8 +2,8 @@ import {
     BINARY,
     BIT_NOT,
     CALL,
-    CZ, DELETE, GC, HExpr,
-    HIRTree, IN,
+    CZ, DELETE, GC, HExpr, HIdentifierExpr, HIndexExpr,
+    HIRTree, HReferenceExpr, IN,
     IRArgs, IRTree,
     JMP,
     JZ,
@@ -101,4 +101,20 @@ export function expr_set(arg:IRArgs,data:HExpr,tool:IRTool,call:(data:HIRTree)=>
 }
 export function to_v(arg:IRArgs){
     return IRArgs.value(arg.data)
+}
+export function left_addr(set_arg:IRArgs,target:HExpr,tool:IRTool,call:(data:HIRTree)=>void){
+    if(target instanceof HIdentifierExpr)
+        tool.push(new MOV(set_arg,IRArgs.reg(target.name)))
+    if(target instanceof HReferenceExpr){
+        const address=IRArgs.reg(tool.id())
+        expr_set(address,target.target,tool,call)
+        tool.push(new MOV(set_arg,address))
+    }
+    if(target instanceof HIndexExpr){
+        const offset=IRArgs.reg(tool.id())
+        const index=IRArgs.reg(tool.id())
+        expr_set(offset,target.target,tool,call)
+        expr_set(index,target.index,tool,call)
+        tool.push(new OFFSET_GET(set_arg,offset,index))
+    }
 }

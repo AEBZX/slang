@@ -8,7 +8,7 @@ import hir from './hir'
 import ir from './ir'
 import optimize from './optimize'
 import PeepholeTool from './utils/lib/tool'
-import Generate from './utils/lib/generate'
+
 const toolToRound=new Map<string,number>([
     ['lexer',0],
     ['parser',1],
@@ -41,8 +41,7 @@ class Runner{
                 ret=out
                 continue
             }
-            const scope:any=out
-            const errs:string[]=Array.isArray(scope?.error)?scope.error:((scope?.global?.error)??[])
+            const errs:string[]=(out?.global?.error)??[]
             if(errs.length>0)
                 throw new Error(`check 报错:\n${errs.join('\n')}`)
         }

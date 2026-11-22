@@ -22,6 +22,8 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#include "main.h"
 using SocketHandle = SOCKET;
 inline constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
 #if defined(_MSC_VER)
@@ -54,11 +56,12 @@ namespace util{
         NetPool();
         ~NetPool();
         int connect(const std::string&);
-        std::string send(const int&,const std::string&);
-        std::string recv(const int&,const int&);
+        void send(int,const std::string&);
+        std::string recv(int,int);
         void close(const int&);
     private:
         std::unordered_map<int,std::mutex> mutex;
+        std::mutex global_mutex;
         std::unordered_map<int,Net> nets;
     };
     class GUI
@@ -238,6 +241,11 @@ namespace data
         int pc;
         int frame;
     };
+    struct reg
+    {
+        int value;
+        std::unordered_map<unsigned int,int> offset;
+    };
 }
 namespace runtime{class Runtime;}
 namespace instruction
@@ -252,17 +260,41 @@ namespace runtime
     class Runtime
     {
     public:
+        bool _stop;
+        int id;
         Runtime();
         ~Runtime();
         Runtime(const Runtime&) = delete;
         Runtime& operator=(const Runtime&) = delete;
         Manage* father;
+        std::unordered_map<std::string,std::unordered_map<int,data::reg>> out;
+        std::unordered_map<int,data::reg> param;
         data::runtime_data frame;
+        std::stack<std::pair<int,data::reg>> stack;
         void stop();
-        void start(int block,int pc);
+        void start(data::runtime_data frame);
     };
+    using instruction_task=std::pair<bool(Runtime*,instruction::instruction&),instruction::instruction>;
     class Manage
     {
+    public:
+        Manage();
+        ~Manage();
+        Manage(const Manage&) = delete;
+        Manage& operator=(const Manage&) = delete;
+        std::unordered_map<unsigned int,data::reg> reg;
+        std::unordered_map<int,std::vector<std::vector<instruction_task>>> code;
+        std::unordered_map<int,bool> lock;
+        std::unordered_map<int,Runtime> runtime;
+        void start();
+        void malloc(int block_id);
+        std::vector<std::vector<instruction_task>>* get(int id);
+        bool _continue=false;
+        util::NetPool net;
+        std::condition_variable cv;
+        std::mutex wait_mtx;
+        std::atomic<bool> _stop{false};
+        std::atomic<int> inflight{0};
     };
 }
 namespace sbin

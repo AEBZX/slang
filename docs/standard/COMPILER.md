@@ -239,7 +239,7 @@ Slang 语言本体只提供**够用的最小内建集**，其余一切能力由�
 |内建能力|说明|
 |--|--|
 |二元算术/位/比较|`+ - * / % << >> & \| ^ == > <`（操作数同为 number → number；比较结果为 boolean）|
-|`!=` `&&` `\|\|`|**内建 VM 不提供**，由 Slang 层（标准库）以 operation 提供；条件降糖产生的 `x != null` 依赖该 operation|
+|`!=` `&&` `\|\|`|**内建 VM 不提供**，由 Slang 层（标准库）以 operation 提供；标准库未提供时行为为 **UB**（当前实现编码为 opcode 0）。条件降糖产生的 `x != null` 依赖该 operation|
 |一元|`!`（boolean）、`~` `-`（number）；前缀 `++` `--`（number，单参数）|
 |后缀自增|`++` `--`（双参数 `(操作数, number占位)`，可重载）|
 |数组索引|`a[i]` 读写（OFFSET_GET/OFFSET_SET）|
@@ -470,13 +470,13 @@ uint64BE           id 空间总长（块号+槽号上限）
 
 插件签名 `(pipeline: PeepholeTool[], config: any) => PeepholeTool[]`，在管线运行前执行，可替换/增删任意阶段（§1.2 之外的行为由插件自担；遵循本规范的范围是：标准管线行为集合内的输出不变式）。
 
-# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11）
+# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11 + 单测 78 例）
 
-已验证通过：全部样例通过 parse/check/desugar；`i++` 走内建 BINARY；局部变量懒分配槽生效；switch/if 的 CZ/NOT 条件链与 case 体完整；bootstrap JMP 去重与 value 间接跳转正确。以下为剩余缺口：
+已验证通过：**check 错误如实抛出**、type_is 结构比较（constructor）、`type_sub` 子类型判定与 `param_best` 布尔化、赋值统一 left_addr、++/-- 地址槽回写、实参槽 `PARAM_SET(reg(index+1))`、嵌套模块 bootstrap 只发射一条、`entry_id==null` 守卫、`D_Arguments` call_target 整体替换、`Type_Member`/`Type_Arguments` 取块 `.type`、`Censor_While_DoWhile` 置 `_loop`。**当前回归基线：S1/S5 通过，其余样例在 check 抛错/崩溃。剩余缺口（按严重度）：**
 
-1. **generate 的指令映射表缺 `[PARAM_SET, G_PARAM_SET]` / `[PARAM_LOAD, G_PARAM_LOAD]` 两项** —— visitor 与基号(13/14)已定义但未注册，所有 PARAM 指令序列化返回 undefined，`Buffer.concat` 崩溃（S1/S4/S11）。
-2. **HIR 的 `call()` 未把 enter 后的 scope 显式传给子节点**（与 check 同款问题）—— `H_Lambda` 的 `register_label` 把标签注册进 lambda 作用域，但 `H_Label`/`H_Goto` 拿到的是外层 scope，`label_get` 全部 undefined → `G_Label` 对 undefined `replace` → 块丢失/`push` 崩溃（S3/S5/S7）；函数参数名同样不可见（S11 的 `a`）。`H_Lambda` 的 body、`H_ListCommand` 的 children、`H_Try` 的 catch 体需要 `call(节点, scope)`。
-3. **`G_Binary`/`G_PostInc` 等工厂在 `expr_set` 子表达式后引用 `tool.set_arg`** —— set_arg 已被最后一个子表达式覆盖，BINARY 结果写进右操作数槽，`G_Assign` 预留的 `right_id` 槽从未被写入（S2 的 `MOV 8,12,0` 读到未初始化槽）。进入子表达式求值前应先保存 result。
-4. **`D_Assign` 复合赋值重写后仍返回 AddAssign** —— HIR 无对应 visitor，`x += 2` 的 += 部分依旧丢失（S9）。重写应返回 `new AAssign(node.data, node.value)`。
-5. **`!=` / `&&` / `||` 的 Slang 层实现未落地** —— 设计上由标准库 operation 提供，但目前 check 不重写、BinaryDict 无子号，编码成 NaN→opcode 0 的垃圾 MOV（S8/S10）。需在 check 对未解析的三者报错，或提供降糖。
-6. generate 对 undefined/NaN 参数静默写 0（Node 24 行为），把逻辑 bug 降级成 opcode 0/槽 0 —— 可选：在 fill 处校验，按 UB 处理也可。
+1. **`type_sub` 两处调用点传参错误（新增崩溃）** —— `Type_VarDecl:79` 写的是 `type_sub(ast.value, ast.t.type, scope)`：`ast.value` 是表达式**节点**而非 `ast.value.type`；`ast.t` 本身就是类型、`.type` 字段恒为 undefined → `b.constructor` 崩溃（S2/S6/S8/S9/S10）。应为 `type_sub(ast.value.type, ast.t, scope)`。`Type_Return:110` 同款：`type_sub(ast.data, scope.ret.type, scope)` 应为 `type_sub(ast.data.type, scope.ret, scope)`（S4/S11）。另：守卫方向——`if(!(type_sub(...)))return` 是"匹配后落到 fast_cast"，匹配即应通过，落到 fast_cast 仍会被 identity 比较拦下。
+2. **`fast_cast` 仍是 identity 比较** —— `type_is(input.type, output, scope)==output`：type_is 结构比较返回的是**输入实例**，与 output 实例恒不等 → 声明类型变量的 cast/catch 全部失败。应改 `type_sub(input.type, output, scope)`。
+3. **`type_sub` 的 LambdaType 分支缺 undefined 防护** —— `b.generic.get(key)` / `b.params.get(key)` 为 undefined 时递归 `.constructor` 崩溃；两侧键集合不一致也应判 false。
+4. **`Censor_For` / `Censor_Foreach` 仍未置 `_loop=true`** —— for/foreach 体内的 break/continue 仍误报（While/DoWhile 已修，注意 body 遍历后恢复）。
+5. **parser 遗漏两处**：① ast 生成器映射表缺 `Delete`（`delete x;` 抛 `AST 生成器缺失:Delete`）；② `for` 的 step 是 `BasicCommand` 循环，裸 `i++`（无分号）无法匹配 `ExprCommand`（要求 `;`）——`for (…; …; i++)` 解析失败，需允许 step 位置的无分号表达式。
+6. **global_local 路径空段（第 6 项）根因** —— check 的 `Build_*`/`Symbol_Module` 用 `scope.path+'.'+name` **无条件加点**（顶层 path='' → `.app` 前导空段），`Build_Module` 进子层时 `path+'.'+name+'.'` **带尾点**、子层注册再加一个点 → 双点空段（`['','app','','f']`）；而 HIR `register` 是条件拼接（`path==''?name:path+'.'+name`，无尾点）→ 两套键对不上。修法：抽 `join_path(base,name)=base==''?name:base+'.'+name` 供 check 统一使用（子层进入不再带尾点），或让 HIR register 直接消费 check 的 `global_local`。

@@ -1,4 +1,4 @@
-import {expr_set, slang_ir_factory, to_v, VMMap} from './tool'
+import {expr_set, left_addr, slang_ir_factory, to_v, VMMap} from './tool'
 import {
     CALL,
     CZ, DELETE,
@@ -17,23 +17,9 @@ import IR from '../utils/lib/ir'
 const G_Assign:slang_ir_factory=(data:HAssign,tool,call)=>{
     const right_id=IRArgs.reg(tool.id())
     expr_set(right_id,data.value,tool,call)
-    //如果是IdentifierExpr,最简单直接写
-    if(data.data instanceof HIdentifierExpr)
-        tool.push(new MOV(IRArgs.reg(data.data.name),right_id))
-    //如果是解引用先拿指针在算
-    if(data.data instanceof HReferenceExpr){
-        const address=IRArgs.reg(tool.id())
-        expr_set(address,data.data.target,tool,call)
-        tool.push(new MOV(to_v(address),right_id))
-    }
-    //index,offset_set
-    if(data.data instanceof HIndexExpr){
-        const offset=IRArgs.reg(tool.id())
-        const index=IRArgs.reg(tool.id())
-        expr_set(offset,data.data.target,tool,call)
-        expr_set(index,data.data.index,tool,call)
-        tool.push(new OFFSET_SET(offset,index,right_id))
-    }
+    const left_address=IRArgs.reg(tool.id())
+    left_addr(left_address,data.data,tool,call)
+    tool.push(new MOV(to_v(left_address),to_v(right_id)))
 }
 const G_Label:slang_ir_factory=(data:HLabel,tool,call)=>{
     tool.push(new JMP(IRArgs.reg(data.name),IRArgs.reg(0)))

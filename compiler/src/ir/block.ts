@@ -10,6 +10,7 @@ const G_Variable:slang_ir_factory=(data:HVariable,tool,call)=>{
 const G_Module:slang_ir_factory=(data:HModule,tool,call)=>{
     data.children.forEach(call)
     tool.block_id=0
+    if(tool.entry_id==null)return
     const last_ins=tool.code.get(0)[tool.code.get(0).length-1]
     if(last_ins instanceof JMP&&last_ins.target.type=='value'&&last_ins.target.data==tool.entry_id)
         return

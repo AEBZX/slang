@@ -60,7 +60,9 @@ const Censor_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
 }
 const Censor_While_DoWhile:slang_check_visitor=(ast:DoWhileStatement|WhileStatement,scope,call)=>{
     call(ast.condition,0,scope)
+    scope._loop=true
     call(ast.commands,0,scope)
+    scope._loop=false
 }
 const Censor_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     for(const init of ast.init)

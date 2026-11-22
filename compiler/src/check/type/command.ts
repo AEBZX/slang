@@ -18,7 +18,7 @@ import {
     slang_check_visitor,
     to_right,
     try_bool,
-    type_is
+    type_is, type_sub
 } from '../tool'
 const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,3,scope)
@@ -76,7 +76,7 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
             return
         }
         //如果类型匹配就可以不管
-        if(!(type_is(ast.t,ast.value.type,scope)==ast.t))return
+        if(!(type_sub(ast.value,ast.t.type,scope)))return
         //尝试转换
         if(!fast_cast(scope,ast,ast.value,ast.t))scope.thr('变量声明类型不匹配',ast)
         return
@@ -107,7 +107,7 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
         scope.thr('函数返回值不是void但是你用了空return',ast)
         return
     }
-    if(type_is(scope.ret,ast.data.type,scope)==scope.ret)
+    if(type_sub(ast.data,scope.ret.type,scope))
         return
     const cast=cast_get(scope,ast,ast.data.type,scope.ret)
     if(cast!=null){

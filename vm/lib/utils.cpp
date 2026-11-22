@@ -1,18 +1,16 @@
 #include "../main.h"
-std::filesystem::path tou8(const std::string& path)
+
+static std::filesystem::path tou8(const std::string& path)
 {
     return std::filesystem::path(std::u8string(
         reinterpret_cast<const char8_t*>(path.data()), path.size()));
 }
 void util::init(const std::vector<std::string>& args)
 {
-#ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
     static WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif
-    util::args=args;
 }
 void util::print(const std::string& data)
 {
@@ -61,13 +59,8 @@ std::string util::cwd() {
     return p.string();
 }
 std::string util::homedir() {
-#ifdef _WIN32
     if (const char* h = std::getenv("USERPROFILE"); h && *h)
         return h;
-#else
-    if (const char* h = std::getenv("HOME"); h && *h)
-        return h;
-#endif
     return {};
 }
 std::vector<std::string> util::list(const std::string& path) {
@@ -100,7 +93,6 @@ bool util::rmdir(const std::string& path)
 }
 bool util::remove(const std::string& path)
 {
-    //非空目录/权限不足都只返回 false,不能把 filesystem_error 抛给运行时
     std::error_code ec;
     return std::filesystem::remove(tou8(path), ec);
 }
@@ -151,30 +143,22 @@ util::Net::~Net()
 void util::Net::close()
 {
     if (fd == kInvalidSocket) return;
-#ifdef _WIN32
     ::closesocket(fd);
-#else
-    ::close(fd);
-#endif
     fd = kInvalidSocket;
 }
-std::string util::Net::send(const std::string& data)
+void util::Net::send(const std::string& data)
 {
-    if (fd == kInvalidSocket) return "not connected";
+    if (fd == kInvalidSocket) return;
     const char* ptr = data.data();
     size_t remain = data.size();
     int flags = 0;
-#if defined(__linux__)
-    flags = MSG_NOSIGNAL;
-#endif
     while (remain > 0)
     {
         const int n = ::send(fd, ptr, static_cast<int>(remain), flags);
-        if (n <= 0) { close(); return "send failed"; }
+        if (n <= 0) { close(); return; }
         ptr += n;
         remain -= static_cast<size_t>(n);
     }
-    return "";
 }
 std::string util::Net::recv(const int& n)
 {
@@ -196,7 +180,7 @@ std::string util::Net::recv(const int& n)
 util::NetPool::NetPool() = default;
 util::NetPool::~NetPool()
 {
-    std::lock_guard g(mtx);
+    std::lock_guard g(this->global_mutex);
     nets.clear();
 }
 int util::NetPool::connect(const std::string& addr)
@@ -204,22 +188,22 @@ int util::NetPool::connect(const std::string& addr)
     static int nextId = 1;
     Net n(addr);
     if (!n.connected()) return -1;
-    std::lock_guard g(mtx);
+    std::lock_guard g(global_mutex);
     const int id = nextId++;
     nets.emplace(id, std::move(n));
     return id;
 }
-std::string util::NetPool::send(const int& id, const std::string& data)
+void util::NetPool::send(const int id, const std::string& data)
 {
-    std::lock_guard g(mtx);
+    std::lock_guard g(mutex[id]);
     const auto it = nets.find(id);
-    if (it == nets.end()) return "unknown handle";
-    return it->second.send(data);
+    if (it == nets.end()) return;
+    it->second.send(data);
 }
 
-std::string util::NetPool::recv(const int& id,const int& num)
+std::string util::NetPool::recv(const int id,const int num)
 {
-    std::lock_guard g(mtx);
+    std::lock_guard g(mutex[id]);
     const auto it = nets.find(id);
     if (it == nets.end()) return "unknown handle";
     return it->second.recv(num);
@@ -227,7 +211,7 @@ std::string util::NetPool::recv(const int& id,const int& num)
 
 void util::NetPool::close(const int& id)
 {
-    std::lock_guard g(mtx);
+    std::lock_guard g(mutex[id]);
     nets.erase(id);
 }
 

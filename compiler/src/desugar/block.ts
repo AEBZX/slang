@@ -26,7 +26,7 @@ const D_Class_Interface:slang_desugar_visitor=(node:Interface|Class,call)=>{
 }
 const D_Function:slang_desugar_visitor=(node:Function,call)=>{
     //不是static就是类/接口成员,最后面加一个Reference的this
-    if(!node.modifiers.unstatic)
+    if(node.modifiers.unstatic)
         node.params=new Map([...node.params,['this',new ReferenceType(new VoidType())]])
     node.commands=call(node.commands) as Command
     //构造函数特殊处理,就算不是构造函数也不可达或者没用

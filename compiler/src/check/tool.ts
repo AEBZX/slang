@@ -36,7 +36,7 @@ export class Scope extends PeepholeScope{
     error:string[]
     _loop:boolean=false
     ret:Type=null
-    path:string
+    path:string=''
     private cast_index:number=0
     private operation_index:number=0
     constructor(parent:Scope,global:Scope){
@@ -223,7 +223,7 @@ export function type_is(a:Type,b:Type,scope:Scope){
     if(b instanceof VoidType)return a
     //情况1,都是Literal
     if(a instanceof LiteralType&&b instanceof LiteralType){
-        if(a==b)return a
+        if(a.constructor==b.constructor)return a
         return new VoidType()
     }
     //情况2,array
@@ -270,23 +270,51 @@ export function type_is(a:Type,b:Type,scope:Scope){
         if(a.local==b.local)return a
     return new VoidType()
 }
+//a是b的子类型
+export function type_sub(a:Type,b:Type,scope:Scope):boolean{
+    if(a instanceof VoidType) return true
+    if(a.constructor==b.constructor)return true
+    if(a instanceof ReferenceType)return type_sub(a.t,b,scope)
+    if(b instanceof ReferenceType)return type_sub(a,b.t,scope)
+    if(a instanceof PointType)return type_sub(a.t,b,scope)
+    if(b instanceof PointType)return type_sub(a,b.t,scope)
+    if(a instanceof ArrayType)return type_sub(a.t,b,scope)
+    if(b instanceof ArrayType)return type_sub(a,b.t,scope)
+    if(a instanceof LambdaType&&b instanceof LambdaType){
+        //a的泛型都是b的泛型的子类型
+        for(const [key,value] of a.generic)
+            if(!type_sub(value,b.generic.get(key),scope))return false
+        //a的参数都是b的参数的子类型
+        for(const [key,value] of a.params)
+            if(!type_sub(value,b.params.get(key),scope))return false
+        //a的返回值是b的返回值的子类型
+        return type_sub(a.returnType,b.returnType,scope)
+    }
+    if(a instanceof ClassType&&b instanceof ClassType){
+        //查继承链
+        const implement=scope.global.implement.get(a.local)
+        for(const i of implement)
+            if(type_sub(i,b,scope))return true
+    }
+    return false
+}
 //具体性比较,如果a比b更具体返回true
 //要求两者length相同
 //也可以用于泛型相容性检查
 export function param_best(param1:Type[],param2:Type[],scope:Scope){
-    return param1.every((v,i)=>type_is(v,param2[i],scope)==param2[i])
+    return param1.every((v,i)=>type_sub(v,param2[i],scope))
 }
 export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...param:Type[]){
     const oper_type=param[0]
     let operations:Operation[]=[]
     for(const [key,value] of scope.operation)
-        if(type_is(key,oper_type,scope)==key)operations.push(...value)
+        if(type_sub(oper_type,key,scope))operations.push(...value)
     operations=operations.filter(v=>v.oper==oper)
-        .filter(v=>type_is(v.command.ret,ret,scope)==ret)
+        .filter(v=>type_sub(v.command.ret,ret,scope))
         .filter(v=>v.command.params.size==param.length)
         .filter(v=>{
             for(let i=0;i<v.command.params.size;i++)
-                if(type_is(Array.from(v.command.params.values())[i],param[i],scope)!=param[i])return false
+                if(!type_sub(Array.from(v.command.params.values())[i],param[i],scope))return false
             return true
         })//存在一个不等于他的operation,参数比他更具体,pass
         .filter(v=>{
@@ -308,12 +336,12 @@ export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...pa
 export function cast_get(scope:Scope,ast:ASTTree,input:Type,output:Type){
     let casts:Cast[]=[]
     for(const [key,value] of scope.cast)
-        if(type_is(key,output,scope)==key)
+        if(type_sub(output,key,scope))
             casts.push(...value)
     casts=casts.filter(v=>{
         //cast只有一个参数
         const param=Array.from(v.command.params.values())[0]
-        return type_is(param, input, scope) == input
+        return type_sub(param, input, scope)
     })
         .filter(v=>{
             for(const cast of casts){
@@ -428,4 +456,7 @@ export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Typ
 export function de_ref(type:Type){
     if(type instanceof ReferenceType)return type.t
     return type
+}
+export function local(scope:Scope,ast:Block){
+    return scope.path==''?ast.name:scope.path+'.'+ast.name
 }

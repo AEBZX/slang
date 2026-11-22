@@ -8,7 +8,7 @@ const H_File:slang_hir_visitor=(node:File,scope,call)=>{
     register(scope,node.children)
     const module=node.children.map(i=>call(i,scope))
     scope=scope.leave()
-    return new HModule(scope.global_id(),module)
+    return new HModule(-1,module)
 }
 const H_Module:slang_hir_visitor=(node:Module,scope,call)=>{
     scope=scope.enter()

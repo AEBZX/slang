@@ -6,7 +6,7 @@ import {
     param_best,
     param_check,
     slang_check_visitor, symbol_do_generic, try_bool,
-    type_is
+    type_is, type_sub
 } from '../tool'
 import {
     AddressPrefix,
@@ -92,7 +92,8 @@ const Type_Inc_Dec:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix,sc
 }
 const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
     call(ast.expr,3,scope)
-    if(de_ref(ast.expr.type) instanceof BlockType||de_ref(ast.expr.type) instanceof ClassType){
+    //这种情况下如果不是类或者模块,那么注册的就是类型在.type就是null,所以可以这样
+    if(de_ref(ast.expr.type).type instanceof BlockType||de_ref(ast.expr.type).type instanceof ClassType){
         ast.type=block_get(
             (<ClassType | BlockType>de_ref(ast.expr.type))._this,
             ast.expr.type instanceof BlockType,
@@ -135,11 +136,12 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
     if(fast_operation(scope,ast,'()',new VoidType(),ast.expr,...ast.args))
         return
     //是不是lambda_type
-    if(ast.expr.type instanceof LambdaType){
+    const expr_type=de_ref(ast.expr.type)
+    if(expr_type instanceof LambdaType){
         //没有overload,直接检查
-        if(!ast.expr.type.overload){
-            const type=param_check(Array.from(ast.expr.type.params.values()),ast.args,
-                ast.expr.type.generic,ast.generic,ast.expr.type.returnType,scope)
+        if(!expr_type.overload){
+            const type=param_check(Array.from(expr_type.params.values()),ast.args,
+                expr_type.generic,ast.generic,expr_type.returnType,scope)
             if(type==null){
                 scope.thr('参数类型不匹配',ast)
                 return
@@ -149,11 +151,11 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
         }
         //需要重载决议
         //已经决议过
-        if(ast.expr.type.name.includes('@')){
-            ast.type=ast.expr.type.returnType
+        if(expr_type.name.includes('@')){
+            ast.type=expr_type.returnType
             return
         }
-        const functions=scope.overload_get(ast.expr.type.name)
+        const functions=scope.overload_get(expr_type.name)
             .filter(item=>param_check(Array.from(item.params.values()),ast.args,item.generic,ast.generic,item.return_type,scope)!=null)
         //具体性决策
             .filter(item=>{
@@ -295,7 +297,7 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
     {
         let index=0
         for (const iden of iden_generic.values()) {
-            if(!(type_is(ast.expr.generic[index],iden,scope)==ast.expr.generic[index]))
+            if(!(type_sub(iden,ast.expr.generic[index],scope)))
                 scope.thr('泛型不相容',ast)
             index++
         }

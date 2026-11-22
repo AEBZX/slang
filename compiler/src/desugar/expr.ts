@@ -62,11 +62,9 @@ const D_Arguments:slang_desugar_visitor=(node:ArgumentsPostfix,call)=>{
     if(node.oper!=null)
         return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,<Expression>de_operation(node, node.oper, node.expr, ...node.args))))
     //call_target检查
-    if(node.call_target!=null){
+    if(node.call_target!=null)
         //call_target必定是函数调用,node.expr是Identifier/Member,替换为call_target
-        if(node.expr instanceof IdentifierExpr)node.expr=new IdentifierExpr(node.call_target)
-        if(node.expr instanceof MemberPostfix)node.expr.name=node.call_target
-    }
+        node.expr=new IdentifierExpr(node.call_target)
     //把调用者传进去,如果是this调用就充当this,已经deref过不需要重复
     if(node.expr instanceof MemberPostfix&&node.expr.expr.type instanceof ClassType)
         node.args.push(node.expr.expr)
