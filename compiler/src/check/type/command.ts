@@ -32,12 +32,12 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     //常规情况
     if(!(ast.data.type instanceof ReferenceType))
         scope.thr('赋值左边不是合法左值',ast)
-    if(ast.op=='='&&!(type_is(ast.data,ast.value,scope) instanceof VoidType))
+    if(ast.op=='='&&!(type_is(ast.data.type,ast.value.type,scope) instanceof VoidType))
         return
-    if(['&&=','&=','||=','|='].includes(ast.op)&&ast.data.type instanceof BooleanType&&ast.value.type instanceof BooleanType)
+    if(['&&=','&=','||=','|='].includes(ast.op)&&to_right(ast.data.type) instanceof BooleanType&&to_right(ast.value.type) instanceof BooleanType)
         return
     //只剩下关于number的运算
-    if(ast.data.type instanceof NumberType&&ast.value.type instanceof NumberType)
+    if(to_right(ast.data.type) instanceof NumberType&&to_right(ast.value.type) instanceof NumberType)
         return
     //尝试转换
     const cast=cast_get(scope,ast,ast.value.type,ast.data.type)
@@ -52,7 +52,7 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
             scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
             return
         }
-        if (!(ast.data.type instanceof NumberType && cast.type instanceof NumberType)){
+        if (!(to_right(ast.data.type) instanceof NumberType && to_right(cast.type) instanceof NumberType)){
             scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
             return
         }
@@ -65,6 +65,9 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
 const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
     call(ast.t,3,scope)
     scope.set(ast.name,ast.t instanceof ReferenceType?ast.t:new ReferenceType(ast.t))
+    //引用类型必须赋值
+    if(ast.t instanceof ReferenceType&&ast.value==null)
+        scope.thr('引用类型必须初始化',ast)
     call(ast.value,3,scope)
     if(!(ast.t instanceof ReferenceType)){
         //如果不是引用,那么就可以进行重载决议和cast决议
@@ -76,15 +79,11 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
             return
         }
         //如果类型匹配就可以不管
-        if(!(type_sub(ast.value,ast.t.type,scope)))return
+        if(ast.value.type&&type_sub(ast.value.type,ast.t,scope))return
         //尝试转换
         if(!fast_cast(scope,ast,ast.value,ast.t))scope.thr('变量声明类型不匹配',ast)
         return
     }
-    //只可能是引用类型
-    //引用类型必须赋值
-    if(ast.value==null)
-        scope.thr('引用类型必须初始化',ast)
     if(!(ast.value.type instanceof ReferenceType))
         scope.thr('引用类型的初始化必须是左值',ast)
 }
@@ -107,7 +106,7 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
         scope.thr('函数返回值不是void但是你用了空return',ast)
         return
     }
-    if(type_sub(ast.data,scope.ret.type,scope))
+    if(ast.data.type&&type_sub(ast.data.type,scope.ret,scope))
         return
     const cast=cast_get(scope,ast,ast.data.type,scope.ret)
     if(cast!=null){
@@ -183,7 +182,7 @@ const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
         call(case_.condition,3,scope);
         //检查两个是否是同一类型
         (()=>{
-            if(!(type_is(ast.condition,case_.condition,scope) instanceof VoidType))
+            if(!(type_is(ast.condition.type,case_.condition.type,scope) instanceof VoidType))
                 return
             //尝试强转
             const cast=cast_get(scope,ast,case_.condition.type,ast.condition.type)

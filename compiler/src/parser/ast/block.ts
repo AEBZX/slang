@@ -9,7 +9,7 @@ import {
     Link, Modifier,
     Module, Operation,
     Type, Value,
-    Variable
+    Variable,Expression
 } from '../../utils'
 import {parseGeneric, parseImplement, to_ast_data, to_string, tree_ast} from "./tool";
 const G_Link:slang_ast_generate=(data,tree)=>{
@@ -71,7 +71,7 @@ const G_Function:slang_ast_generate=(data,tree)=>{
 }
 const G_Variable:slang_ast_generate=(data,tree)=>{
     const init=to_ast_data(data,1)
-    return new Variable(null,null,tree_ast(data,0,tree),typeof init=='object'?tree_ast(init,0,tree):null)
+    return new Variable(null,null,tree_ast(data,0,tree),typeof init =='object' ?tree(init) as Expression : null)
 }
 const G_Block:slang_ast_generate=(data,tree)=>{
     let modifier=data.children.get(0) as ast_data

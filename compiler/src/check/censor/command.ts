@@ -60,9 +60,10 @@ const Censor_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
 }
 const Censor_While_DoWhile:slang_check_visitor=(ast:DoWhileStatement|WhileStatement,scope,call)=>{
     call(ast.condition,0,scope)
+    const prev_loop=scope._loop
     scope._loop=true
     call(ast.commands,0,scope)
-    scope._loop=false
+    scope._loop=prev_loop
 }
 const Censor_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     for(const init of ast.init)
@@ -70,11 +71,17 @@ const Censor_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     call(ast.condition,0,scope)
     for(const step of ast.step)
         call(step,0,scope)
+    const prev_loop=scope._loop
+    scope._loop=true
     call(ast.commands,0,scope)
+    scope._loop=prev_loop
 }
 const Censor_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
     call(ast.data,0,scope)
+    const prev_loop=scope._loop
+    scope._loop=true
     call(ast.commands,0,scope)
+    scope._loop=prev_loop
 }
 const Censor_Try:slang_check_visitor=(ast:TryStatement,scope,call)=>{
     call(ast.commands,0,scope)

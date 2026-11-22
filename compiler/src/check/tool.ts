@@ -142,6 +142,7 @@ export class Scope extends PeepholeScope{
     public enter(func:boolean=false):Scope{
         let ret=new Scope(this,this.global)
         ret.func=func
+        ret.ret=this.ret
         return ret
     }
     public leave():Scope{
@@ -182,7 +183,7 @@ export function symbol_iden(ast:Block[],scope:Scope,path:string=''){
             scope.set(path+item.name,item.t)
     }
     for(const item of ast)
-        if('children' in item)
+        if('children' in item&&!(item instanceof Enum))
             symbol_iden(item.children as Block[],scope,path+item.name+'.')
 }
 export function symbol_check_implement(ast:ASTTree,type:Type,scope:Scope){
@@ -272,6 +273,7 @@ export function type_is(a:Type,b:Type,scope:Scope){
 }
 //a是b的子类型
 export function type_sub(a:Type,b:Type,scope:Scope):boolean{
+    if(a==null||b==null)return false
     if(a instanceof VoidType) return true
     if(a.constructor==b.constructor)return true
     if(a instanceof ReferenceType)return type_sub(a.t,b,scope)
@@ -282,17 +284,21 @@ export function type_sub(a:Type,b:Type,scope:Scope):boolean{
     if(b instanceof ArrayType)return type_sub(a,b.t,scope)
     if(a instanceof LambdaType&&b instanceof LambdaType){
         //a的泛型都是b的泛型的子类型
-        for(const [key,value] of a.generic)
-            if(!type_sub(value,b.generic.get(key),scope))return false
+        for(const [key,value] of a.generic){
+            const bg=b.generic.get(key)
+            if(bg==null||!type_sub(value,bg,scope))return false
+        }
         //a的参数都是b的参数的子类型
-        for(const [key,value] of a.params)
-            if(!type_sub(value,b.params.get(key),scope))return false
+        for(const [key,value] of a.params){
+            const bp=b.params.get(key)
+            if(bp==null||!type_sub(value,bp,scope))return false
+        }
         //a的返回值是b的返回值的子类型
         return type_sub(a.returnType,b.returnType,scope)
     }
     if(a instanceof ClassType&&b instanceof ClassType){
         //查继承链
-        const implement=scope.global.implement.get(a.local)
+        const implement=scope.global.implement.get(a.local)??[]
         for(const i of implement)
             if(type_sub(i,b,scope))return true
     }
@@ -416,6 +422,8 @@ export function generic_type_real(type:Type,generic:Map<string,Type>,scope:Scope
         type.generic=type.generic.map(v=>generic_type_real(v,generic,scope))
         return type
     }
+    //普通类型(字面量类型等)原样返回,否则 param_check 会拿到 undefined
+    return type
 }
 //类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型
 export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map<string,Type>,generic_real:Type[],
@@ -444,7 +452,7 @@ export function fast_operation(scope:Scope,ast:Expression,op:string,ret:Type,...
     return false
 }
 export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Type){
-    if(type_is(input.type,output,scope)==output)return true
+    if(type_sub(input.type,output,scope))return true
     const cast=cast_get(scope,ast,input.type,output)
     if(cast!=null){
         ast.type=cast.t
@@ -457,6 +465,15 @@ export function de_ref(type:Type){
     if(type instanceof ReferenceType)return type.t
     return type
 }
+//类型视图:符号表里块节点(Module/Class/Function)以 .type 存其类型,普通类型原样返回
+export function type_view(type:Type){
+    const d=de_ref(type)
+    if(d instanceof Block)return d.type
+    return d
+}
 export function local(scope:Scope,ast:Block){
     return scope.path==''?ast.name:scope.path+'.'+ast.name
+}
+export function join_path(base:string,name:string){
+    return base==''||base==null?name:base+'.'+name
 }

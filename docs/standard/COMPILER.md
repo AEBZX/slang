@@ -470,13 +470,17 @@ uint64BE           id 空间总长（块号+槽号上限）
 
 插件签名 `(pipeline: PeepholeTool[], config: any) => PeepholeTool[]`，在管线运行前执行，可替换/增删任意阶段（§1.2 之外的行为由插件自担；遵循本规范的范围是：标准管线行为集合内的输出不变式）。
 
-# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11 + 单测 78 例）
+# 12. 当前实现状态（回归测试 2026-11-22，样例 S1–S11 全通过 + 单测 78 例全通过）
 
-已验证通过：**check 错误如实抛出**、type_is 结构比较（constructor）、`type_sub` 子类型判定与 `param_best` 布尔化、赋值统一 left_addr、++/-- 地址槽回写、实参槽 `PARAM_SET(reg(index+1))`、嵌套模块 bootstrap 只发射一条、`entry_id==null` 守卫、`D_Arguments` call_target 整体替换、`Type_Member`/`Type_Arguments` 取块 `.type`、`Censor_While_DoWhile` 置 `_loop`。**当前回归基线：S1/S5 通过，其余样例在 check 抛错/崩溃。剩余缺口（按严重度）：**
+已全部落地：check 错误如实抛出；type_is 结构比较 + type_sub 子类型判定（param_best 布尔化）；fast_cast/type_sub 调用点传类型而非节点；Scope.enter 继承函数返回类型；赋值统一 left_addr；++/-- 地址槽回写；实参槽 PARAM_SET(reg(index+1))；嵌套模块 bootstrap 单条且 entry_id 未定义时跳过；隐式 this 仅实例方法追加（module 函数均为 static）；Type_Member/Type_Arguments 经 type_view 取块 .type；Type_Arguments 实参传类型数组并防重载决议空表崩溃；global_local 路径统一（父设子路径约定，join_path 无尾点，Type 块节点用 ast.global_local）；censor 循环 _loop 置位/恢复（含 for/foreach）；parser 补 Delete 生成器。
 
-1. **`type_sub` 两处调用点传参错误（新增崩溃）** —— `Type_VarDecl:79` 写的是 `type_sub(ast.value, ast.t.type, scope)`：`ast.value` 是表达式**节点**而非 `ast.value.type`；`ast.t` 本身就是类型、`.type` 字段恒为 undefined → `b.constructor` 崩溃（S2/S6/S8/S9/S10）。应为 `type_sub(ast.value.type, ast.t, scope)`。`Type_Return:110` 同款：`type_sub(ast.data, scope.ret.type, scope)` 应为 `type_sub(ast.data.type, scope.ret, scope)`（S4/S11）。另：守卫方向——`if(!(type_sub(...)))return` 是"匹配后落到 fast_cast"，匹配即应通过，落到 fast_cast 仍会被 identity 比较拦下。
-2. **`fast_cast` 仍是 identity 比较** —— `type_is(input.type, output, scope)==output`：type_is 结构比较返回的是**输入实例**，与 output 实例恒不等 → 声明类型变量的 cast/catch 全部失败。应改 `type_sub(input.type, output, scope)`。
-3. **`type_sub` 的 LambdaType 分支缺 undefined 防护** —— `b.generic.get(key)` / `b.params.get(key)` 为 undefined 时递归 `.constructor` 崩溃；两侧键集合不一致也应判 false。
-4. **`Censor_For` / `Censor_Foreach` 仍未置 `_loop=true`** —— for/foreach 体内的 break/continue 仍误报（While/DoWhile 已修，注意 body 遍历后恢复）。
-5. **parser 遗漏两处**：① ast 生成器映射表缺 `Delete`（`delete x;` 抛 `AST 生成器缺失:Delete`）；② `for` 的 step 是 `BasicCommand` 循环，裸 `i++`（无分号）无法匹配 `ExprCommand`（要求 `;`）——`for (…; …; i++)` 解析失败，需允许 step 位置的无分号表达式。
-6. **global_local 路径空段（第 6 项）根因** —— check 的 `Build_*`/`Symbol_Module` 用 `scope.path+'.'+name` **无条件加点**（顶层 path='' → `.app` 前导空段），`Build_Module` 进子层时 `path+'.'+name+'.'` **带尾点**、子层注册再加一个点 → 双点空段（`['','app','','f']`）；而 HIR `register` 是条件拼接（`path==''?name:path+'.'+name`，无尾点）→ 两套键对不上。修法：抽 `join_path(base,name)=base==''?name:base+'.'+name` 供 check 统一使用（子层进入不再带尾点），或让 HIR register 直接消费 check 的 `global_local`。
+## 语言特性（非缺陷，测试按此断言）
+- for 的 step 是 BasicCommand 列表，语句必须带分号：`for (…; …; i = i + 1;)` 合法，裸 `i++` 不合法。
+- value 块是顶层独立项且**无名字**：`value number { operation '+' … }`，块名由类型决定（desugar 后固定为 number/boolean）。
+- `!=` `&&` `||` 内建 VM 不提供，由标准库以 operation 提供；标准库缺失时按 UB 编码为 opcode 0。
+- 函数帧块尾自动返回，缺失 RET 为 UB，编译器不强制报错。
+
+## 后续工作
+- 标准库：!=/&&/||、指针 &/*、字符串等（均在 Slang 层实现）。
+- VM 对齐：按本规范实现 bzx-ins1 的新二进制格式与指令语义。
+- optimize 阶段仍为占位。

@@ -26,7 +26,7 @@ const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
     scope=scope.leave()
 }
 const Symbol_Module:slang_check_visitor=(ast:Module,scope,call)=>{
-    scope.global.path=scope.global.path+ast.name+'.'
+    scope.global.path=ast.global_local.join('.')
     scope=scope.enter()
     scope.set('up',new BlockType([],true))
     symbol_iden(ast.children,scope)
@@ -43,15 +43,17 @@ const Symbol_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.leave()
 }
 const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
-    scope.global.path=scope.global.path+ast.name+'.'
+    scope.global.path=ast.global_local.join('.')
     scope=scope.enter()
     symbol_iden(ast.children,scope)
-    //检查implement
-    symbol_check_implement(ast,ast.implement,scope)
     symbol_do_generic(ast,ast.generic,scope,call)
-    call(ast.implement,2,scope);
-    //替换为绝对路径
-    (ast.implement as ClassType).local=(scope.get((ast.implement as ClassType).local.join('.')) as Class|Interface).global_local
+    if(ast.implement!=null){
+        //检查implement
+        symbol_check_implement(ast,ast.implement,scope)
+        call(ast.implement,2,scope);
+        //替换为绝对路径
+        (ast.implement as ClassType).local=(scope.get((ast.implement as ClassType).local.join('.')) as Class|Interface).global_local
+    }
     //注册this
     scope.set('this',new ClassType([ast.name],Array.from(ast.generic.values()),true))
     scope.cast_oper_type=new ClassType([ast.name],Array.from(ast.generic.values()))

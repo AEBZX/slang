@@ -169,6 +169,7 @@ export default new Map([
     ['VM',G_VM],
     ['Label',G_Label],
     ['Goto',G_Goto],
+    ['Delete',G_Delete],
     ['IfStatement',G_IfStatement],
     ['WhileStatement',G_WhileStatement],
     ['DoWhileStatement',G_DoWhileStatement],

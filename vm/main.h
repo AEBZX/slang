@@ -272,14 +272,23 @@ namespace runtime
         data::runtime_data frame;
         std::stack<std::pair<int,data::reg>> stack;
         void stop();
-        void start(data::runtime_data frame);
+        void start();
     };
-    using instruction_task=std::pair<bool(Runtime*,instruction::instruction&),instruction::instruction>;
+    struct instruction_task{
+        int param1;
+        int param2;
+        int param3;
+        instruction::instruction ins;
+        std::function<bool(Runtime*,int,int,int)> cond;
+        Runtime* runtime;
+    };
     class Manage
     {
     public:
-        Manage();
+        std::atomic<int> runtime_max=0;
+        Manage(std::unordered_map<int,std::vector<std::vector<instruction_task>>>,int);
         ~Manage();
+        void gc();
         Manage(const Manage&) = delete;
         Manage& operator=(const Manage&) = delete;
         std::unordered_map<unsigned int,data::reg> reg;
@@ -287,14 +296,18 @@ namespace runtime
         std::unordered_map<int,bool> lock;
         std::unordered_map<int,Runtime> runtime;
         void start();
-        void malloc(int block_id);
-        std::vector<std::vector<instruction_task>>* get(int id);
+        void malloc(int,int,Runtime*);
+        std::vector<std::vector<instruction_task>>* get(int);
+        void delete_reg(int);
+        void stop();
         bool _continue=false;
         util::NetPool net;
         std::condition_variable cv;
         std::mutex wait_mtx;
         std::atomic<bool> _stop{false};
         std::atomic<int> inflight{0};
+        std::mutex queue_mtx;
+        std::vector<std::pair<bool,instruction_task>> run_queue;
     };
 }
 namespace sbin

@@ -1,6 +1,6 @@
 import {
     block_get,
-    cast_get, de_ref, fast_cast, fast_operation,
+    cast_get, de_ref, fast_cast, fast_operation, type_view,
     generic_type_real,
     operation_get,
     param_best,
@@ -93,13 +93,14 @@ const Type_Inc_Dec:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix,sc
 const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
     call(ast.expr,3,scope)
     //这种情况下如果不是类或者模块,那么注册的就是类型在.type就是null,所以可以这样
-    if(de_ref(ast.expr.type).type instanceof BlockType||de_ref(ast.expr.type).type instanceof ClassType){
+    const block_type=type_view(ast.expr.type)
+    if(block_type instanceof BlockType||block_type instanceof ClassType){
         ast.type=block_get(
-            (<ClassType | BlockType>de_ref(ast.expr.type))._this,
-            ast.expr.type instanceof BlockType,
-            (<BlockType | ClassType>de_ref(ast.expr.type)).local.join('.'),
+            block_type._this,
+            block_type instanceof BlockType,
+            block_type.local.join('.'),
             ast.name,
-            (ast.type instanceof ClassType?ast.type.generic:[]),
+            (block_type instanceof ClassType?block_type.generic:[]),
             scope
         )
         return
@@ -136,11 +137,13 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
     if(fast_operation(scope,ast,'()',new VoidType(),ast.expr,...ast.args))
         return
     //是不是lambda_type
-    const expr_type=de_ref(ast.expr.type)
+    const expr_type=type_view(ast.expr.type)
     if(expr_type instanceof LambdaType){
+        //实参节点取其类型(param_check 只吃类型)
+        const arg_types=ast.args.map(a=>a.type)
         //没有overload,直接检查
         if(!expr_type.overload){
-            const type=param_check(Array.from(expr_type.params.values()),ast.args,
+            const type=param_check(Array.from(expr_type.params.values()),arg_types,
                 expr_type.generic,ast.generic,expr_type.returnType,scope)
             if(type==null){
                 scope.thr('参数类型不匹配',ast)
@@ -155,21 +158,23 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
             ast.type=expr_type.returnType
             return
         }
-        const functions=scope.overload_get(expr_type.name)
-            .filter(item=>param_check(Array.from(item.params.values()),ast.args,item.generic,ast.generic,item.return_type,scope)!=null)
+        const candidates=scope.overload_get(expr_type.name)
+            .filter(item=>param_check(Array.from(item.params.values()),arg_types,item.generic,ast.generic,item.return_type,scope)!=null)
         //具体性决策
-            .filter(item=>{
-                for(const i of functions){
-                    if(i==item)continue
-                    if(param_best(Array.from(i.params.values()),Array.from(item.params.values()),scope))
-                        return false
-                }
-                return true
-            })
+        const functions=candidates.filter(item=>{
+            for(const i of candidates){
+                if(i==item)continue
+                if(param_best(Array.from(i.params.values()),Array.from(item.params.values()),scope))
+                    return false
+            }
+            return true
+        })
         if(functions.length==0)
             scope.thr('重载决议失败,没有符合条件的重载',ast)
         if(functions.length>1)
             scope.thr('重载决议失败,有多个符合条件的重载',ast)
+        if(functions.length!=1)
+            return
         const function_=functions[0]
         ast.call_target=function_.global_local.join('.')+'@'+function_.index
         let generic:Map<string,Type>=new Map()

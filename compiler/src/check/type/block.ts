@@ -22,7 +22,7 @@ const Type_File:slang_check_visitor=(ast:File,scope,call)=>{
     scope=scope.leave()
 }
 const Type_Module:slang_check_visitor=(ast:Module,scope,call)=>{
-    ast.type=new BlockType(scope.global.path.split('.'))
+    ast.type=new BlockType(ast.global_local)
     scope=scope.enter()
     scope.set('up',new BlockType(scope.global.path.split('.'),true))
     symbol_iden(ast.children,scope)
@@ -37,7 +37,7 @@ const Type_Value:slang_check_visitor=(ast:Value,scope,call)=>{
     scope=scope.leave()
 }
 const Type_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
-    ast.type=new BlockType(scope.global.path.split('.'))
+    ast.type=new BlockType(ast.global_local)
     scope=scope.enter()
     scope.set('up',new BlockType(scope.global.path.split('.'),true))
     scope.set('this',new ReferenceType(new ClassType(ast.global_local,Array.from(ast.generic.values()),true)))
