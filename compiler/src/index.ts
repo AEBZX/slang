@@ -19,7 +19,7 @@ const toolToRound=new Map<string,number>([
     ['optimize',6],
     ['generate',7]
 ])
-type plugin=(tool:PeepholeTool[])=>PeepholeTool[]
+type plugin=(tool:PeepholeTool[],config:any)=>PeepholeTool[]
 class Runner{
     tool:PeepholeTool[]=[]
     plu:plugin[]=[]
@@ -31,9 +31,9 @@ class Runner{
         this.plu.push(...pl)
         return this
     }
-    run(code:string[]){
+    run(code:string[],config:any){
         let ret:any=code
-        for(const i of this.plu) this.tool=i(this.tool)
+        for(const i of this.plu) this.tool=i(this.tool,config)
         for(const t of this.tool){
             if(t==null)continue
             const out=t.run(ret)
@@ -49,7 +49,7 @@ class Runner{
         return ret
     }
 }
-export default function(code:string[],plugin:plugin[]=[]){
+export default function(code:string[],plugin:plugin[]=[],config:any){
     return new Runner().register(lexer).register(parser).register(check).register(desugar).register(hir).register(ir)
-        .register(optimize).register(generate).plugin(...plugin).run(code)
+        .register(optimize).register(generate).plugin(...plugin).run(code,config)
 }

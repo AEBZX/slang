@@ -2,17 +2,16 @@ import {
     BINARY,
     BIT_NOT,
     CALL,
-    CMP, ControlStream, ControlStreamCond,
+    ControlStream, ControlStreamCond,
     CZ, DELETE, GC, IN, INT, INT_GET, INT_REGISTER, IRArgs,
     IRTree,
     JMP,
     JZ,
-    LOAD,
     MOV,
-    NOT, OFFSET_ADDR, OFFSET_GET,
-    OFFSET_SET, OFFSET_STR_ADDR, OFFSET_STR_GET, OFFSET_STR_SET, OUT, PARAM_LOAD, PARAM_SET,
+    NOT, OFFSET_GET,
+    OFFSET_SET, OUT, PARAM_LOAD, PARAM_SET,
     POP,
-    PUSH,
+    PUSH, REF,
     RET,
     THREAD,
     TZ
@@ -21,39 +20,30 @@ import Generate from './utils/lib/generate'
 import {OPTTool} from './optimize/tool'
 //指令4字节,3参数12字节,共16字节
 export type slang_generate_visitor=(data:IRTree)=>Buffer
-//实际为command r/v r/v r/v形式所以一个占8位偏移
 const CommandOffset=new Map<any,number>([
-    [LOAD,0],
-    [MOV,1],
-    //binary有更多类型,add,sub,mul,div,mod,shl,shr,and,or,xor,共10个
-    [BINARY,2],
-    [CMP,12],
-    [NOT,13],
-    [BIT_NOT,14],
-    [JMP,15],
-    [CALL,16],
-    [THREAD,17],
-    [JZ,18],
-    [CZ,19],
-    [TZ,20],
-    [RET,21],
-    [PUSH,22],
-    [POP,23],
-    [OFFSET_SET,24],
-    [OFFSET_GET,25],
-    [OFFSET_ADDR,26],
-    [OFFSET_STR_SET,27],
-    [OFFSET_STR_GET,28],
-    [OFFSET_STR_ADDR,29],
-    [IN,30],
-    [OUT,31],
-    [GC,32],
-    [DELETE,33],
-    [PARAM_SET,34],
-    [PARAM_LOAD,35],
-    [INT_REGISTER,36],
-    [INT,37],
-    [INT_GET,38]
+    [MOV,0],
+    [REF,1],
+    [JZ,2],
+    [CZ,3],
+    [TZ,4],
+    [JMP,5],
+    [CALL,6],
+    [THREAD,7],
+    [RET,8],
+    [PUSH,9],
+    [POP,10],
+    [OFFSET_SET,11],
+    [OFFSET_GET,12],
+    [IN,13],
+    [OUT,14],
+    [GC,15],
+    [DELETE,16],
+    [INT,17],
+    [INT_REGISTER,18],
+    [INT_GET,19],
+    [NOT,20],
+    [BIT_NOT,21],
+    [BINARY,22]
 ])
 const BinaryOffset=new Map<string,number>([
     ['add',0],
@@ -65,19 +55,19 @@ const BinaryOffset=new Map<string,number>([
     ['shr',6],
     ['and',7],
     ['or',8],
-    ['xor',9]
+    ['xor',9],
+    ['eq',10],
+    ['grt',11],
+    ['smr',12]
 ])
-//操作数形式偏移:三个操作数的 reg/value 就是三位,reg=0、value=1
 function offest(v1:IRArgs,v2:IRArgs,v3:IRArgs){
     return (v1.type=='value'?4:0)+(v2.type=='value'?2:0)+(v3.type=='value'?1:0)
 }
 function ins_id(data:IRTree,v1:IRArgs,v2:IRArgs,v3:IRArgs){
     let ins_offset:number=null
     for(const [key,value] of CommandOffset)
-        if(data.constructor===key)ins_offset=value
-    if(ins_offset==null)
-        for(const [key,value] of CommandOffset)
-            if(data instanceof key)ins_offset=value
+        if(data instanceof key)
+            ins_offset=value
     const type_offset=data instanceof BINARY?BinaryOffset.get(data.id):0
     const v_offset=offest(v1,v2,v3)
     return (ins_offset+type_offset)*8+v_offset
@@ -93,100 +83,81 @@ function fill(data:IRTree,v1:IRArgs=null,v2:IRArgs=null,v3:IRArgs=null){
     buffer.writeUint32BE(v3.data,12)
     return buffer
 }
-const G_LOAD:slang_generate_visitor=(data:LOAD)=>fill(data,data.reg,data.data)
 const G_MOV:slang_generate_visitor=(data:MOV)=>fill(data,data.left,data.right)
-const G_BINARY:slang_generate_visitor=(data:BINARY)=>fill(data,data.result,data.left,data.right)
-const G_NOT_BIT_NOT:slang_generate_visitor=(data:NOT|BIT_NOT)=>fill(data,data.left,data.right)
-const G_CMP:slang_generate_visitor=(data:CMP)=>fill(data,data.left,data.right,data.oper)
-const G_ControlStream:slang_generate_visitor=(data:ControlStream)=>{
-    if(data instanceof ControlStreamCond)return fill(data,data.target,data.frame,data.cond)
-    return fill(data,data.target,data.frame)
-}
+const G_REF:slang_generate_visitor=(data:REF)=>fill(data,data.left,data.right)
+const G_JZ:slang_generate_visitor=(data:JZ)=>fill(data,data.target,data.frame,data.cond)
+const G_CZ:slang_generate_visitor=(data:CZ)=>fill(data,data.target,data.frame,data.cond)
+const G_TZ:slang_generate_visitor=(data:TZ)=>fill(data,data.target,data.frame,data.cond)
+const G_JMP:slang_generate_visitor=(data:JMP)=>fill(data,data.target,data.frame)
+const G_CALL:slang_generate_visitor=(data:CALL)=>fill(data,data.target,data.frame)
+const G_THREAD:slang_generate_visitor=(data:THREAD)=>fill(data,data.target,data.frame)
 const G_RET:slang_generate_visitor=(data:RET)=>fill(data,data.frame)
 const G_PUSH:slang_generate_visitor=(data:PUSH)=>fill(data,data.target)
 const G_POP:slang_generate_visitor=(data:POP)=>fill(data)
 const G_OFFSET_SET:slang_generate_visitor=(data:OFFSET_SET)=>fill(data,data.target,data.offset,data.value)
-const G_OFFSET_GET:slang_generate_visitor=(data:OFFSET_GET)=>fill(data,data.target,data.data,data.offset)
-const G_IN_OUT:slang_generate_visitor=(data:IN|OUT)=>fill(data,data.oper,data.target)
+const G_OFFSET_GET:slang_generate_visitor=(data:OFFSET_GET)=>fill(data,data.data,data.target,data.offset)
+const G_IN:slang_generate_visitor=(data:IN)=>fill(data,data.oper,data.target)
+const G_OUT:slang_generate_visitor=(data:OUT)=>fill(data,data.oper,data.target)
 const G_GC:slang_generate_visitor=(data:GC)=>fill(data)
 const G_DELETE:slang_generate_visitor=(data:DELETE)=>fill(data,data.data)
-const G_PARAM_SET:slang_generate_visitor=(data:PARAM_SET)=>fill(data,data.param,data.value)
-const G_PARAM_LOAD:slang_generate_visitor=(data:PARAM_LOAD)=>fill(data,data.data,data.param)
-const G_INT_REGISTER:slang_generate_visitor=(data:INT_REGISTER)=>fill(data,data.block)
 const G_INT:slang_generate_visitor=(data:INT)=>fill(data,data.data)
+const G_INT_REGISTER:slang_generate_visitor=(data:INT_REGISTER)=>fill(data,data.block)
 const G_INT_GET:slang_generate_visitor=(data:INT_GET)=>fill(data,data.left)
+const G_NOT:slang_generate_visitor=(data:NOT)=>fill(data,data.left,data.right)
+const G_BIT_NOT:slang_generate_visitor=(data:BIT_NOT)=>fill(data,data.left,data.right)
+const G_BINARY:slang_generate_visitor=(data:BINARY)=>fill(data,data.result,data.left,data.right)
 export default new Generate().use(new Map<any,slang_generate_visitor>([
-    [LOAD,G_LOAD],
     [MOV,G_MOV],
-    [BINARY,G_BINARY],
-    [NOT,G_NOT_BIT_NOT],
-    [BIT_NOT,G_NOT_BIT_NOT],
-    [CMP,G_CMP],
-    [JMP,G_ControlStream],
-    [CALL,G_ControlStream],
-    [THREAD,G_ControlStream],
-    [JZ,G_ControlStream],
-    [CZ,G_ControlStream],
-    [TZ,G_ControlStream],
+    [REF,G_REF],
+    [JZ,G_JZ],
+    [CZ,G_CZ],
+    [TZ,G_TZ],
+    [JMP,G_JMP],
+    [CALL,G_CALL],
+    [THREAD,G_THREAD],
     [RET,G_RET],
     [PUSH,G_PUSH],
     [POP,G_POP],
     [OFFSET_SET,G_OFFSET_SET],
     [OFFSET_GET,G_OFFSET_GET],
-    [OFFSET_ADDR,G_OFFSET_GET],
-    [OFFSET_STR_SET,G_OFFSET_SET],
-    [OFFSET_STR_GET,G_OFFSET_GET],
-    [OFFSET_STR_ADDR,G_OFFSET_GET],
-    [IN,G_IN_OUT],
-    [OUT,G_IN_OUT],
+    [IN,G_IN],
+    [OUT,G_OUT],
     [GC,G_GC],
     [DELETE,G_DELETE],
-    [PARAM_SET,G_PARAM_SET],
-    [PARAM_LOAD,G_PARAM_LOAD],
-    [INT_REGISTER,G_INT_REGISTER],
     [INT,G_INT],
-    [INT_GET,G_INT_GET]
-])).use((tool:OPTTool,call)=>{
+    [INT_REGISTER,G_INT_REGISTER],
+    [INT_GET,G_INT_GET],
+    [NOT,G_NOT],
+    [BIT_NOT,G_BIT_NOT],
+    [BINARY,G_BINARY]
+]))
+.use((scope:OPTTool,call)=>{
     let head:Buffer[]=[]
-    head.push(Buffer.from('SLANG','utf-8'),Buffer.from('1.0.0','utf-8'))
-    //max_id
-    const max_id=Buffer.alloc(4)
-    max_id.writeUint32BE(tool.index,0)
+    head.push(Buffer.from('SLANG','utf-8'),Buffer.from('bzx-ins1','utf-8'))
+    let max_id=Buffer.alloc(8)
+    max_id.writeBigUint64BE(BigInt(scope.index))
     head.push(max_id)
     let pool:Buffer[]=[]
     pool.push(Buffer.from('POOL_START','utf-8'))
-    for(const [k,v] of tool.pool){
-        const type:number=typeof v=='number'?1:0
-        let head=Buffer.alloc(9)
-        const data=type==1?(()=>{
-            let ls=Buffer.alloc(8)
-            ls.writeDoubleBE(v as number,0)
-            return ls
-        })():Buffer.from(v as string,'utf-8')
-        head.writeUint32BE(k,0)
-        head.writeUint8(type,4)
-        head.writeUint32BE(data.length,5)
-        pool.push(head,data)
+    for(const data of scope.pool){
+        let pool_data=Buffer.alloc(4)
+        pool_data.writeUint32BE(data)
+        pool.push(pool_data)
     }
     pool.push(Buffer.from('POOL_END','utf-8'))
     let code:Buffer[]=[]
     code.push(Buffer.from('CODE_START','utf-8'))
-    for(const [id,ir] of tool.command){
-        let block=Buffer.alloc(16)
-        block.writeUint32BE(0xFFFFFFFF,0)
-        block.writeUint32BE(id,4)
-        block.writeUint32BE(0,8)
-        block.writeUint32BE(0,12)
-        let commands:Buffer[]=[]
-        for(const command of ir)
-            commands.push(call(command))
-        code.push(block,Buffer.concat(commands))
-        let end=Buffer.alloc(16)
-        end.writeUint32BE(0xFFFFFFFF-1,0)
-        end.writeUint32BE(0,4)
-        end.writeUint32BE(0,8)
-        end.writeUint32BE(0,12)
-        code.push(end)
+    for(const [number,data] of scope.code){
+        let code_data:Buffer[]=[]
+        code_data.push(Buffer.from('BLOCK_START','utf-8'))
+        let id=Buffer.alloc(4)
+        id.writeUint32BE(number)
+        code_data.push(id)
+        for(const ins of data)
+            code_data.push(call(ins))
+        code_data.push(Buffer.from('BLOCK_END','utf-8'))
+        code.push(...code_data)
     }
+    code.push(Buffer.from('CODE_END','utf-8'))
     return Buffer.concat([...head,...pool,...code])
 })
