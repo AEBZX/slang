@@ -1,4 +1,5 @@
 import {ASTTree} from '../../data'
+import {Block} from './block'
 export class Type extends ASTTree{}
 export class BasicType extends Type{}
 export class LiteralType extends BasicType{}
@@ -17,12 +18,12 @@ export class LambdaType extends BasicType{
     }
 }
 export class ClassType extends BasicType{
-    constructor(public local:string[],public generic:Type[]=[],public _this:boolean=false){
+    constructor(public local:string[],public field:Block[]){
         super()
     }
 }
 export class BlockType extends BasicType{
-    constructor(public local:string[],public _this:boolean=false){
+    constructor(public local:string[],public field:Block[]){
         super()
     }
 }

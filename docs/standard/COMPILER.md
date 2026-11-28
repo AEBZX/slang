@@ -40,8 +40,8 @@
 
 # 3 Conformance [conform]
 
-- **[conform]/1** 合觃编译器 shall 接受所有 well-formed 程序并产出符合 [binfmt] 的二进制。
-- **[conform]/2** 合觃编译器 shall 诊断所有 ill-formed 程序，并以非空诊断消息拒绝产出二进制。
+- **[conform]/1** 合法编译器 shall 接受所有 well-formed 程序并产出符合 [binfmt] 的二进制。
+- **[conform]/2** 合法编译器 shall 诊断所有 ill-formed 程序，并以非空诊断消息拒绝产出二进制。
 - **[conform]/3** 诊断消息 shall 包含触发点的行号信息。
 - **[conform]/4** 对标注 UB 的构造，编译器不承担 [conform]/2 的诊断义务。
 - **[conform]/5** 目标 `bzx-ins1` 的合觃编译器 shall 按 [toolchain] 暴露工具链接口。
@@ -144,18 +144,22 @@ value-block := 'value' 字面量类型 '{' (operation | cast)* '}'
 
 ```
 块        := 修饰符* 名字 ':' 块体
-块体      := module 体 | class 体 | interface 体 | enum 体 | 函数 | 变量
+块体      := module 体 | class 体 | interface 体 | enum 体 | 函数 | 变量 | operation体 | cast 体
 函数      := 泛型声明? 返回类型 '(' 参数 (',' 参数)* ')' 函数体
 函数体    := 命令 | ';'
 变量      := 类型 ('=' 表达式)? ';'
 enum      := 'enum' '{' 标识符 (',' 标识符)* '}'
 class     := 'class' 泛型声明? 'implements' 类型? '{' 块* '}'
+
 ```
 
 - **[grammar.block]/1** 函数体省略（`;`）表示无实现声明。
 - **[grammar.block]/2** 同一作用域内同名函数构成重载组；同名非函数块与函数块混用 ill-formed。
 - **[grammar.block]/3** enum 子项重名 ill-formed。
 - **[grammar.block]/4** class/interface 的 `implements` 子句可选；引用的必须是 interface，否则 ill-formed。
+- **[grammar.block]/5** class/interface 的成员只能是函数、变量、operation 或 cast（[grammar.op]）；module 的成员只能是块；enum 的成员只能是标识符。
+- **[grammar.block]/6** class/interface 的 operation/cast 成员不带名字前缀；其重载键为该类实例类型（[static.overload]）。
+- **[grammar.block]/7** 未有实现支持的构件见 [gaps]。
 
 ## 6.3 Modifiers [grammar.mod]
 
@@ -186,7 +190,13 @@ class     := 'class' 泛型声明? 'implements' 类型? '{' 块* '}'
 lambda 类型 := 泛型声明? '(' 参数类型 (',' 参数类型)* ')' '=>' 类型
 ```
 
-## 6.6 Operations and casts [grammar.op]
+## 6.6 number model [grammar.number]
+
+- **[grammar.number]/1** `number` 的存储为任意精度：uint32 范围内的值直接表示。
+- **[grammar.number]/2** 参与 number 运算的值超出 uint32 时，运算行为 UB（[ub.bignum]）。
+- **[grammar.number]/3** boolean 以 0/1 数表示。
+
+## 6.7 Operations and casts [grammar.op]
 
 ```
 operation := 'operation' 运算符 lambda
@@ -196,7 +206,8 @@ cast      := 'cast' 类型 lambda
 
 - **[grammar.op]/1** cast 的 lambda 必须恰有一个参数；否则 ill-formed。
 - **[grammar.op]/2** operation 的 lambda 必须至少有一个参数；否则 ill-formed。
-- **[grammar.op]/3** 后缀 `++`/`--` 的 operation 签名固定为 `(操作数, number)`；前缀 `++`/`--` 为 `(操作数)` 单参数。
+- **[grammar.op]/3** 后缀 `++`/`--` 的 operation 签名固定为 `(操作数, number)`；前缀 `++`/`--` 为 `(操作数)` 单参数；两参版本与单参版本可共存，按使用点形态区分。
+- **[grammar.op]/4** 运算符 `[]` 与 `()` 为双 token 构成，源码中 shall 不加引号书写（`operation []`、`operation ()`）；加引号形式 ill-formed。
 
 ---
 
@@ -208,6 +219,7 @@ cast      := 'cast' 类型 lambda
 - **[static.name]/2** 变量在符号表中以其类型登记；module/class/function 以块实体登记。
 - **[static.name]/3** link 别名指称被链接的顶层块；被链接模块不存在 ill-formed。
 - **[static.name]/4** class/interface 内 `this` 指称自身实例；module 内 `up` 指称父块。
+- **[static.name]/5** label 的作用域为其所在函数；同一函数内 label 唯一，否则 ill-formed；goto 允许前向引用。
 
 ## 7.2 Type rules [static.type]
 
@@ -225,7 +237,9 @@ cast      := 'cast' 类型 lambda
 - **[static.overload]/1** 调用 `f(a₁,…,aₙ)` 的候选为同名重载组全体；候选按参数相容筛选后按具体性决议：若存在参数比候选更具体的其他候选，则该候选被淘汰。
 - **[static.overload]/2** 恰有一个存活候选 → 决议成功；零个或多个 → ill-formed。
 - **[static.overload]/3** 显式泛型实参在相容筛选前注入。
-- **[static.overload]/4** operation/cast 决议同上：先按签名相容筛选，再做具体性决议，必须唯一。
+- **[static.overload]/4** operation/cast 决议同上：先按签名相容筛选，再做具体性决议，必须唯一；具体性比较只在通过筛选的候选间进行，且要求候选参数个数相同。
+- **[static.overload]/5** operation 的重载键为接收者类型（第一形参）；cast 的重载键为其输出类型，使用点按目标类型查询。
+- **[static.overload]/6** 命中重载后，运算符/转换使用点绑定到该 operation/cast 的指称（宿主路径 + `operation@`/`cast@` + 序号），脱糖将其落地为一次函数调用。
 
 ## 7.4 Diagnostics [static.diag]
 
@@ -249,6 +263,7 @@ cast      := 'cast' 类型 lambda
 - **[runtime.order]/7** 三元 `c ? a : b`：先求 c；仅求值被选中分支。
 - **[runtime.order]/8** 数组/对象字面量：元素/成员自左向右求值并写入。
 - **[runtime.order]/9** `&&`/`||`/`!=` 无内建语义，求值顺序由其标准库 operation 定义（[std]）。
+- **[runtime.order]/10** 表达式语句：求值表达式并丢弃其值。
 
 ## 8.2 Variables [runtime.var]
 
@@ -263,6 +278,7 @@ cast      := 'cast' 类型 lambda
 - **[runtime.call]/3** `return e` 求值 e 并将值作为调用结果返回；无值 `return` 返回 null。
 - **[runtime.call]/4** 函数体执行至末尾等同执行了无值 `return`（缺失 RET 为 UB，见 [ub.ret]）。
 - **[runtime.call]/5** `unstatic` 函数经接收者调用时，接收者占据参数区第一槽绑定 `this`。
+- **[runtime.call]/6** `new C(a₁,…,aₙ)` 求值为调用 `C.constructor`，实参为 a₁..aₙ，接收者为正在构造的实例；constructor 体末尾隐式返回该实例，实例即 `new` 表达式的值。
 
 ## 8.4 Loops [runtime.loop]
 
@@ -279,7 +295,21 @@ cast      := 'cast' 类型 lambda
 - **[runtime.exc]/3** finally 体在 try 正常结束与 catch 结束后各执行一次。
 - **[runtime.exc]/4** 无处理块覆盖的中断：行为 UB。
 
-## 8.6 await [runtime.await]
+## 8.6 Semantic equivalences [dsugar]
+
+以下改写为规范性的语义等价：改写前后程序的可观测行为 shall 相同。实现可以采用任何产生相同可观测行为的机制。
+
+- **[dsugar]/1** `var x: T = v;` ≡ 引入槽 x 并执行赋值 x = v。
+- **[dsugar]/2** `x op= v;` ≡ `x = x op v`。
+- **[dsugar]/3** 表达式语句 ≡ 求值表达式并丢弃其值。
+- **[dsugar]/4** `while (c) body` ≡ 重复`求值 c；为真则求值 body`；`do body while (c)` ≡ 先求值 body 一次再循环；`for (init; c; step) body` ≡ init、`while (c) { body; step }`。
+- **[dsugar]/5** `break`/`continue` ≡ 转移到最近层循环的出口/继续点。
+- **[dsugar]/6** `switch (x) { case v₁ => s₁ … default => sd }` ≡ 依序比较 x 与各 vᵢ，命中执行对应 sᵢ，否则执行 sd。
+- **[dsugar]/7** 函数指称 ≡ 一个以其形参、返回类型与体定义的函数值；module 下函数为 static（无接收者）。
+- **[dsugar]/8** enum `E { A, B }` ≡ 一组以成员名指称、值为序号的 number 常量。
+- **[dsugar]/9** value 块 ≡ 以字面量类型名指称的 operation/cast 集合。
+
+## 8.7 await [runtime.await]
 
 - **[runtime.await]/1** `await 命令` 将命令作为独立协程启动；不阻塞当前执行流，两者的相对顺序 unspecified。
 
@@ -378,7 +408,7 @@ uint64BE           id 空间总长（块号+槽号上限）
 # 11 Standard library requirements [std]
 
 - **[std]/1** 以下 operation 由标准库提供，签名与语义由标准库规范定义；标准库缺失时程序按 [ub.logic] 处理：`!=` `&&` `||`。
-- **[std]/2** `!=`/`&&`/`||` 之外的运算符内建于 [lang.expr] 与 [isa]；指针解引用/取地址内建于 [lang.expr]。
+- **[std]/2** `!=`/`&&`/`||` 之外的运算符内建于 [static.type] 与 [isa]；指针解引用/取地址内建于 [static.type]（[lang.expr]/7）。
 - **[std]/3** 非 32 位 int 的 number 算术运算（任意精度路径）行为 UB（[ub.bignum]）。
 - **[std]/4** 字符串及容器设施由标准库提供。
 

@@ -275,13 +275,11 @@ export function type_is(a:Type,b:Type,scope:Scope){
 export function type_sub(a:Type,b:Type,scope:Scope):boolean{
     if(a==null||b==null)return false
     if(a instanceof VoidType) return true
-    if(a.constructor==b.constructor)return true
+    if(b instanceof VoidType) return true
     if(a instanceof ReferenceType)return type_sub(a.t,b,scope)
     if(b instanceof ReferenceType)return type_sub(a,b.t,scope)
-    if(a instanceof PointType)return type_sub(a.t,b,scope)
-    if(b instanceof PointType)return type_sub(a,b.t,scope)
-    if(a instanceof ArrayType)return type_sub(a.t,b,scope)
-    if(b instanceof ArrayType)return type_sub(a,b.t,scope)
+    if(a instanceof ArrayType&&b instanceof ArrayType)return type_sub(a.t,b.t,scope)
+    if(a instanceof PointType&&b instanceof PointType)return type_sub(a.t,b.t,scope)
     if(a instanceof LambdaType&&b instanceof LambdaType){
         //a的泛型都是b的泛型的子类型
         for(const [key,value] of a.generic){
@@ -308,13 +306,15 @@ export function type_sub(a:Type,b:Type,scope:Scope):boolean{
 //要求两者length相同
 //也可以用于泛型相容性检查
 export function param_best(param1:Type[],param2:Type[],scope:Scope){
+    if(param1.length!=param2.length)return false
     return param1.every((v,i)=>type_sub(v,param2[i],scope))
 }
 export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...param:Type[]){
     const oper_type=param[0]
     let operations:Operation[]=[]
-    for(const [key,value] of scope.operation)
+    for(const [key,value] of scope.global.operation)
         if(type_sub(oper_type,key,scope))operations.push(...value)
+    operations=[...new Set(operations)]
     operations=operations.filter(v=>v.oper==oper)
         .filter(v=>type_sub(v.command.ret,ret,scope))
         .filter(v=>v.command.params.size==param.length)
@@ -322,16 +322,18 @@ export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...pa
             for(let i=0;i<v.command.params.size;i++)
                 if(!type_sub(Array.from(v.command.params.values())[i],param[i],scope))return false
             return true
-        })//存在一个不等于他的operation,参数比他更具体,pass
-        .filter(v=>{
-            for(const operation of operations){
-                if(v==operation)continue
-                if(param_best(Array.from(operation.command.params.values()),
-                              Array.from(v.command.params.values()),scope))
-                    return false
-            }
-            return true
         })
+    //具体性决议只在过滤后存活的候选间比较
+    const survivors=operations
+    operations=operations.filter(v=>{
+        for(const operation of survivors){
+            if(v==operation)continue
+            if(param_best(Array.from(operation.command.params.values()),
+                          Array.from(v.command.params.values()),scope))
+                return false
+        }
+        return true
+    })
     if(operations.length==0)return null
     if(operations.length!=1){
         scope.thr(`${oper}中存在无法进行具体性决议的operation`,ast)
@@ -341,22 +343,27 @@ export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...pa
 }
 export function cast_get(scope:Scope,ast:ASTTree,input:Type,output:Type){
     let casts:Cast[]=[]
-    for(const [key,value] of scope.cast)
+    for(const [key,value] of scope.global.cast)
         if(type_sub(output,key,scope))
             casts.push(...value)
+    //同一 cast 会以多个键注册(build/symbol 各一次),按对象身份去重
+    casts=[...new Set(casts)]
     casts=casts.filter(v=>{
         //cast只有一个参数
         const param=Array.from(v.command.params.values())[0]
         return type_sub(param, input, scope)
     })
-        .filter(v=>{
-            for(const cast of casts){
-                if(cast==v)continue
-                if(param_best(Array.from(cast.command.params.values()),
-                              Array.from(v.command.params.values()),scope))
-                    return false
-            }
-        })
+    //具体性决议只在过滤后存活的候选间比较
+    const survivors=casts
+    casts=casts.filter(v=>{
+        for(const cast of survivors){
+            if(cast==v)continue
+            if(param_best(Array.from(cast.command.params.values()),
+                          Array.from(v.command.params.values()),scope))
+                return false
+        }
+        return true
+    })
     if(casts.length==0)return null
     if(casts.length!=1){
         scope.thr(`存在无法进行具体性决议的cast`,ast)
@@ -369,7 +376,7 @@ export function try_bool(scope:Scope,ast:Expression){
     if(ast.type instanceof BooleanType)return
     const cast=cast_get(scope,ast,ast.type,new BooleanType())
     if(cast==null)return
-    ast.cast=cast.global_local.join('.')+'.'+cast.id
+    ast.cast=cast.global_local.join('.')+'.cast@'+cast.id
     ast.type=new BooleanType()
 }
 //将左值类型转换为便于计算的纯右值类型
@@ -445,7 +452,8 @@ export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map
 export function fast_operation(scope:Scope,ast:Expression,op:string,ret:Type,...param:(Expression|Type)[]){
     const operation=operation_get(scope,ast,op,ret,...param.map(v=>v instanceof Expression?v.type:v))
     if(operation!=null){
-        ast.type=operation.type
+        //operation 节点的类型即其 lambda 的返回类型
+        ast.type=operation.command.ret
         ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
         return true
     }

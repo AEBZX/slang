@@ -20,6 +20,7 @@ export function de_operation(ast:ASTTree,oper:string,...param:Expression[]){
 }
 export function de_cast(cast:string,data:Expression){
     if(cast==null)return data
+    data.cast=null
     let ret:Expression=null
     for(const i of cast.split('.')){
         if(ret==null)ret=new IdentifierExpr(i)

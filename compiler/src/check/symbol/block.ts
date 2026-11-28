@@ -81,7 +81,7 @@ const Symbol_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     call(ast.command,2,scope)
 }
 const Symbol_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
-    scope.global.cast_set(scope.cast_oper_type,ast)
+    scope.global.cast_set(ast.t,ast)
     call(ast.t,2,scope)
     call(ast.command,2,scope)
 }

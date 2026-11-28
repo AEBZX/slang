@@ -76,7 +76,7 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
         //=的参数基础上在加一个滚木number就是初始化'='
         const operation=operation_get(scope,ast,'=',ast.t,ast.value.type||new VoidType(),new NumberType())
         if(operation!=null){
-            ast.t=operation.type
+            ast.t=operation.command.ret
             ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
             return
         }
@@ -112,7 +112,7 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
         return
     const cast=cast_get(scope,ast,ast.data.type,scope.ret)
     if(cast!=null){
-        ast.data.cast=cast.global_local.join('.')+'.'+cast.id
+        ast.data.cast=cast.global_local.join('.')+'.cast@'+cast.id
         ast.data.type=cast.type
         return
     }
@@ -155,9 +155,9 @@ const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
         //是否重载
         const operation=operation_get(scope,ast,ast.iden,ast.data,new ArrayType(new VoidType()))
         if(operation!=null){
-            ast.iden_type=(operation.type as ArrayType).t
-            ast.data.type=operation.type
-            ast.data.oper=operation.global_local.join('.')+'.'+operation.index
+            ast.iden_type=(operation.command.ret as ArrayType).t
+            ast.data.type=operation.command.ret
+            ast.data.oper=operation.global_local.join('.')+'.operation@'+operation.index
             return
         }
         if(to_right(ast.data.type) instanceof ArrayType){
@@ -167,7 +167,7 @@ const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
         //尝试强转
         const cast=cast_get(scope,ast,ast.data.type,new ArrayType(new VoidType()))
         if(cast!=null){
-            ast.data.cast=cast.global_local.join('.')+'.'+cast.id
+            ast.data.cast=cast.global_local.join('.')+'.cast@'+cast.id
             ast.data.type=cast.type
             ast.iden_type=(cast.type as ArrayType).t
             return
@@ -189,7 +189,7 @@ const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
             //尝试强转
             const cast=cast_get(scope,ast,case_.condition.type,ast.condition.type)
             if(cast!=null){
-                case_.condition.cast=cast.global_local.join('.')+'.'+cast.id
+                case_.condition.cast=cast.global_local.join('.')+'.cast@'+cast.id
                 case_.condition.type=cast.type
                 return
             }

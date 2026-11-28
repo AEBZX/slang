@@ -5,7 +5,7 @@ import {
     operation_get,
     param_best,
     param_check,
-    slang_check_visitor, symbol_do_generic, try_bool,
+    slang_check_visitor, symbol_do_generic, to_right, try_bool,
     type_is, type_sub
 } from '../tool'
 import {
@@ -252,8 +252,8 @@ const Type_Reference:slang_check_visitor=(ast:ReferencePrefix,scope,call)=>{
     call(ast.expr,3,scope)
     if(fast_operation(scope,ast,'*',new VoidType(),ast.expr))
         return
-    if(ast.expr.type instanceof PointType){
-        ast.type=new ReferenceType(ast.expr.type.t)
+    if(to_right(ast.expr.type) instanceof PointType){
+        ast.type=new ReferenceType((to_right(ast.expr.type) as PointType).t)
         return
     }
     //转换
@@ -289,7 +289,7 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
     }
     //不能直接调用不然会找不到函数
     call(ast.expr.expr,3,scope)
-    const ast_type=de_ref(ast.expr.expr.type)
+    const ast_type=type_view(ast.expr.expr.type)
     if(!(ast_type instanceof BlockType)){
         scope.thr('new后面得跟类',ast)
         return
@@ -315,7 +315,8 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
 const Type_Binary:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
     call(ast.left,3,scope)
     call(ast.right,3,scope)
-    if(fast_operation(scope,ast,ast.op,new VoidType(),ast.left,ast.right))
+    const fo = fast_operation(scope,ast,ast.op,new VoidType(),ast.left,ast.right)
+    if(fo)
         return
     if(['|','&','==','<','>','&&','||','^'].includes(ast.op)&&ast.left.type instanceof BooleanType&&ast.right.type instanceof BooleanType){
         ast.type=new BooleanType()
@@ -356,8 +357,8 @@ export default new Map<any,slang_check_visitor>([
     [BooleanLiteral,Type_Boolean],
     [NullLiteral,Type_Null],
     [IdentifierExpr,Type_Identifier],
-    [IncrementPostfix,Type_PreInc_Dec],
-    [DecrementPostfix,Type_PreInc_Dec],
+    [IncrementPostfix,Type_Inc_Dec],
+    [DecrementPostfix,Type_Inc_Dec],
     [MemberPostfix,Type_Member],
     [IndexPostfix,Type_Index],
     [ArgumentsPostfix,Type_Arguments],

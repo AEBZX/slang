@@ -174,7 +174,8 @@ void data::Scheduler::yield_self(Task t) {
     else post(t);
     wake();
 }
-void data::Scheduler::shutdown() {
+void data::Scheduler::shutdown()
+{
     {
         std::lock_guard<std::mutex> g(mtx);
         running.store(false);
