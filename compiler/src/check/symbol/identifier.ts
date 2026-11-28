@@ -10,16 +10,11 @@ const Symbol_Lambda:slang_check_visitor=(ast:LambdaType,scope,call)=> {
         call(type,2,scope)
     call(ast.returnType,2,scope)
 }
-const Symbol_ClassType:slang_check_visitor=(ast:ClassType,scope,call)=>{
-    for(const type of ast.generic)
-        call(type,2,scope)
-}
 const Symbol_FixType:slang_check_visitor=(ast:FixType,scope,call)=>{
     call(ast.t,2,scope)
 }
 export default new Map<any,slang_check_visitor>([
     [GenericType,Symbol_Generic],
     [LambdaType,Symbol_Lambda],
-    [ClassType,Symbol_ClassType],
     [FixType,Symbol_FixType]
 ])

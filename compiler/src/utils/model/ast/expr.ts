@@ -49,8 +49,7 @@ export class IndexPostfix extends PostfixExpression{
 }
 export class ArgumentsPostfix extends PostfixExpression{
     public call_target:string=null
-    public cons:boolean=false
-    public local:string[]=null
+    public is_class=false
     constructor(expr:Expression,public generic:Type[],public args:Expression[]) {
         super(expr)
     }

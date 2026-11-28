@@ -29,7 +29,6 @@ const D_Function:slang_desugar_visitor=(node:Function,call)=>{
     if(node.modifiers.unstatic)
         node.params=new Map([...node.params,['this',new ReferenceType(new VoidType())]])
     node.commands=call(node.commands) as Command
-    //构造函数特殊处理,就算不是构造函数也不可达或者没用
     if(node.name=='constructor')
         node.commands=call(new ListCommand([node.commands,new Return(new IdentifierExpr('this'))]))
     return new Variable(node.modifiers,node.name+'@'+node.index,
@@ -40,7 +39,6 @@ const D_Value:slang_desugar_visitor=(node:Value,call)=>{
     return call(new Module(node.modifiers,node instanceof BooleanType?'boolean':'number',node.children))
 }
 const D_Operation:slang_desugar_visitor=(node:Operation,call)=>{
-    //名字不带索引,由 D_Function 统一追加 @index,否则产出 operation@0@0
     const fn=new Function(node.modifiers,'operation',new Map(),new Map(),node.command.ret,node.command.body)
     fn.index=node.index
     return call(fn)

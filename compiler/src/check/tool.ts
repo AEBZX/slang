@@ -1,5 +1,5 @@
 import {
-    ArrayType,
+    ArrayType, Assign,
     ASTTree,
     Block, BooleanType,
     Cast, Class,
@@ -9,7 +9,7 @@ import {
     Module, NumberType,
     Operation, PointType, ReferencePrefix,
     ReferenceType,
-    Type,
+    Type, VarDecl,
     Variable, VoidType
 } from '../utils'
 import {PeepholeScope} from '../utils/lib/tool'
@@ -17,8 +17,11 @@ import {assertType} from 'vitest'
 import ast from '../parser/ast'
 export class Scope extends PeepholeScope{
     parent:Scope
+    block_parent:Scope
     global:Scope
     func:boolean=false
+    block:boolean=false
+    in_new=false
     //标签表
     label:string[]=[]
     //标签需要延迟处理
@@ -28,8 +31,7 @@ export class Scope extends PeepholeScope{
     //符号表
     symbol:Map<string,ASTTree>
     generic:Map<string,Type>
-    overload:Map<string,Function[]>
-    //op,operation
+    //Literal的operation,cast重载
     operation:Map<Type,Operation[]>
     cast:Map<Type,Cast[]>
     cast_oper_type:Type
@@ -43,7 +45,6 @@ export class Scope extends PeepholeScope{
         super(parent,global)
         this.symbol=new Map()
         this.generic=new Map()
-        this.overload=new Map()
         this.operation=new Map()
         this.cast=new Map()
         this.implement=new Map()
@@ -83,15 +84,6 @@ export class Scope extends PeepholeScope{
     public set_generic(name:string,type:Type){
         this.generic.set(name,type)
     }
-    public overload_set(name:string,ast:Function){
-        if(!this.overload.has(name))this.overload.set(name,[ast])
-        if(this.overload.get(name).includes(ast))return
-        ast.index=this.overload.get(name).length
-        this.overload.get(name).push(ast)
-    }
-    public overload_get(name:string):Function[]{
-        return this.overload.get(name)||this.parent?.overload_get(name)||this.global?.overload_get(name)||[]
-    }
     public operation_set(type:Type,ast:Operation){
         if(this.global!=null){
             this.global.operation_set(type,ast)
@@ -116,7 +108,7 @@ export class Scope extends PeepholeScope{
         if(!this.cast.has(name))this.cast.set(name,[ast])
         this.cast.get(name).push(ast)
     }
-    public cast_get(name:Type){
+    public cast_get(name:Type):Cast[]{
         if(this.global!=null)return this.global.cast_get(name)
         return this.cast.get(name)
     }
@@ -125,6 +117,7 @@ export class Scope extends PeepholeScope{
         else this.global.thr(str,ast)
     }
     public get(name:string):ASTTree{
+        if(this.func)return this.symbol.get(name)||this.block_parent?.get(name)||this.global?.get(name)||null
         return this.symbol.get(name)||this.parent?.get(name)||this.global?.get(name)||null
     }
     public lookup(name:string,filter:(ast:ASTTree)=>boolean=()=>true){
@@ -139,8 +132,11 @@ export class Scope extends PeepholeScope{
         if(this._loop)return true
         else return this.parent?.loop()||false
     }
-    public enter(func:boolean=false):Scope{
+    public enter(func:boolean=false,block:boolean=false):Scope{
         let ret=new Scope(this,this.global)
+        if(this.block)ret.block_parent=this
+        else ret.block_parent=this.block_parent
+        ret.block=block
         ret.func=func
         ret.ret=this.ret
         return ret
@@ -162,7 +158,13 @@ function module_merge(a:Module,b:Module){
 //处理前置定义
 export function symbol_iden(ast:Block[],scope:Scope,path:string=''){
     if(ast==null)return
+    let func_index=0
+    let oper_index=0
+    let cast_index=0
     for(const item of ast){
+        if(item instanceof Operation)item.index=oper_index++
+        if(item instanceof Cast)item.id=cast_index++
+        if(item instanceof Function)item.index=func_index++
         //重名
         if(scope.symbol.get(path+item.name)!=null){
             //不报错:函数重名(overload),模块重名(合并)
@@ -173,8 +175,6 @@ export function symbol_iden(ast:Block[],scope:Scope,path:string=''){
                     scope.thr(`合并模块${item.name}时出现修饰符不一致`,item)
                 scope.set(path+item.name,module_merge(block,item))
             }
-            if(block instanceof Function&&item instanceof Function)
-                scope.overload_set(path+item.name,item)
             continue
         }
         scope.set(path+item.name,item)
@@ -198,9 +198,6 @@ export function symbol_check_implement(ast:ASTTree,type:Type,scope:Scope){
         scope.thr('继承的接口不存在',ast)
         return
     }
-    //泛型数量对不对的上
-    if(block.generic.size!=type.generic.length)
-        scope.thr('继承的接口泛型与实际给出的泛型数量不一致',ast)
 }
 export function symbol_do_generic(ast:ASTTree,generic:Map<string,Type>,scope:Scope,call:(ast:ASTTree,round:number)=>void){
     for(const generic_implement of generic.values())
@@ -253,19 +250,6 @@ export function type_is(a:Type,b:Type,scope:Scope){
     }
     //情况5,ClassType,查继承链
     if(a instanceof ClassType&&b instanceof ClassType){
-        //a和b是一个Class/Interface,取generic最小超类型
-        if(a.local==b.local){
-            let ret:ClassType=new ClassType(a.local)
-            for(let i=0;i<a.generic.length;i++)
-                ret.generic.push(type_is(a.generic[i],b.generic[i],scope))
-            return ret
-        }
-        //a implement b,当成b求
-        const implement=scope.global.implement.get(a.local)
-        for(const i of implement){
-            if((i as ClassType).local==b.local)return type_is(b,i,scope)
-            if(scope.global.implement.get(b.local).includes(i))return i
-        }
     }
     if(a instanceof EnumType&&b instanceof EnumType)
         if(a.local==b.local)return a
@@ -309,173 +293,27 @@ export function param_best(param1:Type[],param2:Type[],scope:Scope){
     if(param1.length!=param2.length)return false
     return param1.every((v,i)=>type_sub(v,param2[i],scope))
 }
-export function operation_get(scope:Scope,ast:ASTTree,oper:string,ret:Type,...param:Type[]){
-    const oper_type=param[0]
-    let operations:Operation[]=[]
-    for(const [key,value] of scope.global.operation)
-        if(type_sub(oper_type,key,scope))operations.push(...value)
-    operations=[...new Set(operations)]
-    operations=operations.filter(v=>v.oper==oper)
-        .filter(v=>type_sub(v.command.ret,ret,scope))
-        .filter(v=>v.command.params.size==param.length)
-        .filter(v=>{
-            for(let i=0;i<v.command.params.size;i++)
-                if(!type_sub(Array.from(v.command.params.values())[i],param[i],scope))return false
-            return true
-        })
-    //具体性决议只在过滤后存活的候选间比较
-    const survivors=operations
-    operations=operations.filter(v=>{
-        for(const operation of survivors){
-            if(v==operation)continue
-            if(param_best(Array.from(operation.command.params.values()),
-                          Array.from(v.command.params.values()),scope))
-                return false
-        }
-        return true
-    })
-    if(operations.length==0)return null
-    if(operations.length!=1){
-        scope.thr(`${oper}中存在无法进行具体性决议的operation`,ast)
-        return null
-    }
-    return operations[0]
-}
-export function cast_get(scope:Scope,ast:ASTTree,input:Type,output:Type){
-    let casts:Cast[]=[]
-    for(const [key,value] of scope.global.cast)
-        if(type_sub(output,key,scope))
-            casts.push(...value)
-    //同一 cast 会以多个键注册(build/symbol 各一次),按对象身份去重
-    casts=[...new Set(casts)]
-    casts=casts.filter(v=>{
-        //cast只有一个参数
-        const param=Array.from(v.command.params.values())[0]
-        return type_sub(param, input, scope)
-    })
-    //具体性决议只在过滤后存活的候选间比较
-    const survivors=casts
-    casts=casts.filter(v=>{
-        for(const cast of survivors){
-            if(cast==v)continue
-            if(param_best(Array.from(cast.command.params.values()),
-                          Array.from(v.command.params.values()),scope))
-                return false
-        }
-        return true
-    })
-    if(casts.length==0)return null
-    if(casts.length!=1){
-        scope.thr(`存在无法进行具体性决议的cast`,ast)
-        return null
-    }
-    return casts[0]
-}
-//逻辑上condition不是bool可以被转为condition!=null,但是一般会期望condition是bool,所以如果不是bool,尝试一次转换
-export function try_bool(scope:Scope,ast:Expression){
-    if(ast.type instanceof BooleanType)return
-    const cast=cast_get(scope,ast,ast.type,new BooleanType())
-    if(cast==null)return
-    ast.cast=cast.global_local.join('.')+'.cast@'+cast.id
-    ast.type=new BooleanType()
-}
 //将左值类型转换为便于计算的纯右值类型
 export function to_right(type:Type){
     if(type instanceof ReferenceType)return to_right(type.t)
     return type
 }
-//如果是this,那么不受private限制
-export function block_get(_this:boolean,_static:boolean,path:string,name:string,generic:Type[],scope:Scope){
-    const block=scope.get(path) as Block
-    if(!(block instanceof Module||block instanceof Class||block instanceof Interface||block instanceof Enum))
-        return null
-    if(!_static&&(block instanceof Module||block instanceof Enum))
-        return null
-    if(block instanceof Enum) {
-        if(block.children.includes(name))
-            return new EnumType(block.global_local)
-        return null
-    }
-    const children=block.children
-        .filter(v=>_this||!v.modifiers._private)
-        .filter(v=>!_static||!v.modifiers.unstatic)
-        .filter(v=>v.name==name)
-    if(children.length==0)return null
-    if(children.length==1){
-        if(block instanceof Interface||block instanceof Class&&!_static){
-            //泛型注入
-            let index=0
-            let _generic:Map<string,Type>=new Map()
-            for(const key of block.generic.keys())
-                _generic.set(key,generic[index++])
-            return generic_type_real(children[0].type,_generic,scope)
-        }
-        return children[0].type
-    }
-    //此时100%是函数重载
-    return new LambdaType(new Map(),new Map(),new VoidType(),true,block.global_local.join('.')+'.'+name)
+//类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型,匹配返回true否则false
+export function param_check(ast:ASTTree,param_iden:Map<string,Type>,param_real:Type[],generic_iden:Map<string,Type>,generic_real:Type[],scope:Scope){
+    if(param_iden.size!=param_real.length)
+        return false
+    if(generic_iden.size!=generic_real.length)
+        return false
+    for(const [key,value] of param_iden.entries())
+        if(!type_sub(value,param_real[key],scope))
+            return false
+    for(const [key,value] of generic_iden.entries())
+        if(!type_sub(value,generic_real[key],scope))
+            return false
+    return true
 }
-//得出实际类型
-export function generic_type_real(type:Type,generic:Map<string,Type>,scope:Scope){
-    if(type instanceof FixType){
-        type.t=generic_type_real(type.t,generic,scope)
-        return type
-    }
-    if(type instanceof GenericType){
-        if(!scope.get_generic(type.generic))return generic.get(type.generic)
-        return type
-    }
-    if(type instanceof ClassType){
-        type.generic=type.generic.map(v=>generic_type_real(v,generic,scope))
-        return type
-    }
-    //普通类型(字面量类型等)原样返回,否则 param_check 会拿到 undefined
-    return type
-}
-//类型匹配检查,param_iden为形参,param_real为实参,generic_iden为形式泛型,generic_real为注入泛型
-export function param_check(param_iden:Type[],param_real:Type[],generic_iden:Map<string,Type>,generic_real:Type[],
-                            ret:Type,scope:Scope){
-    if(param_iden.length!=param_real.length)return null
-    if(generic_iden.size!=generic_real.length)return null
-    param_iden=param_iden.map(v=>generic_type_real(v,generic_iden,scope))
-    const generic:Map<string,Type>=new Map()
-    {
-        let index=0
-        for(const key of generic_iden.keys())
-            generic.set(key,generic_real[index++])
-    }
-    param_real=param_real.map(v=>generic_type_real(v,generic,scope))
-    return param_best(param_iden,param_real,scope)&&
-           param_best(Array.from(generic_iden.values()),generic_real,scope)?
-           generic_type_real(ret,generic,scope):null
-}
-export function fast_operation(scope:Scope,ast:Expression,op:string,ret:Type,...param:(Expression|Type)[]){
-    const operation=operation_get(scope,ast,op,ret,...param.map(v=>v instanceof Expression?v.type:v))
-    if(operation!=null){
-        //operation 节点的类型即其 lambda 的返回类型
-        ast.type=operation.command.ret
-        ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
-        return true
-    }
-    return false
-}
-export function fast_cast(scope:Scope,ast:Expression,input:Expression,output:Type){
-    if(type_sub(input.type,output,scope))return true
-    const cast=cast_get(scope,ast,input.type,output)
-    if(cast!=null){
-        ast.type=cast.t
-        input.cast=cast.global_local.join('.')+'.cast@'+cast.id
-        return true
-    }
-    return false
-}
-export function de_ref(type:Type){
-    if(type instanceof ReferenceType)return type.t
-    return type
-}
-//类型视图:符号表里块节点(Module/Class/Function)以 .type 存其类型,普通类型原样返回
 export function type_view(type:Type){
-    const d=de_ref(type)
+    const d=to_right(type)
     if(d instanceof Block)return d.type
     return d
 }
@@ -484,4 +322,159 @@ export function local(scope:Scope,ast:Block){
 }
 export function join_path(base:string,name:string){
     return base==''||base==null?name:base+'.'+name
+}
+//给定type和表做类型推断
+function generic_type_get(type:Type,generic:Map<string,Type>):Type{
+    if(type instanceof GenericType&&generic.has(type.generic))
+        return generic.get(type.generic)
+    if(type instanceof ReferenceType)return new ReferenceType(generic_type_get(type.t,generic))
+    if(type instanceof PointType)return new PointType(generic_type_get(type.t,generic))
+    if(type instanceof ArrayType)return new ArrayType(generic_type_get(type.t,generic))
+    if(type instanceof LambdaType){
+        let ret:LambdaType=new LambdaType(new Map(),new Map(),new VoidType())
+        for(const [key,value] of type.params)
+            ret.params.set(key,generic_type_get(value,generic))
+        for(const [key,value] of type.generic)
+            ret.generic.set(key,generic_type_get(value,generic))
+        ret.returnType=generic_type_get(type.returnType,generic)
+        return ret
+    }
+    if(type instanceof ClassType)
+        return new ClassType(type.local,type.field.map(i=>generic_field_get(i,generic)))
+    return type
+}
+function generic_field_get(ast:Block,generic:Map<string,Type>):Block{
+    if(ast instanceof Variable){
+        let ret=structuredClone(ast)
+        ret.t=generic_type_get(ast.t,generic)
+        return ret
+    }
+    if(ast instanceof Function){
+        let ret=structuredClone(ast)
+        for(const [key,value] of ret.generic)
+            ret.generic.set(key,generic_type_get(value,generic))
+        for(const [key,value] of ret.params)
+            ret.params.set(key,generic_type_get(value,generic))
+        ret.return_type=generic_type_get(ast.return_type,generic)
+        return ret
+    }
+    if(ast instanceof Operation){
+        let ret=structuredClone(ast)
+        ret.command.type=generic_type_get(ast.command.type,generic)
+        return ret
+    }
+    if(ast instanceof Cast){
+        let ret=structuredClone(ast)
+        ret.t=generic_type_get(ast.t,generic)
+        return ret
+    }
+    return ast
+}
+//得到推断后的ClassType
+export function class_generic_type(ast:Class|Interface,generic:Type[],scope:Scope,_this=false){
+    let real_generic=new Map<string,Type>()
+    {
+        let i=0
+        for(const index of ast.generic.keys())
+            real_generic.set(index,generic[i++])
+    }
+    const field=ast.children.filter(i=>i.modifiers.unstatic).filter(i=>this||!i.modifiers._private)
+        .map(i=>generic_field_get(i,real_generic))
+    return new ClassType(ast.global_local,field)
+}
+export function function_generic_type(ast:Function,generic:Type[],scope:Scope){
+    let real_generic=new Map<string,Type>()
+    {
+        let i=0
+        for(const index of ast.generic.keys())
+            real_generic.set(index,generic[i++])
+    }
+    let ret=structuredClone(ast)
+    for(const [key,value] of ret.generic)
+        ret.generic.set(key,generic_type_get(value,real_generic))
+    for(const [key,value] of ret.params)
+        ret.params.set(key,generic_type_get(value,real_generic))
+    ret.return_type=generic_type_get(ast.return_type,real_generic)
+    return ret
+}
+export function operation_get(scope:Scope,ast:Assign|VarDecl|Expression,oper:string,left:Type,...param:Type[]){
+    if(left.type instanceof LiteralType){
+        const operation=scope.operation_get(left.type).filter(i=>i.constructor==ast.constructor)
+            .filter(i=>i.oper==oper)
+            .filter(i=>param_check(ast,i.command.params,[left,...param],new Map(),[],scope))
+            .filter(i=>{
+                //具体性决议,如果自身永远更具体就留下
+                for(const _oper of operation){
+                    if(_oper==i)continue
+                    if(param_best(Array.from(_oper.command.params.values()),Array.from(i.command.params.values()),scope))
+                        return false
+                }
+                return true
+            })
+        if(operation.length==0)return null
+        return operation[0]
+    }
+    if(left.type instanceof ClassType){
+        const operation=left.type.field.filter(i=>i instanceof Operation)
+            .filter(i=>i.oper==oper)
+            .filter(i=>param_check(ast,i.command.params,param,new Map(),[],scope))
+            .filter(i=>{
+                for(const _oper of operation){
+                    if(_oper==i)continue
+                    if(param_best(Array.from(_oper.command.params.values()),Array.from(i.command.params.values()),scope))
+                        return false
+                }
+                return true
+            })
+        if(operation.length==0)return null
+        return operation[0]
+    }
+    return null
+}
+export function cast_get(scope:Scope,ast:Assign|VarDecl|Expression,data:Type,qiw:Type){
+    if(data instanceof LiteralType){
+        const cast=scope.cast_get(data).filter(i=>i.constructor==ast.constructor)
+            .filter(i=>!(type_is(Array.from(i.command.params.values())[0],qiw,scope) instanceof VoidType))
+            .filter(i=>type_sub(i.t,qiw,scope))
+            .filter(i=>{
+                for(const _cast of cast){
+                    if(_cast==i)continue
+                    if(type_sub(_cast.t,_cast.t,scope))
+                        return false
+                }
+                return true
+            })
+        if(cast.length==0)return null
+        return cast[0]
+    }
+    if(data instanceof ClassType){
+        const cast=data.field.filter(i=>i instanceof Cast)
+            .filter(i=>!(type_is(i.command.ret,qiw,scope) instanceof VoidType))
+            .filter(i=>{
+                for(const _cast of cast){
+                    if(_cast==i)continue
+                    if(type_sub(_cast.t,_cast.t,scope))
+                        return false
+                }
+                return true
+            })
+        if(cast.length==0)return null
+        return cast[0]
+    }
+    return null
+}
+export function fast_operation(scope:Scope,ast:Assign|VarDecl|Expression,oper:string,left:Type,...param:(Type|Expression)[]){
+    param=param.map(i=>i instanceof Expression?i.type:i)
+    const operation=operation_get(scope,ast,oper,left,...param)
+    if(operation==null)return false
+    ast.oper=oper+'@'+operation.index
+    return true
+}
+export function fast_cast(scope:Scope,ast:Expression,data:Type,qiw:Type){
+    if(type_sub(ast.type,qiw,scope))return true
+    const cast=cast_get(scope,ast,data,qiw)
+    if(cast==null)return false
+    ast.type=cast.t
+    ast.cast='cast@'+cast.id
+    return true
 }

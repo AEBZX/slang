@@ -58,7 +58,7 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
     if(node.oper!=null)
-        return de_operation(node,node.oper,node.data,node.value)
+        return de_operation(node,node.data,node.oper,node.value)
     if(node instanceof AddAssign)node.value=new AddExpression(node.data,node.value)
     if(node instanceof SubAssign)node.value=new SubExpression(node.data,node.value)
     if(node instanceof MulAssign)node.value=new MulExpression(node.data,node.value)
@@ -77,7 +77,7 @@ const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
     node.value=call(node.value) as Expression
     //operation
     if(node.oper!=null){
-        const ret=de_operation(node,node.oper,new IdentifierExpr(node.name),node.value)
+        const ret=de_operation(node,new IdentifierExpr(node.name),node.oper,node.value)
         if(ret instanceof Expression)return call(new ExprCommand(de_ref(ret)))
         if(ret instanceof VarDecl)return new AAssign(new IdentifierExpr(ret.name),ret.value)
     }

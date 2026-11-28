@@ -104,8 +104,6 @@ const Censor_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
 }
 const Censor_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
     call(ast.command,0,scope)
-    if(ast.command.params.size==0)
-        scope.thr('operation不能重载滚木',ast)
 }
 export default new Map<any,slang_check_visitor>([
     [File,Censor_File],

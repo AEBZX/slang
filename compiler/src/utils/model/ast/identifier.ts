@@ -18,12 +18,12 @@ export class LambdaType extends BasicType{
     }
 }
 export class ClassType extends BasicType{
-    constructor(public local:string[],public field:Block[]){
+    constructor(public local:string[],public field:Block[]=[]){
         super()
     }
 }
 export class BlockType extends BasicType{
-    constructor(public local:string[],public field:Block[]){
+    constructor(public local:string[],public field:Block[]=[]){
         super()
     }
 }

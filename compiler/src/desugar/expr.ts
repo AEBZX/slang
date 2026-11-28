@@ -43,7 +43,7 @@ const D_Lambda:slang_desugar_visitor=(node:LambdaExpression,call)=>{
 }
 const D_Inc_Dec:slang_desugar_visitor=(node:IncrementPostfix|DecrementPostfix,call)=>{
     node.expr=call(node.expr) as Expression
-    if(node.oper!=null)node=de_operation(node,node.oper,node.expr) as any
+    if(node.oper!=null)node=de_operation(node,node.expr,node.oper) as any
     return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,node)))
 }
 const D_Member:slang_desugar_visitor=(node:MemberPostfix,call)=>{
@@ -53,14 +53,14 @@ const D_Member:slang_desugar_visitor=(node:MemberPostfix,call)=>{
 const D_Index:slang_desugar_visitor=(node:IndexPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node.index=call(node.index) as Expression
-    node=de_operation(node,'[]',node.expr,node.index) as any
+    node=de_operation(node,node.expr,'[]',node.index) as any
     return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,node)))
 }
 const D_Arguments:slang_desugar_visitor=(node:ArgumentsPostfix,call)=>{
     node.expr=call(node.expr) as Expression
     node.args=node.args.map(call) as Expression[]
     if(node.oper!=null)
-        return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,<Expression>de_operation(node, node.oper, node.expr, ...node.args))))
+        return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,<Expression>de_operation(node,node.expr, node.oper,...node.args))))
     //call_target检查
     if(node.call_target!=null)
         //call_target必定是函数调用,node.expr是Identifier/Member,替换为call_target
@@ -72,14 +72,14 @@ const D_Arguments:slang_desugar_visitor=(node:ArgumentsPostfix,call)=>{
 }
 const D_Prefix:slang_desugar_visitor=(node:PrefixExpression,call)=>{
     node.expr=call(node.expr) as Expression
-    node=de_operation(node,node.oper,node.expr) as any
+    node=de_operation(node,node.expr,node.oper) as any
     if(node instanceof NewPrefix)node=node.expr as any
     return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,node)))
 }
 const D_Binary:slang_desugar_visitor=(node:BinaryExpression,call)=>{
     node.left=call(node.left) as Expression
     node.right=call(node.right) as Expression
-    if(node.oper!=null)node=de_operation(node,node.oper,node.left,node.right) as any
+    if(node.oper!=null)node=de_operation(node,node.left,node.oper,node.right) as any
     return de_ref(node.cast==null?node:<Expression>call(de_cast(node.cast,node)))
 }
 const D_Ternary:slang_desugar_visitor=(node:TernaryExpression,call)=>{

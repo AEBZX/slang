@@ -14,7 +14,7 @@ import {
 } from '../../utils'
 const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
     scope.global.path=''
-    scope = scope.enter()
+    scope = scope.enter(false,true)
     for (const link of ast.links) {
         if (!scope.global.get(link.module.join('.')))
             scope.thr('link的模块不存在', link)
@@ -27,24 +27,23 @@ const Symbol_File:slang_check_visitor=(ast:File,scope,call)=> {
 }
 const Symbol_Module:slang_check_visitor=(ast:Module,scope,call)=>{
     scope.global.path=ast.global_local.join('.')
-    scope=scope.enter()
-    scope.set('up',new BlockType([],true))
+    scope=scope.enter(false,true)
+    scope.set('up',new BlockType([],ast.children))
     symbol_iden(ast.children,scope)
     for(const item of ast.children)
         call(item,2,scope)
     scope=scope.leave()
 }
 const Symbol_Value:slang_check_visitor=(ast:Value,scope,call)=>{
-    scope=scope.enter()
+    scope=scope.enter(false,true)
     symbol_iden(ast.children,scope)
-    scope.cast_oper_type=ast.value
     for(const item of ast.children)
         call(item,2,scope)
     scope=scope.leave()
 }
 const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=>{
     scope.global.path=ast.global_local.join('.')
-    scope=scope.enter()
+    scope=scope.enter(false,true)
     symbol_iden(ast.children,scope)
     symbol_do_generic(ast,ast.generic,scope,call)
     if(ast.implement!=null){
@@ -55,8 +54,7 @@ const Symbol_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call
         (ast.implement as ClassType).local=(scope.get((ast.implement as ClassType).local.join('.')) as Class|Interface).global_local
     }
     //注册this
-    scope.set('this',new ClassType([ast.name],Array.from(ast.generic.values()),true))
-    scope.cast_oper_type=new ClassType([ast.name],Array.from(ast.generic.values()))
+    scope.set('this',new ClassType([ast.name],ast.children))
     for(const item of ast.children)
         call(item,2,scope)
     scope=scope.leave()
@@ -77,11 +75,9 @@ const Symbol_Variable:slang_check_visitor=(ast:Variable,scope,call)=>{
     call(ast.value,2,scope)
 }
 const Symbol_Operation:slang_check_visitor=(ast:Operation,scope,call)=>{
-    scope.global.operation_set(scope.cast_oper_type,ast)
     call(ast.command,2,scope)
 }
 const Symbol_Cast:slang_check_visitor=(ast:Cast,scope,call)=>{
-    scope.global.cast_set(ast.t,ast)
     call(ast.t,2,scope)
     call(ast.command,2,scope)
 }

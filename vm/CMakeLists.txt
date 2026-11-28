@@ -21,12 +21,8 @@ set(SLANG_VM_SOURCES lib/utils.cpp
         lib/instruction.cpp
         lib/decode.cpp)
 
-#===== 单文件产物 =====
-#要求:编译出来就是一个 exe,不依赖同目录的 libstdc++/libgcc/libwinpthread 等 DLL
 function(slang_static_runtime target)
     if(MINGW)
-        #-static 会把 libstdc++/libgcc/libwinpthread 全部链进 exe;
-        #静态 msvcrt 还需要这两个符号别名,少了链接期直接报未定义
         target_link_options(${target} PRIVATE
                 -static
                 -static-libgcc
@@ -34,13 +30,10 @@ function(slang_static_runtime target)
                 -Wl,--defsym,__ms_vsnprintf=_vsnprintf
                 -Wl,--defsym,__intrinsic_setjmpex=_setjmpex)
     elseif(MSVC)
-        #MSVC 用 /MT(静态 CRT),否则会依赖 vcruntime140.dll / msvcp140.dll
         set_property(TARGET ${target} PROPERTY MSVC_RUNTIME_LIBRARY
                 "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
 endfunction()
-
-#链接完立刻扫导入表:出现系统 DLL 之外的依赖就让构建失败,而不是等到分发时才发现
 function(slang_check_single_exe target)
     if(MINGW)
         find_program(SLANG_OBJDUMP objdump)
@@ -59,7 +52,6 @@ endfunction()
 
 add_executable(vm main.cpp ${SLANG_VM_SOURCES}
         lib/decode.cpp)
-#utils 的网络部分用了 winsock,缺这个库会在链接期报 __imp_WSAStartup 未定义
 if(WIN32)
     target_link_libraries(vm PRIVATE ws2_32)
 endif()
@@ -82,8 +74,6 @@ if(NOT Catch2_FOUND)
 endif()
 enable_testing()
 include(Catch)
-
-#测试:unit 放 unit/<功能集>-<功能>.test.cpp,integration 放 integration/<功能集>.test.cpp
 file(GLOB_RECURSE SLANG_VM_TEST_SOURCES CONFIGURE_DEPENDS
         test/unit/*.test.cpp
         test/integration/*.test.cpp

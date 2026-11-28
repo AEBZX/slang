@@ -13,22 +13,17 @@ import {
 import {
     cast_get,
     fast_cast,
-    fast_operation,
-    operation_get,
+    fast_operation, operation_get,
     slang_check_visitor,
     to_right,
-    try_bool,
-    type_is, type_sub
+    type_is, type_sub, type_view
 } from '../tool'
 const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     call(ast.data,3,scope)
     call(ast.value,3,scope)
     //先看有没有重载
-    const operation=operation_get(scope,ast,ast.oper,ast.data.type,ast.value.type)
-    if(operation!=null){
-        ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
+    if(fast_operation(scope,ast,'=',ast.data.type,ast.value))
         return
-    }
     //常规情况
     if(!(ast.data.type instanceof ReferenceType))
         scope.thr('赋值左边不是合法左值',ast)
@@ -40,26 +35,12 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     if(to_right(ast.data.type) instanceof NumberType&&to_right(ast.value.type) instanceof NumberType)
         return
     //尝试转换
-    const cast=cast_get(scope,ast,ast.value.type,ast.data.type)
-    if (cast != null) {
-        if (ast.op != '=') {
-            scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
-            return
-        }
-        if (!(['&&=', '&=', '||=', '|='].includes(ast.op)
-            && ast.data.type instanceof BooleanType
-            && ast.value.type instanceof BooleanType)){
-            scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
-            return
-        }
-        if (!(to_right(ast.data.type) instanceof NumberType && to_right(cast.type) instanceof NumberType)){
-            scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
-            return
-        }
-        ast.value.cast=cast.global_local.join('.')+'.cast@'+cast.id
-        ast.type=cast.type
+    const cast_bool=fast_cast(scope,ast,ast.value.type,new BooleanType())
+    const cast_number=fast_cast(scope,ast,ast.value.type,new NumberType())
+    if(type_view(ast.data.type) instanceof BooleanType&&cast_bool!=null)
         return
-    }
+    if(type_view(ast.data.type) instanceof NumberType&&cast_number!=null)
+        return
     scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
 }
 const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
@@ -74,12 +55,8 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
         if(ast.value==null)return
         //如果不是引用,那么就可以进行重载决议和cast决议
         //=的参数基础上在加一个滚木number就是初始化'='
-        const operation=operation_get(scope,ast,'=',ast.t,ast.value.type||new VoidType(),new NumberType())
-        if(operation!=null){
-            ast.t=operation.command.ret
-            ast.oper=operation.global_local.join('.')+'.operation@'+operation.index
+        if(fast_operation(scope,ast,'=',ast.t,ast.value,new NumberType()))
             return
-        }
         //如果类型匹配就可以不管
         if(ast.value.type&&type_sub(ast.value.type,ast.t,scope))return
         //尝试转换
@@ -110,12 +87,8 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
     }
     if(ast.data.type&&type_sub(ast.data.type,scope.ret,scope))
         return
-    const cast=cast_get(scope,ast,ast.data.type,scope.ret)
-    if(cast!=null){
-        ast.data.cast=cast.global_local.join('.')+'.cast@'+cast.id
-        ast.data.type=cast.type
+    if(!fast_cast(scope,ast.data,ast.data.type,scope.ret))
         return
-    }
     scope.thr('函数返回值类型不匹配',ast)
 }
 const Type_Throw:slang_check_visitor=(ast:Throw,scope,call)=>{
@@ -129,12 +102,10 @@ const Type_If:slang_check_visitor=(ast:IfStatement,scope,call)=>{
     call(ast.condition,3,scope)
     call(ast.commands,3,scope)
     call(ast.else_,3,scope)
-    try_bool(scope,ast.condition)
 }
 const Type_While_DoWhile:slang_check_visitor=(ast:WhileStatement|DoWhileStatement,scope,call)=>{
     call(ast.condition,3,scope)
     call(ast.commands,3,scope)
-    try_bool(scope,ast.condition)
 }
 const Type_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     scope=scope.enter()
@@ -144,35 +115,25 @@ const Type_For:slang_check_visitor=(ast:ForStatement,scope,call)=>{
     for(const step of ast.step)
         call(step,3,scope)
     call(ast.commands,3,scope)
-    try_bool(scope,ast.condition)
     scope=scope.leave()
 }
 const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
     call(ast.data,3,scope)
     scope=scope.enter();
-    //类型推断:ast.data是array返回内部元素否则尝试强转
     (()=>{
-        //是否重载
-        const operation=operation_get(scope,ast,ast.iden,ast.data,new ArrayType(new VoidType()))
-        if(operation!=null){
-            ast.iden_type=(operation.command.ret as ArrayType).t
-            ast.data.type=operation.command.ret
-            ast.data.oper=operation.global_local.join('.')+'.operation@'+operation.index
-            return
-        }
         if(to_right(ast.data.type) instanceof ArrayType){
             ast.iden_type=(to_right(ast.data.type) as ArrayType).t
             return
         }
         //尝试强转
-        const cast=cast_get(scope,ast,ast.data.type,new ArrayType(new VoidType()))
+        const cast=cast_get(scope,ast as any,ast.data.type,new ArrayType(new VoidType()))
         if(cast!=null){
             ast.data.cast=cast.global_local.join('.')+'.cast@'+cast.id
             ast.data.type=cast.type
             ast.iden_type=(cast.type as ArrayType).t
             return
         }
-        scope.thr('foreach的data类型不是数组也不能强转成数组,也没有重载:',ast)
+        scope.thr('foreach的data类型不是数组也不能强转成数组',ast)
     })()
     scope.set(ast.iden,ast.iden_type)
     call(ast.commands,3,scope)
@@ -187,7 +148,7 @@ const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
             if(!(type_is(ast.condition.type,case_.condition.type,scope) instanceof VoidType))
                 return
             //尝试强转
-            const cast=cast_get(scope,ast,case_.condition.type,ast.condition.type)
+            const cast=cast_get(scope,ast as any,case_.condition.type,ast.condition.type)
             if(cast!=null){
                 case_.condition.cast=cast.global_local.join('.')+'.cast@'+cast.id
                 case_.condition.type=cast.type
