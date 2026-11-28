@@ -14,10 +14,9 @@ runtime::Manage::~Manage()
 void runtime::Manage::gc()
 {
     std::lock_guard lk(this->queue_mtx);
-    std::erase_if(this->run_queue,[](const auto& task)
+    std::erase_if(this->run_queue, [](const instruction_task& x)
     {
-        const auto& [a,b]=task;
-        return a;
+        return x.ok;
     });
 }
 std::vector<std::vector<runtime::instruction_task>>* runtime::Manage::get(const int id)
@@ -32,7 +31,7 @@ void runtime::Manage::stop()
 {
     _stop=true;
 }
-void runtime::Manage::malloc(const int _id , const int frame,Runtime* extends)
+void runtime::Manage::malloc(const int _id , const int frame, const Runtime* extends)
 {
     const int runtime_id=this->runtime_max++;
     runtime[runtime_id].father=this;
@@ -117,7 +116,13 @@ void runtime::Runtime::start()
                             return command.cond(runtime,param1,param2,param3);
                         };
                     }
-                    data::scheduler().spawn([&](){command.ins(command.runtime,command.param1,command.param2,command.param3);});
+                    data::scheduler().spawn([&]()
+                    {
+                        command.lock(command.runtime,command.param1,command.param2,command.param3);
+                        command.ins(command.runtime,command.param1,command.param2,command.param3);
+                        command.free(command.runtime,command.param1,command.param2,command.param3);
+                        command.ok=true;
+                    });
                 }
                 last=task;
             }

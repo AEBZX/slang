@@ -40,6 +40,7 @@ export class Enum extends Block{
 }
 export class Function extends Block{
     public index:number=0
+    public overloads:Function[]|null=null
     constructor(modifiers:Modifier,name:string,public generic:Map<string,Type>,public params:Map<string,Type>,public return_type:Type,public commands:Command) {
         super(modifiers,name)
     }

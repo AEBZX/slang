@@ -35,12 +35,11 @@ describe('parser 类型语法', () => {
         expect(generic.generic).toBe('T')
     })
 
-    it('类路径与泛型实参', () => {
+    it('类路径解析为 ClassType', () => {
+        //新模型 ClassType 只携带 local,泛型实参不在类型标注上表达
         const class_type = parse_type('a.b.C<number>') as ClassType
         expect(class_type).toBeInstanceOf(ClassType)
         expect(class_type.local).toEqual(['a', 'b', 'C'])
-        expect(class_type.generic).toHaveLength(1)
-        expect(class_type.generic[0]).toBeInstanceOf(NumberType)
     })
 
     it('lambda 类型', () => {

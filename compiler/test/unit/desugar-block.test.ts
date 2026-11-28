@@ -45,6 +45,6 @@ describe('desugar block: value 降糖', () => {
         const value_module = desugared[0].children[0] as Module
         expect(value_module).toBeInstanceOf(Module)
         expect(value_module.name).toBe('number')
-        expect((value_module.children[0] as Variable).name).toBe('operation@0')
+        expect((value_module.children[0] as Variable).name).toBe('+@0')
     })
 })

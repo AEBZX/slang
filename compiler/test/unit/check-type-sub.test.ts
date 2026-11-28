@@ -32,27 +32,27 @@ describe('check type_sub: 包装类型', () => {
         expect(type_sub(num(), new ReferenceType(num()), make_scope())).toBe(true)
     })
 
-    it('同构造器的数组相容(构造器快捷判定)', () => {
-        //type_sub 先比 constructor:同种包装类型即视为相容
+    it('数组按元素逐位相容', () => {
+        //同种包装类型做元素级比较,不再整体快捷相容
         expect(type_sub(new ArrayType(num()), new ArrayType(num()), make_scope())).toBe(true)
-        expect(type_sub(new ArrayType(num()), new ArrayType(bool()), make_scope())).toBe(true)
+        expect(type_sub(new ArrayType(num()), new ArrayType(bool()), make_scope())).toBe(false)
     })
 })
 
 describe('check type_sub: lambda', () => {
-    it('同构造器的 lambda 相容(构造器快捷判定)', () => {
-        //constructor 快捷分支先行,lambda 的参数/返回值细化当前不生效
+    it('lambda 按参数/返回值逐位相容', () => {
         const scope = make_scope()
         const a = new LambdaType(new Map(), new Map([['x', num()]]), num())
         const b = new LambdaType(new Map(), new Map([['x', num()]]), num())
         expect(type_sub(a, b, scope)).toBe(true)
         const bad_ret = new LambdaType(new Map(), new Map([['x', num()]]), bool())
-        expect(type_sub(a, bad_ret, scope)).toBe(true)
+        expect(type_sub(a, bad_ret, scope)).toBe(false)
     })
 })
 
 describe('check type_sub: ClassType', () => {
-    it('同构造器的 ClassType 相容(继承链细化当前不生效)', () => {
-        expect(type_sub(new ClassType(['a']), new ClassType(['b']), make_scope())).toBe(true)
+    it('ClassType 同类相容,跨类不相容(除非 implements)', () => {
+        expect(type_sub(new ClassType(['app','c']), new ClassType(['app','c']), make_scope())).toBe(true)
+        expect(type_sub(new ClassType(['app','c']), new ClassType(['app','d']), make_scope())).toBe(false)
     })
 })

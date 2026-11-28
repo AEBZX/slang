@@ -32,12 +32,7 @@ const G_ClassType:slang_ast_generate=(data,tree)=>{
     for(const v of rest.children.values())
         if(typeof v=='object')
             local.push(to_string(v,0))
-    let generic:Type[]=[]
-    if(data.children.has(2))
-        for(const v of to_ast_data(data,2).children.values())
-            if(typeof v=='object')
-                generic.push(tree(v))
-    return new ClassType(local,generic)
+    return new ClassType(local)
 }
 const G_FixType:slang_ast_generate=(data,tree)=>{
     let basic=tree_ast<Type>(data,0,tree)

@@ -58,7 +58,7 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     node.data=call(node.data) as Expression
     node.value=call(node.value) as Expression
     if(node.oper!=null)
-        return de_operation(node,node.data,node.oper,node.value)
+        return call(de_operation(node,node.data,node.oper,node.value)) as any
     if(node instanceof AddAssign)node.value=new AddExpression(node.data,node.value)
     if(node instanceof SubAssign)node.value=new SubExpression(node.data,node.value)
     if(node instanceof MulAssign)node.value=new MulExpression(node.data,node.value)
@@ -72,6 +72,7 @@ const D_Assign:slang_desugar_visitor=(node:Assign,call)=>{
     return new AAssign(node.data,node.value)
 }
 const D_VarDecl:slang_desugar_visitor=(node:VarDecl,call)=>{
+    if(node.value==null)return new ListCommand([])
     //如果是需要处理ref需要撤销de_ref
     const is_ref=node.value.type instanceof ReferenceType&&node.value.type.literal=='call'
     node.value=call(node.value) as Expression

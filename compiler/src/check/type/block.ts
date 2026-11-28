@@ -11,7 +11,7 @@ import {
     Operation,
     Cast, ReferenceType, ClassType, ArrayType
 } from '../../utils'
-import {slang_check_visitor, symbol_iden, type_view} from '../tool'
+import {instance_field, slang_check_visitor, symbol_iden, type_view} from '../tool'
 const Type_File:slang_check_visitor=(ast:File,scope,call)=>{
     scope=scope.enter()
     for(const link of ast.links)
@@ -40,7 +40,7 @@ const Type_Class_Interface:slang_check_visitor=(ast:Class|Interface,scope,call)=
     ast.type=new BlockType(ast.global_local,ast.children.filter(i=>!i.modifiers._private))
     scope=scope.enter()
     scope.set('up',new BlockType(ast.global_local,ast.children.filter(i=>!i.modifiers.unstatic)))
-    scope.set('this',new ReferenceType(new ClassType(ast.global_local,ast.children.filter(i=>i.modifiers.unstatic))))
+    scope.set('this',new ReferenceType(new ClassType(ast.global_local,instance_field(ast.children,true))))
     if(ast.implement!=null){
         call(ast.implement,3,scope)
         scope.implement_set(ast.global_local,ast.implement as ClassType)

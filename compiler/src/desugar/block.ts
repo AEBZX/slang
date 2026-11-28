@@ -39,7 +39,7 @@ const D_Value:slang_desugar_visitor=(node:Value,call)=>{
     return call(new Module(node.modifiers,node instanceof BooleanType?'boolean':'number',node.children))
 }
 const D_Operation:slang_desugar_visitor=(node:Operation,call)=>{
-    const fn=new Function(node.modifiers,'operation',new Map(),new Map(),node.command.ret,node.command.body)
+    const fn=new Function(node.modifiers,node.oper,new Map(),new Map(),node.command.ret,node.command.body)
     fn.index=node.index
     return call(fn)
 }

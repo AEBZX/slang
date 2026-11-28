@@ -34,12 +34,12 @@ const Type_Assign:slang_check_visitor=(ast:Assign,scope,call)=>{
     //只剩下关于number的运算
     if(to_right(ast.data.type) instanceof NumberType&&to_right(ast.value.type) instanceof NumberType)
         return
-    //尝试转换
-    const cast_bool=fast_cast(scope,ast,ast.value.type,new BooleanType())
-    const cast_number=fast_cast(scope,ast,ast.value.type,new NumberType())
-    if(type_view(ast.data.type) instanceof BooleanType&&cast_bool!=null)
+    //尝试转换:cast 标记落在值表达式上,由脱糖落地为 cast 调用
+    const cast_bool=fast_cast(scope,ast.value,ast.value.type,new BooleanType())
+    const cast_number=fast_cast(scope,ast.value,ast.value.type,new NumberType())
+    if(type_view(ast.data.type) instanceof BooleanType&&cast_bool)
         return
-    if(type_view(ast.data.type) instanceof NumberType&&cast_number!=null)
+    if(type_view(ast.data.type) instanceof NumberType&&cast_number)
         return
     scope.thr('两者第一没有重载,第二类型不匹配，第三类型转换不了',ast)
 }
@@ -59,8 +59,8 @@ const Type_VarDecl:slang_check_visitor=(ast:VarDecl,scope,call)=>{
             return
         //如果类型匹配就可以不管
         if(ast.value.type&&type_sub(ast.value.type,ast.t,scope))return
-        //尝试转换
-        if(!fast_cast(scope,ast,ast.value,ast.t))scope.thr('变量声明类型不匹配',ast)
+        //尝试转换:cast 标记落在初始化表达式上,由脱糖落地为 cast 调用
+        if(!fast_cast(scope,ast.value,ast.value.type,ast.t))scope.thr('变量声明类型不匹配',ast)
         return
     }
     if(ast.value&&!(ast.value.type instanceof ReferenceType))
@@ -87,7 +87,7 @@ const Type_Return:slang_check_visitor=(ast:Return,scope,call)=>{
     }
     if(ast.data.type&&type_sub(ast.data.type,scope.ret,scope))
         return
-    if(!fast_cast(scope,ast.data,ast.data.type,scope.ret))
+    if(fast_cast(scope,ast.data,ast.data.type,scope.ret))
         return
     scope.thr('函数返回值类型不匹配',ast)
 }
@@ -128,9 +128,9 @@ const Type_Foreach:slang_check_visitor=(ast:ForeachStatement,scope,call)=>{
         //尝试强转
         const cast=cast_get(scope,ast as any,ast.data.type,new ArrayType(new VoidType()))
         if(cast!=null){
-            ast.data.cast=cast.global_local.join('.')+'.cast@'+cast.id
-            ast.data.type=cast.type
-            ast.iden_type=(cast.type as ArrayType).t
+            ast.data.cast='cast@'+cast.id
+            ast.data.type=cast.t
+            ast.iden_type=(cast.t as ArrayType).t
             return
         }
         scope.thr('foreach的data类型不是数组也不能强转成数组',ast)
@@ -150,8 +150,8 @@ const Type_Switch:slang_check_visitor=(ast:SwitchStatement,scope,call)=>{
             //尝试强转
             const cast=cast_get(scope,ast as any,case_.condition.type,ast.condition.type)
             if(cast!=null){
-                case_.condition.cast=cast.global_local.join('.')+'.cast@'+cast.id
-                case_.condition.type=cast.type
+                case_.condition.cast='cast@'+cast.id
+                case_.condition.type=cast.t
                 return
             }
             scope.thr('case的条件类型不匹配',case_.condition)

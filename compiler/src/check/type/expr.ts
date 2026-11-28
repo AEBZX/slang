@@ -2,6 +2,7 @@ import {
     type_view,
     param_best,
     param_check,
+    instance_field,
     slang_check_visitor, symbol_do_generic, to_right,
     type_is, type_sub, fast_operation, fast_cast, cast_get
 } from '../tool'
@@ -20,7 +21,7 @@ import {
     NumberType, PointType, ReferencePrefix,
     ReferenceType,
     StringLiteral, TernaryExpression, Type, TypePrefix,
-    VoidType, convert, Function
+    VoidType, convert, Function, Variable, Module
 } from '../../utils'
 
 const Type_Number:slang_check_visitor=(ast:NumberLiteral,scope,call)=>{
@@ -76,8 +77,8 @@ const Type_Lambda:slang_check_visitor=(ast:LambdaExpression,scope,call)=>{
 const Type_Inc_Dec:slang_check_visitor=(ast:IncrementPostfix|DecrementPostfix,scope,call)=>{
     call(ast.expr,3,scope)
     ast.type=new VoidType()
-    //先看重载,postfix++的operation要加空气number
-    if(fast_operation(scope,ast,ast instanceof IncrementPostfix?'++':'--',new NumberType(),ast.expr))
+    //先看重载,++/-- 的 operation 签名为 (操作数)
+    if(fast_operation(scope,ast,ast instanceof IncrementPostfix?'++':'--',ast.expr.type))
         return
     ast.type=new NumberType()
     if(ast.expr.type instanceof ReferenceType&&ast.expr.type.t instanceof NumberType)
@@ -94,16 +95,21 @@ const Type_Member:slang_check_visitor=(ast:MemberPostfix,scope,call)=>{
         scope.thr('不是类或者模块,不可进行.运算',ast)
         return
     }
-    if(block_type instanceof ClassType||block_type instanceof BlockType){
-        if(!block_type.field.map(i=>i.name==ast.name).includes(true)) {
-            scope.thr('找不到字段'+ast.name,ast)
-            return
-        }
-        if(ast.expr.type instanceof ReferenceType)
-            ast.type=new ReferenceType(block_type.field.find(i=>i.name==ast.name).type)
-        else
-            ast.type=block_type.field.find(i=>i.name==ast.name).type
+    const member=block_type.field.find(i=>i.name==ast.name)
+    if(member==null){
+        scope.thr('找不到字段'+ast.name,ast)
+        return
     }
+    if(member instanceof Function)
+        ast.type=member.type
+    else if(member instanceof Variable)
+        ast.type=member.t
+    else if(member instanceof Module)
+        ast.type=member.type
+    else
+        scope.thr('字段'+ast.name+'不可通过.访问',ast)
+    if(ast.expr.type instanceof ReferenceType&&member instanceof Function)
+        ast.type=new ReferenceType(ast.type)
 }
 const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=> {
     call(ast.expr, 3)
@@ -123,7 +129,6 @@ const Type_Index:slang_check_visitor=(ast:IndexPostfix,scope,call)=> {
 }
 const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
     call(ast.expr,3,scope)
-    ast.expr.type=new VoidType()
     for(const item of ast.generic)
         call(item,3,scope)
     for(const item of ast.args)
@@ -145,26 +150,39 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
             scope.thr('参数或者泛型不相容',ast)
             return
         }
-        //重载情况下ast.expr一定是BlockType/ClassType,先拿到field
-        const field= (<BlockType | ClassType>type_view(ast.expr.type)).field
-            .filter(i=>i.name==expr_type.name)
-            .filter(i=>i instanceof Function)
-            .filter(i=>param_check(ast,i.params,ast.args.map(i=>i.type),expr_type.generic,ast.generic,scope))
-        if(field.length==0)
-            scope.thr('匹配的函数不存在',ast)
-        //具体性决策
-        let result:Function=null
-        for(const item of field){
-            if(result==null){
-                result=item
-                continue
-            }
-            if(param_best(Array.from(result.params.values()),ast.args.map(i=>i.type),scope))continue
-            if(param_best(Array.from(item.generic.values()),ast.generic,scope))continue
-            result=item
+        //函数调用:成员调用取宿主 field,普通调用取符号表
+        let candidates:Function[]
+        if(ast.expr instanceof MemberPostfix){
+            const host=type_view(ast.expr.expr.type)
+            candidates=(host instanceof BlockType||host instanceof ClassType)
+                ?host.field.filter(i=>i instanceof Function&&i.name== (<MemberPostfix>ast.expr).name)
+                :[] as any
+        }else{
+            //普通调用:符号表函数(重载组挂在其上)
+            const name=(ast.expr as IdentifierExpr).name
+            const sym=scope.get(name)
+            candidates=sym instanceof Function?(sym.overloads??[sym]):[]
         }
-        ast.type=result.return_type
-        ast.call_target=result.name+'@'+result.index
+        candidates=candidates.filter(i=>param_check(ast,i.params,ast.args.map(i=>i.type),i.generic,ast.generic,scope))
+        //具体性决策
+        const survivors=candidates.filter(i=>{
+            for(const other of candidates){
+                if(other==i)continue
+                if(param_best(Array.from(other.params.values()),Array.from(i.params.values()),scope))
+                    return false
+            }
+            return true
+        })
+        if(survivors.length!=1)
+            scope.thr('匹配的函数不存在或无法具体性决议',ast)
+        if(survivors.length!=1)return
+        ast.type=survivors[0].return_type
+        if(ast.expr instanceof MemberPostfix){
+            const host=type_view(ast.expr.expr.type) as BlockType|ClassType
+            ast.call_target=host.local.join('.')+'.'+survivors[0].name+'@'+survivors[0].index
+        }else{
+            ast.call_target=survivors[0].global_local.join('.')+'@'+survivors[0].index
+        }
         return
     }
     //是BlockType同时也是类或者接口,等价于调用构造
@@ -176,21 +194,21 @@ const Type_Arguments:slang_check_visitor=(ast:ArgumentsPostfix,scope,call)=>{
             if(!ok)
                 scope.thr('泛型不相容',ast)
             //参数匹配
-            const constructor=expr_type.field.filter(i=>i instanceof Function)
+            const candidates=expr_type.field.filter(i=>i instanceof Function)
                 .filter(i=>i.name=='constructor')
                 .filter(i=>param_check(ast,i.params,ast.args.map(i=>i.type),i.generic,ast.generic,scope))
-                .filter(i=>{
-                    for(const item of constructor){
-                        if(item==i)continue
-                        if(param_best(Array.from(item.params.values()),ast.args.map(i=>i.type),scope))continue
-                        if(param_best(Array.from(item.generic.values()),ast.generic,scope))continue
-                        return true
-                    }
-                })
-            if(constructor.length==0)
+            //具体性决策
+            const constructor=candidates.filter(i=>{
+                for(const other of candidates){
+                    if(other==i)continue
+                    if(param_best(Array.from(other.params.values()),Array.from(i.params.values()),scope))
+                        return false
+                }
+                return true
+            })
+            if(constructor.length==0&&ast.args.length>0)
                 scope.thr('构造函数不存在',ast)
-            ast.type=new ClassType(block.global_local,block.children.filter(i=>i.modifiers.unstatic)
-                .filter(i=>!i.modifiers._private))
+            ast.type=new ClassType(block.global_local,instance_field(block.children,false))
             return
         }
         scope.thr('不是类',ast)
@@ -207,7 +225,7 @@ const Type_PreInc_Dec:slang_check_visitor=(ast:IncrementPrefix|DecrementPrefix,s
         return
     }
     //转换
-    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+    if(fast_cast(scope,ast,ast.expr.type,new NumberType()))
         return
     scope.thr('不是number,也没前置++/--重载,还没转换',ast)
 }
@@ -221,7 +239,7 @@ const Type_Not:slang_check_visitor=(ast:NotPrefix,scope,call)=>{
         return
     }
     //转换
-    if(fast_cast(scope,ast,ast.expr,new BooleanType()))
+    if(fast_cast(scope,ast,ast.expr.type,new BooleanType()))
         return
     scope.thr('不是boolean,也没!重载,还没转换',ast)
 }
@@ -235,7 +253,7 @@ const Type_BitNot:slang_check_visitor=(ast:BitNotPrefix,scope,call)=>{
         return
     }
     //转换
-    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+    if(fast_cast(scope,ast,ast.expr.type,new NumberType()))
         return
     scope.thr('不是number,也没~重载,还没转换',ast)
 }
@@ -249,7 +267,7 @@ const Type_Minus:slang_check_visitor=(ast:MinusPrefix,scope,call)=>{
         return
     }
     //转换
-    if(fast_cast(scope,ast,ast.expr,new NumberType()))
+    if(fast_cast(scope,ast,ast.expr.type,new NumberType()))
         return
     scope.thr('不是number,也没-重载,还没转换',ast)
 }
@@ -284,7 +302,7 @@ const Type_Point:slang_check_visitor=(ast:AddressPrefix,scope,call)=>{
 const Type_Type:slang_check_visitor=(ast:TypePrefix,scope,call)=>{
     call(ast.expr,3,scope)
     ast.type=ast.t
-    if(fast_cast(scope,ast,ast.expr,ast.t))return
+    if(fast_cast(scope,ast,ast.expr.type,ast.t))return
     scope.thr('你没有定义强转的类型的cast',ast)
 }
 const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
@@ -295,11 +313,12 @@ const Type_New:slang_check_visitor=(ast:NewPrefix,scope,call)=>{
     scope.in_new=in_new
     if(!(ast.expr instanceof ArgumentsPostfix))
         scope.thr('不是函数',ast)
+    ast.type=ast.expr.type
 }
 const Type_Binary:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
     call(ast.left,3,scope)
     call(ast.right,3,scope)
-    const fo = fast_operation(scope,ast,ast.op,new VoidType(),ast.left,ast.right)
+    const fo = fast_operation(scope,ast,ast.op,ast.left.type,ast.right)
     if(fo)
         return
     if(['|','&','==','<','>','&&','||','^'].includes(ast.op)&&ast.left.type instanceof BooleanType&&ast.right.type instanceof BooleanType){
@@ -311,11 +330,11 @@ const Type_Binary:slang_check_visitor=(ast:BinaryExpression,scope,call)=>{
         return
     }
     if(['|','&','==','<','>','&&','||','^'].includes(ast.op))
-        if(fast_cast(scope,ast,ast.left,new BooleanType())&&fast_cast(scope,ast,ast.right,new BooleanType())){
+        if(fast_cast(scope,ast,ast.left.type,new BooleanType())&&fast_cast(scope,ast,ast.right.type,new BooleanType())){
             ast.type=new BooleanType()
             return
         }
-    if(fast_cast(scope,ast,ast.left,new NumberType())&&fast_cast(scope,ast,ast.right,new NumberType())){
+    if(fast_cast(scope,ast,ast.left.type,new NumberType())&&fast_cast(scope,ast,ast.right.type,new NumberType())){
         ast.type=new NumberType()
         return
     }

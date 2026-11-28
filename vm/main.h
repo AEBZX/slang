@@ -277,7 +277,9 @@ namespace runtime
         int param1;
         int param2;
         int param3;
+        std::function<void(Runtime*,int,int,int)> lock;
         instruction::instruction ins;
+        std::function<void(Runtime*,int,int,int)> free;
         std::function<bool(Runtime*,int,int,int)> cond;
         Runtime* runtime;
         bool ok;
@@ -296,7 +298,7 @@ namespace runtime
         std::unordered_map<int,bool> lock;
         std::unordered_map<int,Runtime> runtime;
         void start();
-        void malloc(int,int,Runtime*);
+        void malloc(int,int, const Runtime*);
         std::vector<std::vector<instruction_task>>* get(int);
         void delete_reg(int);
         void stop();

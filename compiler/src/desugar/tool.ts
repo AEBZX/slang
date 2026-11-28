@@ -13,23 +13,33 @@ export function de_operation(ast:VarDecl|Assign|Expression,expr:Expression,oper:
     if(oper==null)return ast
     const type=type_view(expr.type)
     ast.oper=null
+    let ret:ArgumentsPostfix
     if(type instanceof LiteralType)
         //number等就是调用value里的静态函数
-        return new ArgumentsPostfix(new MemberPostfix(new IdentifierExpr(
+        ret=new ArgumentsPostfix(new MemberPostfix(new IdentifierExpr(
             type instanceof NumberType?'number':'boolean'
         ),oper),[],[expr,...param])
-    //class就是调用内部函数
-    return new ArgumentsPostfix(new MemberPostfix(expr,oper),[],param)
+    else
+        //class就是调用内部函数
+        ret=new ArgumentsPostfix(new MemberPostfix(expr,oper),[],param)
+    //决议产物上的类型与 cast 标记转移到包装节点,供后续 de_cast 消费
+    ret.type=ast.type
+    ret.cast=ast.cast
+    ast.cast=null
+    return ret
 }
 export function de_cast(cast:string,data:Expression){
     if(cast==null)return data
     data.cast=null
-    const type=type_view(data.type)
-    if(type instanceof LiteralType)
-        return new ArgumentsPostfix(new MemberPostfix(new IdentifierExpr(
-            type instanceof NumberType?'number':'boolean'
-        ),cast),[],[data])
-    return new ArgumentsPostfix(new MemberPostfix(data,cast),[],[])
+    const parts=cast.split('.')
+    const name=parts[parts.length-1]
+    if(parts.length==1)
+        return new ArgumentsPostfix(new MemberPostfix(data,name),[],[data])
+    let ret:Expression=null
+    for(const i of parts.slice(0,-1)){
+        ret=ret==null?new IdentifierExpr(i):new MemberPostfix(ret,i)
+    }
+    return new ArgumentsPostfix(new MemberPostfix(ret,name),[],[data])
 }
 export function de_cond(data:Expression){
     if(data.type instanceof BooleanType)return data
